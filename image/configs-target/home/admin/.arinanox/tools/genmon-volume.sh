@@ -1,9 +1,10 @@
 #!/bin/bash
 # ═══════════════════════════════════════════
-#  XFCE Genmon — Volume Monitor
+#  Volume Monitor (MATE/XFCE compatible)
 #  Panel plugin that shows 🔊 volume level
 # ===========================================
-#  Setup: xfce4-panel → Add → Generic Monitor
+#  MATE: mate-panel → Add → Notification Area
+#  XFCE: xfce4-panel → Add → Generic Monitor
 #  Command: bash ~/.arinanox/tools/genmon-volume.sh
 #  Interval: 5s
 # ═══════════════════════════════════════════

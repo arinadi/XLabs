@@ -1,18 +1,18 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # ═══════════════════════════════════════════════════════════════
 # arinanoX — Stop (unified kill)
-#  XFCE → proot → virgl → X11 → PulseAudio → cleanup
+#  MATE → proot → virgl → X11 → PulseAudio → cleanup
 # ═══════════════════════════════════════════════════════════════
 
 echo ">>> Stopping arinanoX..."
 
-# ── XFCE (graceful first, then force) ───────────────────────
-echo "  [*] Killing XFCE processes..."
-for proc in thunar xfdesktop xfce4-panel xfce4-terminal xfwm4 xfce4-session; do
+# ── MATE (graceful first, then force) ────────────────────────
+echo "  [*] Killing MATE processes..."
+for proc in marco mate-session mate-panel mate-terminal mate-system-monitor pluma caja atril; do
     pkill -f "$proc" 2>/dev/null && echo "  [x] $proc" || true
 done
 sleep 1
-for proc in thunar xfdesktop xfce4-panel xfce4-terminal xfwm4 xfce4-session; do
+for proc in marco mate-session mate-panel mate-terminal mate-system-monitor pluma caja atril; do
     pkill -9 -f "$proc" 2>/dev/null || true
 done
 

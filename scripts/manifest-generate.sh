@@ -37,20 +37,34 @@ gnupg
 htop
 make
 mesa-utils
-mousepad
+mate-desktop-environment
+mate-terminal
+mate-system-monitor
+mate-utils
+mate-applets
+mate-media
+mate-netbook
+mate-panel
+mate-screensaver
+mate-session-manager
+mate-polkit
+mate-power-manager
+mate-disk-utility-utils
+pluma
+eom
+atril
+engrampa
+marco
+network-manager-gnome
 openssh-client
 python3
 python3-pip
 python3-venv
-ristretto
 sudo
 tmux
 wget
 xdotool
-xfce4
-xfce4-goodies
-xfce4-terminal
-xorg
+thunar
 yad
 BASE
 
@@ -64,7 +78,7 @@ EXTRA=$(cat "$EXTRA_FILE" 2>/dev/null | head -30 | tr '\n' ' ')
 # ── Detect custom dotfiles ──────────────────────────────────
 DOTFILES=""
 for df in .bashrc .bash_aliases .gitconfig .config/gtk-3.0/gtk.css \
-           .config/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml; do
+           .config/dconf/user .config/dconf/db/arinanox; do
     src="$ROOTFS/home/admin/$df"
     if [ -f "$src" ]; then
         # Check if file differs from shipped config (skip if identical to configs-target)
@@ -99,14 +113,10 @@ $(echo "$EXTRA" | tr ' ' '\n' | grep -v "^$" | sed 's/^/  - /')
 # Custom dotfiles (tracked for backup/sync)
 dotfiles:$(echo -e "$DOTFILES")
 
-# XFCE config files to preserve
-xfce_config:
-  - xfce4-panel.xml
-  - xfwm4.xml
-  - xsettings.xml
-  - xfce4-desktop.xml
-  - xfce4-keyboard-shortcuts.xml
-  - thunar.xml
+# MATE config files to preserve
+mate_config:
+  - .config/dconf/user
+  - .config/dconf/db/arinanox
 YAML
 
 echo ""

@@ -54,7 +54,7 @@ if [ -d "$ROOTFS/home/admin" ]; then
     echo "  ${GREEN} arinanox (${SIZE:-?})"
     
     # Check core packages inside
-    for bin in firefox-esr xfce4-session; do
+    for bin in firefox-esr mate-session; do
         if proot-distro login arinanox -- which "$bin" &>/dev/null; then
             echo "  ${GREEN}   $bin"
         else
@@ -106,10 +106,10 @@ else
     WARNS=$((WARNS + 1))
 fi
 
-if pgrep -f "xfce4-session" &>/dev/null; then
-    echo "  ${GREEN} XFCE session active"
+if pgrep -f "mate-session" &>/dev/null; then
+    echo "  ${GREEN} MATE session active"
 else
-    echo "  ${DIM} XFCE not running"
+    echo "  ${DIM} MATE not running"
 fi
 
 # ── Updates ─────────────────────────────────────────────────

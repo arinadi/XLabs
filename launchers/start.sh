@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # ═══════════════════════════════════════════════════════════════
 # arinanoX — Start (unified launcher)
-#  Parallel: PulseAudio + virgl + X11 → XFCE desktop
+#  Parallel: PulseAudio + virgl + X11 → MATE desktop
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -78,7 +78,7 @@ done
 [ -S "$X11_SOCK" ] && echo "  ✓ X11 ready ($(busybox expr $i \* 100)ms)" || \
     echo "  ⚠ X11 socket timeout, proceeding anyway..."
 
-# ── [3/3] XFCE Desktop ──────────────────────────────────────
+# ── [3/3] MATE Desktop ──────────────────────────────────────
 echo ">>> [3/3] Launching desktop..."
 
 if [ "$VIRGL_MODE" != "cpu" ]; then
@@ -93,7 +93,7 @@ if [ "$VIRGL_MODE" != "cpu" ]; then
         export MESA_NO_ERROR=1
         export MESA_BACK_BUFFER=pixmap
         rm -f /tmp/dbus-* 2>/dev/null
-        dbus-launch --exit-with-session xfce4-session
+        dbus-launch --exit-with-session mate-session
     "
 else
     echo "  • CPU mode"
@@ -103,7 +103,7 @@ else
         export NO_AT_BRIDGE=1
         export LIBGL_ALWAYS_SOFTWARE=1
         rm -f /tmp/dbus-* 2>/dev/null
-        dbus-launch --exit-with-session xfce4-session
+        dbus-launch --exit-with-session mate-session
     "
 fi
 

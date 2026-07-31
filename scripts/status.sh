@@ -31,10 +31,10 @@ fi
 echo "╠═══════════════════════════════════════╣"
 
 # Running status
-if pgrep -f "xfce4-session" > /dev/null 2>&1; then
-    echo "║  ● XFCE session running"
+if pgrep -f "mate-session" > /dev/null 2>&1; then
+    echo "║  ● MATE session running"
 else
-    echo "║  ○ XFCE not running"
+    echo "║  ○ MATE not running"
 fi
 
 if pgrep -f "termux.x11" > /dev/null 2>&1; then

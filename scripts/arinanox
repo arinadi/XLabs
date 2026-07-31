@@ -20,7 +20,7 @@ usage() {
     cat <<EOF
 arinanoX v${VERSION} — Your phone is a Linux workstation.
 
-  arinanox start         Start desktop (PulseAudio → X11 → virgl → XFCE)
+  arinanox start         Start desktop (PulseAudio → X11 → virgl → MATE)
   arinanox stop          Stop desktop
   arinanox status        System status (image, storage, snapshots)
   arinanox doctor        Full health-check

@@ -1,9 +1,10 @@
 #!/bin/bash
 # ═══════════════════════════════════════════
-#  XFCE Genmon — Battery Monitor
+#  Battery Monitor (MATE/XFCE compatible)
 #  Panel plugin that shows 🔋 percentage
 # ===========================================
-#  Setup: xfce4-panel → Add → Generic Monitor
+#  MATE: mate-panel → Add → Notification Area
+#  XFCE: xfce4-panel → Add → Generic Monitor
 #  Command: bash ~/.arinanox/tools/genmon-battery.sh
 #  Interval: 30s
 # ═══════════════════════════════════════════

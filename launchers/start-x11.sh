@@ -29,4 +29,4 @@ am start -n com.termux.x11/com.termux.x11.MainActivity 2>/dev/null || true
 
 echo ""
 echo ">>> X11/TCP Audio Ready."
-echo ">>> Run: bash ~/start-xfce.sh (or tap the widget!)"
+echo ">>> Run: bash ~/start-mate.sh (or tap the widget!)"

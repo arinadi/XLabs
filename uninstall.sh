@@ -30,7 +30,7 @@ echo ""
 
 # 1. Stop any running sessions
 echo ">>> Stopping running sessions..."
-pkill -f "startxfce4" 2>/dev/null && echo "  [x] XFCE stopped" || true
+pkill -f "mate-session" 2>/dev/null && echo "  [x] MATE stopped" || true
 pkill -f "proot-distro login" 2>/dev/null && echo "  [x] proot login stopped" || true
 pkill -f "termux-x11" 2>/dev/null && echo "  [x] X11 stopped" || true
 pulseaudio --kill 2>/dev/null && echo "  [x] PulseAudio stopped" || true

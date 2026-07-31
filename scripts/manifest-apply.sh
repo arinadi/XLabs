@@ -37,20 +37,21 @@ if grep -q "^packages:" "$MANIFEST" 2>/dev/null; then
     fi
 fi
 
-# ── Restore XFCE configs ────────────────────────────────────
-CONFIG_DIR="$HOME/.arinanox/snapshot-current/home/.config/xfce4/xfconf/xfce-perchannel-xml"
-TARGET_DIR="$ROOTFS/home/admin/.config/xfce4/xfconf/xfce-perchannel-xml"
+# ── Restore MATE configs ────────────────────────────────────
+CONFIG_DIR="$HOME/.arinanox/snapshot-current/home/.config/dconf"
+TARGET_DIR="$ROOTFS/home/admin/.config/dconf"
 
 if [ -d "$CONFIG_DIR" ]; then
-    echo "  Restoring XFCE configs..."
+    echo "  Restoring MATE configs..."
     mkdir -p "$TARGET_DIR"
-    for xml in xfce4-panel.xml xfwm4.xml xsettings.xml xfce4-desktop.xml \
-               xfce4-keyboard-shortcuts.xml thunar.xml; do
-        if [ -f "$CONFIG_DIR/$xml" ]; then
-            cp "$CONFIG_DIR/$xml" "$TARGET_DIR/$xml"
-            echo "    → $xml"
-        fi
-    done
+    if [ -f "$CONFIG_DIR/user" ]; then
+        cp "$CONFIG_DIR/user" "$TARGET_DIR/user"
+        echo "    → dconf/user"
+    fi
+    if [ -d "$CONFIG_DIR/db" ]; then
+        cp -r "$CONFIG_DIR/db" "$TARGET_DIR/"
+        echo "    → dconf/db/"
+    fi
     echo "  ✓ Configs restored"
 fi
 

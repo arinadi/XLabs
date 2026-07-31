@@ -1,0 +1,29 @@
+services:
+  arinanox-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: arinanox-dev
+    hostname: arinanox-dev
+    stdin_open: true
+    tty: true
+    privileged: true
+
+    volumes:
+      # Live project mount
+      - ../../:/data/data/com.termux/files/home/arinanoX
+      # Persist proot container data
+      - proot-root:/data/data/com.termux/files/usr/var/lib/proot-distro
+      # X11 socket forwarding
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+      - PULSE_SERVER=tcp:127.0.0.1:4713
+      - LANG=en_US.UTF-8
+      - LC_ALL=en_US.UTF-8
+
+    network_mode: host
+
+volumes:
+  proot-root:
