@@ -85,9 +85,12 @@ def handle_update():
         else:
             print("  ✓ Updated! Restarting...")
             print()
-            input("  Press Enter to restart...")
-            # Restart process with new code
-            os.execl(sys.executable, sys.executable, *sys.argv)
+            # Find the script that launched us
+            launcher = os.path.expanduser("~/.local/bin/alabs")
+            if os.path.exists(launcher):
+                os.execl("/bin/bash", "bash", launcher)
+            else:
+                os.execl(sys.executable, sys.executable, *sys.argv)
     else:
         print("  ✗ Update failed")
 
