@@ -24,6 +24,11 @@ set -e
 IMAGE="arinanolabs-dev"
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# On Windows (Git Bash / MSYS), convert to Windows path for Podman
+if [[ "$(uname -s)" == MINGW* || "$(uname -s)" == MSYS* ]]; then
+    PROJECT_DIR="$(cygpath -w "$PROJECT_DIR")"
+fi
+
 echo ""
 echo "═══════════════════════════════════════════"
 echo "  arinanoLabs TUI Test (Podman)"
@@ -44,7 +49,7 @@ if ! podman machine info &>/dev/null; then
 fi
 
 echo ">>> Building dev container..."
-podman build -t "$IMAGE" -f docker/dev/Dockerfile docker/dev 2>&1 | tail -5
+podman build -t "$IMAGE" -f docker/dev/Dockerfile docker/dev
 
 echo ""
 echo ">>> Running TUI test..."
@@ -56,6 +61,7 @@ podman run -it --rm \
     -v "${PROJECT_DIR}:/data/data/com.termux/files/home/arinanoLabs" \
     "$IMAGE" bash -c "
         cd /data/data/com.termux/files/home/arinanoLabs
-        pip install rich requests --quiet 2>/dev/null || true
+        pip install rich requests --quiet --break-system-packages 2>/dev/null || \
+        pip install rich requests --quiet --user 2>/dev/null || true
         python install.py
     "

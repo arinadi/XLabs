@@ -13,7 +13,7 @@ from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeRe
 from rich.live import Live
 from rich.align import Align
 
-console = Console()
+console = Console(force_terminal=True)
 
 # ── Constants ──────────────────────────────────────────────
 PROOT_DIR = "/data/data/com.termux/files/usr/var/lib/proot-distro/containers/arinanolabs"

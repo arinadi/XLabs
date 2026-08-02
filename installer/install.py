@@ -7,7 +7,7 @@ import urllib.request
 from pathlib import Path
 
 from .ui import (
-    console, clear, run_cmd, show_banner, show_panel,
+    console, clear, run_cmd, run_cmd_stream, show_banner, show_panel,
     show_progress_download, show_error, show_success, show_warning
 )
 from .mirror import ensure_mirror
@@ -38,9 +38,7 @@ def install():
         ("Installing Termux:X11", step_install_x11),
         ("Installing audio (PulseAudio)", step_install_audio),
         ("Installing GPU drivers", step_install_gpu),
-        ("Creating Debian container", step_create_container),
-        ("Installing desktop environment", step_install_desktop),
-        ("Installing dev tools", step_install_devtools),
+        ("Pulling arinanoLabs image", step_pull_image),
         ("Configuring GPU", step_configure_gpu),
         ("Setting up user", step_setup_user),
         ("Installing launcher scripts", step_install_launchers),
@@ -74,13 +72,13 @@ def continue_on_error() -> bool:
 
 def step_update_system() -> bool:
     """Update system packages."""
-    rc, _ = run_cmd("pkg update -y", timeout=120)
+    rc = run_cmd_stream("pkg update -y")
     return rc == 0
 
 
 def step_install_proot() -> bool:
     """Install proot-distro."""
-    rc, _ = run_cmd("pkg install -y proot-distro", timeout=60)
+    rc = run_cmd_stream("pkg install -y proot-distro")
     return rc == 0
 
 
@@ -93,13 +91,13 @@ def step_install_x11() -> bool:
         "xorg-xrandr",
         "netcat-openbsd",
     ]
-    rc, _ = run_cmd(f"pkg install -y {' '.join(packages)}", timeout=120)
+    rc = run_cmd_stream(f"pkg install -y {' '.join(packages)}")
     return rc == 0
 
 
 def step_install_audio() -> bool:
     """Install PulseAudio."""
-    rc, _ = run_cmd("pkg install -y pulseaudio", timeout=60)
+    rc = run_cmd_stream("pkg install -y pulseaudio")
     return rc == 0
 
 
@@ -107,88 +105,25 @@ def step_install_gpu() -> bool:
     """Install GPU drivers."""
     packages = [
         "mesa-zink",
-        "mesa-vulkan-icd-freedreno",
         "vulkan-loader-android",
         "virglrenderer-android",
         "angle-android",
     ]
-    rc, _ = run_cmd(f"pkg install -y {' '.join(packages)}", timeout=120)
+    rc = run_cmd_stream(f"pkg install -y {' '.join(packages)}")
     return rc == 0
 
 
-def step_create_container() -> bool:
-    """Create Debian proot container."""
+def step_pull_image() -> bool:
+    """Pull arinanoLabs image from GHCR (Debian + MATE + dev tools pre-installed)."""
     # Check if already exists
     rc, _ = run_cmd(f"proot-distro list | grep {CONTAINER_NAME}")
     if rc == 0:
         console.print("  [dim]Container already exists, skipping...[/dim]")
         return True
 
-    # Install Debian
-    rc, output = run_cmd(f"proot-distro install {PROOT_DISTRO}", timeout=300)
-    if rc != 0:
-        console.print(f"  [red]{output}[/red]")
-        return False
-
-    # Rename to arinanolabs
-    rc, _ = run_cmd(f"proot-distro rename {PROOT_DISTRO} {CONTAINER_NAME}", timeout=30)
-    return rc == 0
-
-
-def step_install_desktop() -> bool:
-    """Install MATE desktop inside container."""
-    packages = [
-        "mate-desktop-environment",
-        "mate-terminal",
-        "mate-system-monitor",
-        "pluma",
-        "eom",
-        "firefox-esr",
-        "thunar",
-        "adwaita-icon-theme",
-    ]
-
-    install_cmd = f"""
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update -qq
-        apt-get install -y --no-install-recommends {' '.join(packages)}
-        apt-get clean
-        rm -rf /var/lib/apt/lists/*
-    """
-
-    rc, output = run_cmd(
-        f"proot-distro login {CONTAINER_NAME} -- bash -c '{install_cmd}'",
-        timeout=600
-    )
-    return rc == 0
-
-
-def step_install_devtools() -> bool:
-    """Install development tools inside container."""
-    packages = [
-        "git",
-        "python3",
-        "python3-pip",
-        "build-essential",
-        "cmake",
-        "htop",
-        "tmux",
-        "curl",
-        "wget",
-    ]
-
-    install_cmd = f"""
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update -qq
-        apt-get install -y --no-install-recommends {' '.join(packages)}
-        apt-get clean
-        rm -rf /var/lib/apt/lists/*
-    """
-
-    rc, output = run_cmd(
-        f"proot-distro login {CONTAINER_NAME} -- bash -c '{install_cmd}'",
-        timeout=300
-    )
+    # Pull from GitHub Container Registry
+    image_ref = "ghcr.io/arinadi/arinanolabs:latest"
+    rc = run_cmd_stream(f"proot-distro install {image_ref} --name {CONTAINER_NAME}")
     return rc == 0
 
 
