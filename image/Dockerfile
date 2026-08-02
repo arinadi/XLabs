@@ -20,14 +20,10 @@ RUN apt-get update && \
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         dbus-x11 \
-        mate-desktop-environment mate-terminal mate-system-monitor mate-utils mate-applets \
-        mate-media mate-netbook mate-panel mate-screensaver mate-session-manager \
-        mate-polkit mate-power-manager mate-disk-utility-utils \
-        pluma eom atril engrampa marco \
+        mate-desktop-environment \
         network-manager-gnome \
-        pulseaudio-utils netcat-openbsd x11-xserver-utils \
+        pulseaudio-utils x11-xserver-utils \
         thunar \
-        adwaita-icon-theme \
         firefox-esr \
         mesa-utils glmark2 \
         xdotool \
