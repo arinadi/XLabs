@@ -5,49 +5,61 @@ ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 
 # ═══════════════════════════════════════════════
-# Layer 1  BASE + CORE PACKAGES
+# Layer 1  BASE
 # ═══════════════════════════════════════════════
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         dialog locales ca-certificates sudo \
         curl wget zip unzip jq tree less && \
-    apt-get upgrade -y -o Dpkg::Options::='--force-confold' && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ═══════════════════════════════════════════════
-# Layer 2  MATE + GUI + BROWSER + THEMES
+# Layer 2  MATE CORE
 # ═══════════════════════════════════════════════
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         dbus-x11 \
-        mate-desktop-environment \
-        pulseaudio-utils x11-xserver-utils \
-        firefox-esr \
-        mesa-utils glmark2 \
-        xdotool \
-        gnupg \
-        yad && \
+        mate-desktop-environment && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ═══════════════════════════════════════════════
-# Layer 3  DEV TOOLS + SYSTEM + NODE.JS
+# Layer 3  GUI EXTRAS
+# ═══════════════════════════════════════════════
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        pulseaudio-utils x11-xserver-utils \
+        xdotool yad gnupg && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# ═══════════════════════════════════════════════
+# Layer 4  BROWSER
+# ═══════════════════════════════════════════════
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        firefox-esr && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# ═══════════════════════════════════════════════
+# Layer 5  DEV TOOLS
 # ═══════════════════════════════════════════════
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         git python3-pip python3-venv python3-dev \
         build-essential cmake pkg-config \
         htop tmux openssh-client && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* && \
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
-    apt-get install -y nodejs && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ═══════════════════════════════════════════════
-# Layer 4  CONFIGS + USER + CLEANUP
+# Layer 6  NODE.JS
 # ═══════════════════════════════════════════════
-RUN printf '#!/bin/sh\nexit 1\n' > /usr/bin/pm-is-supported && chmod +x /usr/bin/pm-is-supported && \
-    dpkg --purge libupower-glib3 2>/dev/null || true && \
-    useradd -m -s /bin/bash admin && \
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# ═══════════════════════════════════════════════
+# Layer 7  USER + CONFIGS
+# ═══════════════════════════════════════════════
+RUN useradd -m -s /bin/bash admin && \
     echo "admin:admin" | chpasswd && \
     echo "admin ALL=(ALL:ALL) NOPASSWD: ALL" > /etc/sudoers.d/admin && \
     chmod 0440 /etc/sudoers.d/admin
@@ -55,8 +67,6 @@ RUN printf '#!/bin/sh\nexit 1\n' > /usr/bin/pm-is-supported && chmod +x /usr/bin
 COPY configs-target/home/ /home/
 
 RUN chown -R admin:admin /home/admin && \
-    chmod +x /home/admin/.arinanolabs/tools/*.sh && \
-    sed -i 's/.droiddesk/.arinanolabs/g' /home/admin/.bashrc && \
     sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && locale-gen
 
 ENV LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
