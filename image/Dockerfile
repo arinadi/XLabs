@@ -11,7 +11,9 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         dialog locales ca-certificates sudo \
         curl wget zip unzip jq tree less && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    apt-get clean && rm -rf /var/lib/apt/lists/* \
+    /usr/share/doc/* /usr/share/man/* /usr/share/info/* \
+    /usr/share/locale/* /var/cache/apt/archives/*
 
 # ═══════════════════════════════════════════════
 # Layer 2  MATE CORE
@@ -20,7 +22,9 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         dbus-x11 \
         mate-desktop-environment && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    apt-get clean && rm -rf /var/lib/apt/lists/* \
+    /usr/share/doc/* /usr/share/man/* /usr/share/info/* \
+    /usr/share/locale/* /var/cache/apt/archives/*
 
 # ═══════════════════════════════════════════════
 # Layer 3  GUI EXTRAS
@@ -29,7 +33,9 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         pulseaudio-utils x11-xserver-utils \
         xdotool yad gnupg && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    apt-get clean && rm -rf /var/lib/apt/lists/* \
+    /usr/share/doc/* /usr/share/man/* /usr/share/info/* \
+    /usr/share/locale/* /var/cache/apt/archives/*
 
 # ═══════════════════════════════════════════════
 # Layer 4  BROWSER
@@ -37,7 +43,9 @@ RUN apt-get update && \
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         firefox-esr && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    apt-get clean && rm -rf /var/lib/apt/lists/* \
+    /usr/share/doc/* /usr/share/man/* /usr/share/info/* \
+    /usr/share/locale/* /var/cache/apt/archives/*
 
 # ═══════════════════════════════════════════════
 # Layer 5  DEV TOOLS
@@ -47,14 +55,18 @@ RUN apt-get update && \
         git python3-pip python3-venv python3-dev \
         build-essential cmake pkg-config \
         htop tmux openssh-client && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    apt-get clean && rm -rf /var/lib/apt/lists/* \
+    /usr/share/doc/* /usr/share/man/* /usr/share/info/* \
+    /usr/share/locale/* /var/cache/apt/archives/*
 
 # ═══════════════════════════════════════════════
 # Layer 6  NODE.JS
 # ═══════════════════════════════════════════════
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    apt-get clean && rm -rf /var/lib/apt/lists/* \
+    /usr/share/doc/* /usr/share/man/* /usr/share/info/* \
+    /usr/share/locale/* /var/cache/apt/archives/*
 
 # ═══════════════════════════════════════════════
 # Layer 7  USER + CONFIGS
