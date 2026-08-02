@@ -169,8 +169,9 @@ def start_mate() -> bool:
     env_str = " ".join(f"export {k}={v}" for k, v in env_vars.items())
 
     # Start in background, capture output for debugging
+    # Use container's own /tmp (writable by admin uid 1000)
     cmd = (
-        f"proot-distro login arinanolabs --isolated --bind /tmp:/tmp -- su - admin -c '"
+        f"proot-distro login arinanolabs --isolated -- su - admin -c '"
         f"mkdir -p /tmp/runtime-admin && chmod 700 /tmp/runtime-admin && "
         f"{env_str} && "
         f"dbus-launch --exit-with-session mate-session"
