@@ -1,160 +1,159 @@
-"""npyscreen TUI for arinanoLabs."""
+"""Simple TUI for arinanoLabs — input-based, guaranteed to work."""
 
-import npyscreen
 import os
+import sys
 
 
-class MainMenuForm(npyscreen.FormWithMenus):
-    """Main menu."""
-
-    def create(self):
-        from .ui import get_version
-        self.name = f"📱 arinanoLabs v{get_version()}"
-
-        self.menu = self.new_menu(name="Main Menu", footer="Press Enter to select")
-        self.menu.addItem("Start Desktop", self.on_start, "1")
-        self.menu.addItem("Stop Desktop", self.on_stop, "2")
-        self.menu.addItem("Update", self.on_update, "3")
-        self.menu.addItem("Extra Tools", self.on_tools, "4")
-        self.menu.addItem("Status", self.on_status, "5")
-        self.menu.addItem("Exit", self.on_exit, "0")
-
-    def on_start(self):
-        self.parentApp.switchForm("START")
-
-    def on_stop(self):
-        self.parentApp.switchForm("STOP")
-
-    def on_update(self):
-        self.parentApp.switchForm("UPDATE")
-
-    def on_tools(self):
-        self.parentApp.switchForm("TOOLS")
-
-    def on_status(self):
-        self.parentApp.switchForm("STATUS")
-
-    def on_exit(self):
-        self.parentApp.switchForm(None)
+def clear():
+    os.system("cls" if os.name == "nt" else "clear")
 
 
-class OutputForm(npyscreen.Form):
-    """Generic output form with Back button."""
-
-    def create(self):
-        self.output = self.add(
-            npyscreen.MultiLineEdit,
-            name="Output",
-            value="",
-            editable=False,
-            max_height=15,
-        )
-        self.add(npyscreen.ButtonPress, name="Back", when_pressed_function=self.on_back)
-
-    def set_output(self, text):
-        self.output.value = text
-        self.display()
-
-    def on_back(self):
-        self.parentApp.switchForm("MAIN")
+def show_menu():
+    from .ui import get_version
+    clear()
+    print()
+    print(f"  📱 arinanoLabs v{get_version()}")
+    print()
+    print("  Main Menu")
+    print()
+    print("  1  ▶️  Start Desktop")
+    print("  2  ⏹️  Stop Desktop")
+    print("  3  🔄  Update")
+    print("  4  🧰  Extra Tools")
+    print("  5  📊  Status")
+    print()
+    print("  0  🚪  Exit")
+    print()
 
 
-class StartForm(OutputForm):
-    def beforeEditing(self):
-        self.name = "▶️  Start Desktop"
-        self.set_output("Starting desktop...")
+def handle_start():
+    clear()
+    print()
+    print("  ▶️  Starting desktop...")
+    print()
+    from .start import start_desktop
+    success = start_desktop()
+    print()
+    if success:
+        print("  ✓ Desktop started!")
+        print("  Open Termux:X11 app to see your desktop.")
+    else:
+        print("  ✗ Failed to start desktop")
+    print()
+    input("  Press Enter to go back...")
 
-    def on_edit(self):
-        from .start import start_desktop
-        success = start_desktop()
-        if success:
-            self.set_output("✓ Desktop started!\n\nOpen Termux:X11 app to see your desktop.")
+
+def handle_stop():
+    clear()
+    print()
+    print("  ⏹️  Stopping desktop...")
+    print()
+    from .start import stop_desktop
+    stop_desktop()
+    print("  ✓ Desktop stopped")
+    print()
+    input("  Press Enter to go back...")
+
+
+def handle_update():
+    import subprocess
+    clear()
+    print()
+    print("  🔄  Updating...")
+    print()
+
+    repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    if not os.path.exists(os.path.join(repo_dir, ".git")):
+        print("  ✗ Not a git repository")
+        print("  Reinstall via install.sh")
+        print()
+        input("  Press Enter to go back...")
+        return
+
+    print("  → Pulling latest changes...")
+    result = subprocess.run(["git", "pull"], cwd=repo_dir, capture_output=True, text=True)
+
+    if result.returncode != 0:
+        print("  → Fetching latest...")
+        subprocess.run(["git", "fetch", "origin", "main"], cwd=repo_dir, capture_output=True)
+        result = subprocess.run(["git", "reset", "--hard", "origin/main"], cwd=repo_dir, capture_output=True, text=True)
+
+    if result.returncode == 0:
+        if "Already up to date" in result.stdout:
+            print("  ✓ Already on latest version")
         else:
-            self.set_output("✗ Failed to start desktop")
+            print("  ✓ Updated!")
+            print("  Restart alabs to use new version")
+    else:
+        print("  ✗ Update failed")
+
+    print()
+    input("  Press Enter to go back...")
 
 
-class StopForm(OutputForm):
-    def beforeEditing(self):
-        self.name = "⏹️  Stop Desktop"
-        self.set_output("Stopping desktop...")
-
-    def on_edit(self):
-        from .start import stop_desktop
-        stop_desktop()
-        self.set_output("✓ Desktop stopped")
-
-
-class UpdateForm(OutputForm):
-    def beforeEditing(self):
-        self.name = "🔄  Update"
-        self.set_output("Pulling latest changes...")
-
-    def on_edit(self):
-        import subprocess
-        repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-        if not os.path.exists(os.path.join(repo_dir, ".git")):
-            self.set_output("✗ Not a git repository\nReinstall via install.sh")
-            return
-
-        result = subprocess.run(["git", "pull"], cwd=repo_dir, capture_output=True, text=True)
-
-        if result.returncode != 0:
-            subprocess.run(["git", "fetch", "origin", "main"], cwd=repo_dir, capture_output=True)
-            result = subprocess.run(["git", "reset", "--hard", "origin/main"], cwd=repo_dir, capture_output=True, text=True)
-
-        if result.returncode == 0:
-            if "Already up to date" in result.stdout:
-                self.set_output("✓ Already on latest version")
-            else:
-                self.set_output("✓ Updated!\n\nRestart alabs to use new version")
-        else:
-            self.set_output("✗ Update failed")
+def handle_tools():
+    clear()
+    print()
+    print("  🧰  Extra Tools")
+    print()
+    print("  [1] Chromium Browser")
+    print("  [2] VS Code (code-server)")
+    print("  [3] Zsh + Oh My Zsh")
+    print("  [4] Neovim")
+    print("  [5] GitHub CLI")
+    print()
+    print("  Coming soon!")
+    print()
+    input("  Press Enter to go back...")
 
 
-class ToolsForm(OutputForm):
-    def beforeEditing(self):
-        self.name = "🧰  Extra Tools"
-        self.set_output(
-            "  [1] Chromium Browser\n"
-            "  [2] VS Code (code-server)\n"
-            "  [3] Zsh + Oh My Zsh\n"
-            "  [4] Neovim\n"
-            "  [5] GitHub CLI\n\n"
-            "  Coming soon!"
-        )
+def handle_status():
+    from .start import is_running
+    from .ui import is_installed, get_version
+    from .gpu import detect_gpu, get_gpu_summary
 
+    clear()
+    print()
+    print("  📊  System Status")
+    print()
 
-class StatusForm(OutputForm):
-    def beforeEditing(self):
-        self.name = "📊  Status"
-        from .start import is_running
-        from .ui import is_installed, get_version
-        from .gpu import detect_gpu, get_gpu_summary
+    container = is_installed()
+    running = is_running()
+    gpu = detect_gpu()
 
-        container = is_installed()
-        running = is_running()
-        gpu = detect_gpu()
-
-        self.set_output(
-            f"  Container:  {'✓ Installed' if container else '✗ Not found'}\n"
-            f"  Desktop:    {'● Running' if running else '○ Not running'}\n"
-            f"  GPU:        {get_gpu_summary(gpu)}\n"
-            f"  Version:    {get_version()}\n"
-        )
-
-
-class ArinanoLabsApp(npyscreen.NPSApp):
-    def main(self):
-        self.addForm("MAIN", MainMenuForm, name="arinanoLabs")
-        self.addForm("START", StartForm)
-        self.addForm("STOP", StopForm)
-        self.addForm("UPDATE", UpdateForm)
-        self.addForm("TOOLS", ToolsForm)
-        self.addForm("STATUS", StatusForm)
-        self.switchForm("MAIN")
+    print(f"  Container:  {'✓ Installed' if container else '✗ Not found'}")
+    print(f"  Desktop:    {'● Running' if running else '○ Not running'}")
+    print(f"  GPU:        {get_gpu_summary(gpu)}")
+    print(f"  Version:    {get_version()}")
+    print()
+    input("  Press Enter to go back...")
 
 
 def run_npyscreen():
-    app = ArinanoLabsApp()
-    app.run()
+    """Run the TUI — simple input-based, no fancy widgets."""
+    while True:
+        show_menu()
+        choice = input("  Select: ").strip()
+
+        if choice == "1":
+            handle_start()
+        elif choice == "2":
+            handle_stop()
+        elif choice == "3":
+            handle_update()
+        elif choice == "4":
+            handle_tools()
+        elif choice == "5":
+            handle_status()
+        elif choice == "0":
+            clear()
+            print()
+            print("  Goodbye! 👋")
+            print()
+            break
+        else:
+            print()
+            print("  Invalid option. Try again.")
+            print()
+            input("  Press Enter...")
