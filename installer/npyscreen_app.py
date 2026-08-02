@@ -80,6 +80,7 @@ def show_menu():
     table.add_row("4", "🧰  Extra Tools")
     table.add_row("5", "📊  Status")
     table.add_row("6", "🗑️   Reset (Clean Install)")
+    table.add_row("7", "🧹  Clean Image Cache")
     table.add_row("", "")
     table.add_row("0", "🚪  Exit")
     console.print()
@@ -131,6 +132,38 @@ def handle_start():
 
 
 # ── Stop ───────────────────────────────────────────────────
+
+def _stop_desktop_silent():
+    """Stop desktop processes without UI (used by other handlers)."""
+    import time
+
+    for _, cmd in [
+        ("xfce4-session", "pkill -9 -f xfce4-session 2>/dev/null"),
+        ("xfwm4", "pkill -9 -f xfwm4 2>/dev/null"),
+        ("dbus-launch", "pkill -9 -f dbus-launch 2>/dev/null"),
+        ("virgl", "pkill -9 -f virgl_test_server 2>/dev/null"),
+        ("termux-x11", "pkill -9 -f termux-x11 2>/dev/null"),
+    ]:
+        run_cmd(cmd)
+
+    for mod in ["module-null-sink", "module-native-protocol-tcp"]:
+        run_cmd(f"pactl unload-module {mod} 2>/dev/null")
+
+    run_cmd("pkill -9 -f pulseaudio 2>/dev/null")
+    run_cmd("pkill -9 -f 'proot.*arinanolabs' 2>/dev/null")
+    run_cmd("pkill -9 -f dbus-daemon 2>/dev/null")
+    time.sleep(1)
+
+    tmpdir = os.environ.get("TMPDIR", "/data/data/com.termux/files/usr/tmp")
+    for f in [".X0-lock", ".X11-unix/X0", "dbus-*"]:
+        run_cmd(f"rm -f {tmpdir}/{f} 2>/dev/null")
+    run_cmd(f"rm -rf {tmpdir}/runtime-* 2>/dev/null")
+
+    proot_tmp = os.path.join(PROOT_DIR, "rootfs/tmp")
+    for f in ["dbus-*"]:
+        run_cmd(f"rm -f {proot_tmp}/{f} 2>/dev/null")
+    run_cmd(f"rm -rf {proot_tmp}/runtime-* 2>/dev/null")
+
 
 def handle_stop():
     clear()
@@ -254,7 +287,6 @@ def handle_status():
     table.add_column("value")
     table.add_row("Container", "[green]✓ Installed[/green]" if container else "[red]✗ Not found[/red]")
     table.add_row("Desktop", "[green]● Running[/green]" if running else "[dim]○ Not running[/dim]")
-    table.add_row("Environment", "Xfce4")
     table.add_row("GPU", get_gpu_summary(gpu))
     table.add_row("Version", get_version())
     console.print(table)
@@ -322,6 +354,60 @@ def handle_reset():
     wait_key()
 
 
+# ── Clean Cache ────────────────────────────────────────────
+
+def handle_clean_cache():
+    """Remove proot-distro OCI image cache."""
+    import shutil
+
+    clear()
+    console.print("[bold cyan]🧹  Clean Image Cache[/bold cyan]\n")
+
+    cache_dir = "/data/data/com.termux/files/usr/var/lib/proot-distro/cache"
+    if not os.path.exists(cache_dir):
+        console.print("[dim]No cache found.[/dim]")
+        wait_key()
+        return
+
+    # Show size
+    size = subprocess.run(
+        ["du", "-sh", cache_dir], capture_output=True, text=True
+    )
+    size_str = size.stdout.split()[0] if size.returncode == 0 else "unknown"
+    console.print(f"  Cache: [yellow]{size_str}[/yellow]\n")
+
+    console.print("[yellow]This will:[/yellow]")
+    console.print("  • Stop desktop if running")
+    console.print("  • Delete cached OCI image layers")
+    console.print("  • Next install will re-download fresh image\n")
+
+    confirm = input("  Type 'yes' to confirm: ").strip().lower()
+    if confirm != "yes":
+        console.print("\n[dim]Cancelled.[/dim]")
+        wait_key()
+        return
+
+    # Stop desktop first
+    if is_running():
+        console.print("\n  [cyan]→[/cyan] Stopping desktop...")
+        _stop_desktop_silent()
+        console.print("  [green]✓ Desktop stopped[/green]")
+
+    # Remove cache
+    console.print("\n  [cyan]→[/cyan] Removing cache...")
+    try:
+        shutil.rmtree(cache_dir)
+        console.print("  [green]✓ Cache cleared[/green]")
+    except Exception as e:
+        console.print(f"  [red]✗ Failed: {e}[/red]")
+        wait_key()
+        return
+
+    console.print("\n[green]✓ Done![/green]")
+    console.print("[dim]Next Reset or install will download a fresh image.[/dim]")
+    wait_key()
+
+
 # ── Main Loop ──────────────────────────────────────────────
 
 def run_npyscreen():
@@ -333,6 +419,7 @@ def run_npyscreen():
         "4": handle_tools,
         "5": handle_status,
         "6": handle_reset,
+        "7": handle_clean_cache,
     }
 
     while True:

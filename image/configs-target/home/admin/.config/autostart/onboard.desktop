@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Onboard
+Comment=On-screen keyboard for touch input
+Exec=/home/admin/.config/autostart-scripts/onboard-autostart.sh
+Icon=onboard
+Terminal=false
+Hidden=false
+X-GNOME-Autostart-enabled=true

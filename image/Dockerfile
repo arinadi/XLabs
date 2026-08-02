@@ -26,7 +26,7 @@ RUN apt-get update && \
         xfce4-terminal xfce4-panel \
         xfce4-session xfce4-settings \
         xfce4-notifyd xfce4-screenshooter \
-        mousepad ristretto xfburn \
+        mousepad ristretto \
         menu gnome-keyring && \
     apt-get clean && rm -rf /var/lib/apt/lists/* \
     /usr/share/doc/* /usr/share/man/* /usr/share/info/* \
@@ -79,7 +79,37 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     /usr/share/locale/* /var/cache/apt/archives/*
 
 # ═══════════════════════════════════════════════
-# Layer 7  USER + CONFIGS
+# Layer 7  TOUCHSCREEN / HiDPI SUPPORT
+# ═══════════════════════════════════════════════
+# NOTE: touchegg is intentionally NOT installed — it is not packaged for
+# Debian (Ubuntu PPA / Fedora / Arch / openSUSE only) and would fail to
+# build here. It's also unnecessary in a proot-distro + Termux:X11 setup:
+# this container is an X11 *client* only (no /dev/input access), so all
+# real touch/gesture handling happens on the Android host side via the
+# Termux:X11 app itself (see its "Touchscreen input mode" setting).
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        onboard \
+        at-spi2-core \
+        gsettings-desktop-schemas \
+        dconf-cli \
+        dconf-gsettings-backend \
+        libglib2.0-bin \
+        xinput \
+        fonts-noto-core \
+        fonts-noto-color-emoji \
+        materia-gtk-theme \
+        papirus-icon-theme && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* \
+    /usr/share/doc/* /usr/share/man/* /usr/share/info/* \
+    /usr/share/locale/* /var/cache/apt/archives/*
+
+# Accessibility bridge needed for onboard's auto-show-on-focus feature
+ENV GTK_MODULES=gail:atk-bridge
+ENV NO_AT_BRIDGE=0
+
+# ═══════════════════════════════════════════════
+# Layer 8  USER + CONFIGS
 # ═══════════════════════════════════════════════
 RUN useradd -m -s /bin/bash admin && \
     echo "admin:admin" | chpasswd && \
@@ -88,7 +118,8 @@ RUN useradd -m -s /bin/bash admin && \
 
 COPY configs-target/home/ /home/
 
-RUN chown -R admin:admin /home/admin && \
+RUN chmod +x /home/admin/.config/autostart-scripts/*.sh && \
+    chown -R admin:admin /home/admin && \
     sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && locale-gen
 
 ENV LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
