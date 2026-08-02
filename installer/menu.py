@@ -92,13 +92,37 @@ def handle_stop():
 
 
 def handle_update():
-    """Handle update."""
+    """Handle update — git pull from repo."""
     clear()
     show_banner()
     console.print("\n[bold]Updating arinanoLabs...[/bold]\n")
 
-    # TODO: Implement self-update
-    console.print("  [yellow]Update feature coming soon![/yellow]")
+    repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    # Check if git repo
+    if not os.path.exists(os.path.join(repo_dir, ".git")):
+        console.print("  [red]✗ Not a git repository. Reinstall via install.sh[/red]")
+        press_any_key()
+        return
+
+    # Git pull
+    import subprocess
+    console.print("  [cyan]→[/cyan] Pulling latest changes...")
+    result = subprocess.run(
+        ["git", "pull", "--ff-only"],
+        cwd=repo_dir, capture_output=True, text=True
+    )
+
+    if result.returncode == 0:
+        console.print(f"  [green]✓ Updated[/green]")
+        if "Already up to date" in result.stdout:
+            console.print("  [dim]Already on latest version[/dim]")
+        else:
+            console.print("  [dim]Restart alabs to use the new version[/dim]")
+    else:
+        console.print(f"  [red]✗ Pull failed:[/red]")
+        console.print(f"  [dim]{result.stderr.strip()}[/dim]")
+
     press_any_key()
 
 
