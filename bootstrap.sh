@@ -85,18 +85,6 @@ for f in start.sh stop.sh update.sh; do
     chmod +x "${LAUNCHERS_DIR}/${f}"
 done
 
-echo ">>> Downloading CLI..."
-mkdir -p "${ARINANOX_DIR}/bin"
-curl -sL --retry 2 "${REPO}/scripts/arinanox" -o "${ARINANOX_DIR}/bin/arinanox"
-chmod +x "${ARINANOX_DIR}/bin/arinanox"
-
-# Add to PATH
-if ! grep -q '.arinanox/bin' "$HOME/.bashrc" 2>/dev/null; then
-    echo '' >> "$HOME/.bashrc"
-    echo '# arinanoX CLI' >> "$HOME/.bashrc"
-    echo 'export PATH="$HOME/.arinanox/bin:$PATH"' >> "$HOME/.bashrc"
-fi
-
 # --- Execute Setup ---
 echo ">>> Running host setup..."
 bash "${SCRIPTS_DIR}/host-setup.sh"

@@ -6,17 +6,16 @@ echo ">>> Setting up MOTD..."
 cat > /data/data/com.termux/files/usr/etc/motd << 'MOTDEOF'
 
 ==========================================
- 📱 arinanoX Proot MATE
+ 📱 arinanoLabs
 ==========================================
+
+ Launch TUI:
+    alabs
 
  Start:
     bash ~/start.sh
  Stop:
     bash ~/stop.sh
-
- ⚠ Update (fresh install, wipes config):
-    curl -sL URL/bootstrap.sh | bash
-    See README for details.
 
  User: admin / Pass: admin
 ==========================================
