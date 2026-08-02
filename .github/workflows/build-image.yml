@@ -1,6 +1,10 @@
 name: Build arinanoLabs Image
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'image/**'
   workflow_dispatch:
 
 jobs:
