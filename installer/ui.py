@@ -17,7 +17,6 @@ console = Console(force_terminal=True)
 
 # ── Constants ──────────────────────────────────────────────
 PROOT_DIR = "/data/data/com.termux/files/usr/var/lib/proot-distro/containers/arinanolabs"
-VERSION_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "VERSION")
 
 
 def clear():
@@ -31,12 +30,15 @@ def is_installed() -> bool:
 
 
 def get_version() -> str:
-    """Read local version from VERSION file."""
+    """Get version from git commit hash."""
     try:
-        with open(VERSION_FILE, "r") as f:
-            return f.read().strip()
-    except FileNotFoundError:
-        return "0.0.0"
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5
+        )
+        return result.stdout.strip() if result.returncode == 0 else "unknown"
+    except Exception:
+        return "unknown"
 
 
 def run_cmd(cmd: str, timeout: int = 60) -> tuple[int, str]:
