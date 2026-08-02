@@ -4,7 +4,7 @@ import os
 import subprocess
 import time
 
-from .ui import console, run_cmd, PROOT_DIR
+from .ui import console, run_cmd, run_cmd_stream, PROOT_DIR
 from .gpu import detect_gpu, GPU_CONFIGS
 
 
@@ -84,46 +84,48 @@ def start_pulseaudio() -> bool:
     """Start PulseAudio server."""
     run_cmd("pulseaudio --kill 2>/dev/null")  # Kill existing
     time.sleep(0.3)
-    rc, _ = run_cmd("pulseaudio --start --exit-idle-time=-1 2>/dev/null")
+    rc = run_cmd_stream("pulseaudio --start --exit-idle-time=-1 2>&1")
     return rc == 0
 
 
 def load_audio_modules() -> bool:
     """Load audio sink modules."""
-    run_cmd("pactl load-module module-aaudio-sink 2>/dev/null")
-    run_cmd("pactl load-module module-sles-sink 2>/dev/null")
-    run_cmd("pactl load-module module-native-protocol-tcp auth-ip-acl=127.0.0.1 auth-anonymous=1 port=4713 2>/dev/null")
+    run_cmd_stream("pactl load-module module-aaudio-sink 2>&1")
+    run_cmd_stream("pactl load-module module-sles-sink 2>&1")
+    run_cmd_stream("pactl load-module module-native-protocol-tcp auth-ip-acl=127.0.0.1 auth-anonymous=1 port=4713 2>&1")
     return True
 
 
 def start_virgl() -> bool:
     """Start virgl renderer (auto-detect path)."""
     # Try Android path first
-    rc, _ = run_cmd("virgl_test_server_android &>/dev/null &")
+    rc = run_cmd_stream("which virgl_test_server_android 2>&1")
     if rc == 0:
+        run_cmd_stream("virgl_test_server_android &")
         return True
 
     # Try ANGLE path
     angle_dir = "/data/data/com.termux/files/usr/opt/angle-android"
     if os.path.exists(f"{angle_dir}/vulkan-null"):
-        run_cmd(f"LD_LIBRARY_PATH={angle_dir}/vulkan-null virgl_test_server --use-egl-surfaceless --use-gles &>/dev/null &")
+        run_cmd_stream(f"LD_LIBRARY_PATH={angle_dir}/vulkan-null virgl_test_server --use-egl-surfaceless --use-gles &")
         return True
 
     if os.path.exists(f"{angle_dir}/vulkan"):
-        run_cmd(f"LD_LIBRARY_PATH={angle_dir}/vulkan virgl_test_server --use-egl-surfaceless --use-gles &>/dev/null &")
+        run_cmd_stream(f"LD_LIBRARY_PATH={angle_dir}/vulkan virgl_test_server --use-egl-surfaceless --use-gles &")
         return True
 
     # Fallback - no virgl
+    console.print("    [dim]No virgl renderer found, using software rendering[/dim]")
     return False
 
 
 def start_x11() -> bool:
     """Start Termux:X11 server."""
-    run_cmd("termux-x11 :0 -ac &")
+    rc = run_cmd_stream("termux-x11 :0 -ac 2>&1")
     time.sleep(2)
 
     # Auto-open X11 app
-    run_cmd("am start -n com.termux.x11/com.termux.x11.MainActivity 2>/dev/null")
+    run_cmd_stream("am start -n com.termux.x11/com.termux.x11.MainActivity 2>&1")
     return True
 
 
@@ -132,7 +134,7 @@ def wait_for_x11() -> bool:
     tmpdir = os.environ.get("TMPDIR", "/data/data/com.termux/files/usr/tmp")
     socket_path = f"{tmpdir}/.X11-unix/X0"
 
-    for i in range(30):  # Wait up to 3 seconds
+    for i in range(50):  # Wait up to 5 seconds
         if os.path.exists(socket_path):
             console.print(f"    [green]✓ X11 ready ({(i+1)*100}ms)[/green]")
             return True
@@ -149,24 +151,25 @@ def start_mate() -> bool:
         "DISPLAY": ":0",
         "PULSE_SERVER": "tcp:127.0.0.1:4713",
         "NO_AT_BRIDGE": "1",
+        "LIBGL_ALWAYS_SOFTWARE": "0",
     }
 
     # Add GPU-specific env vars
     env_vars.update(gpu.mesa_config)
 
-    env_str = " ".join(f"{k}={v}" for k, v in env_vars.items())
+    env_str = " ".join(f"export {k}={v}" for k, v in env_vars.items())
 
     # Start in background (--isolated: no Termux binaries leak into container)
-    cmd = f"""
-        proot-distro login arinanolabs --isolated --bind /tmp:/tmp -- su - admin -c "
-            {env_str}
-            rm -f /tmp/dbus-* 2>/dev/null
-            dbus-launch --exit-with-session mate-session
-        " &
-    """
+    cmd = (
+        f"proot-distro login arinanolabs --isolated --bind /tmp:/tmp -- su - admin -c '"
+        f"{env_str} && "
+        f"rm -f /tmp/dbus-* 2>/dev/null && "
+        f"dbus-launch --exit-with-session mate-session"
+        f"' &"
+    )
 
-    run_cmd(cmd)
-    time.sleep(2)
+    run_cmd_stream(cmd)
+    time.sleep(3)
 
     # Verify
     rc, _ = run_cmd("pgrep -f mate-session")
