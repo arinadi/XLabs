@@ -212,14 +212,23 @@ def start_mate() -> bool:
     # Add GPU-specific env vars
     env_vars.update(gpu.mesa_config)
 
-    env_str = " ".join(f"export {k}={v}" for k, v in env_vars.items())
+    exports = " ".join(f"{k}={v}" for k, v in env_vars.items())
+
+    # Use 'su admin' (no -) to avoid .bashrc overriding XDG_RUNTIME_DIR=/tmp
+    # Use 'eval $(dbus-launch --sh-syntax)' so DBUS_SESSION_BUS_ADDRESS is set
+    # in the shell env before mate-session inherits it
+    inner_cmd = (
+        f"export {exports} && "
+        f"XDG=/tmp/runtime-$$ && mkdir -p $XDG && chmod 0700 $XDG && "
+        f"export XDG_RUNTIME_DIR=$XDG && "
+        f"eval $(dbus-launch --sh-syntax) && "
+        f"exec mate-session"
+    )
 
     # Start in background
     cmd = (
-        f"proot-distro login arinanolabs --shared-x11 -- su - admin -c '"
-        f"{env_str} && "
-        f"dbus-launch mate-session"
-        f"'"
+        f"proot-distro login arinanolabs --shared-x11 -- "
+        f"su admin -c '{inner_cmd}'"
     )
 
     # Log to file for debugging
