@@ -160,7 +160,6 @@ def start_mate() -> bool:
         "PULSE_SERVER": "tcp:127.0.0.1:4713",
         "NO_AT_BRIDGE": "1",
         "LIBGL_ALWAYS_SOFTWARE": "0",
-        "XDG_RUNTIME_DIR": "/tmp/runtime-admin",
     }
 
     # Add GPU-specific env vars
@@ -168,13 +167,11 @@ def start_mate() -> bool:
 
     env_str = " ".join(f"export {k}={v}" for k, v in env_vars.items())
 
-    # Start in background, capture output for debugging
-    # --shared-x11: X11 socket from Termux
+    # Start in background
     cmd = (
         f"proot-distro login arinanolabs --shared-x11 -- su - admin -c '"
-        f"mkdir -p /tmp/runtime-admin && chmod 700 /tmp/runtime-admin && "
         f"{env_str} && "
-        f"dbus-launch --exit-with-session mate-session"
+        f"dbus-launch mate-session"
         f"'"
     )
 
