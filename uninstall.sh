@@ -11,7 +11,7 @@ echo ""
 echo "This will remove:"
 echo "  • proot container (arinanolabs)"
 echo "  • ~/.local/bin/alabs"
-echo "  • ~/.arinanolabs/ cache"
+echo "  • ~/arinanoLabs (git repo)"
 echo ""
 echo "This will NOT remove:"
 echo "  • ~/arinanoLabs/ (git repo)"
@@ -49,11 +49,11 @@ echo ">>> Removing alabs launcher..."
 rm -f ~/.local/bin/alabs
 echo "  [x] ~/.local/bin/alabs removed"
 
-# 4. Remove ~/.arinanolabs cache
+# 4. Remove git repo
 echo ""
-echo ">>> Removing ~/.arinanolabs cache..."
-rm -rf ~/.arinanolabs
-echo "  [x] ~/.arinanolabs removed"
+echo ">>> Removing ~/arinanoLabs..."
+rm -rf ~/arinanoLabs
+echo "  [x] ~/arinanoLabs removed"
 
 # 6. Clean Termux tmp
 echo ""

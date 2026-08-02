@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # ═══════════════════════════════════════════════════════════════
 # arinanoX — Doctor (health-check)
-# Usage: bash ~/.arinanolabs/scripts/doctor.sh
+# Usage: bash ~/arinanoLabs/scripts/doctor.sh
 # ═══════════════════════════════════════════════════════════════
 set -uo pipefail
 
@@ -27,7 +27,7 @@ echo "  ${DIM} Android ${ANDROID_VER} (SDK ${ANDROID_SDK}) · $(uname -m) · $(f
 # ── Seccomp ─────────────────────────────────────────────────
 echo "── Seccomp ──"
 SECCOMP_OK=0
-if bash "$HOME/.arinanolabs/scripts/seccomp-check.sh" 2>/dev/null; then
+if bash "$HOME/arinanoLabs/scripts/seccomp-check.sh" 2>/dev/null; then
     SECCOMP_OK=1
     echo "  ${GREEN} seccomp OK"
 else
@@ -81,12 +81,12 @@ fi
 # ── Storage ─────────────────────────────────────────────────
 echo "── Storage ──"
 FREE=$(df -h /data 2>/dev/null | awk 'NR==2{print $4}' || echo "?")
-ARINANOX_DIR="$HOME/.arinanolabs"
+ARINANOLABS_DIR="$HOME/arinanoLabs"
 if [ -d "$ARINANOX_DIR" ]; then
     DIR_SIZE=$(du -sh "$ARINANOX_DIR" 2>/dev/null | awk '{print $1}')
-    echo "  ${DIM} ~/.arinanolabs: ${DIR_SIZE} · /data free: ${FREE}"
+    echo "  ${DIM} ~/arinanoLabs: ${DIR_SIZE} · /data free: ${FREE}"
 else
-    echo "  ${WARN} ~/.arinanolabs not found (not installed?)"
+    echo "  ${WARN} ~/arinanoLabs not found (not installed?)"
     WARNS=$((WARNS + 1))
 fi
 

@@ -100,7 +100,7 @@ echo ""
 echo ">>> Installing ${#SELECTED[@]} patches..."
 
 # Track layered packages (Silverblue-style)
-LAYERS_FILE="$HOME/.arinanolabs/layers.txt"
+LAYERS_FILE="$HOME/arinanoLabs/layers.txt"
 touch "$LAYERS_FILE"
 
 for key in "${SELECTED[@]}"; do

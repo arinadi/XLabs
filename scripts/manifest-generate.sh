@@ -1,11 +1,11 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # ═══════════════════════════════════════════════════════════════
 # arinanoX — Manifest Generator
-# Scans user state, generates ~/.arinanolabs/user-manifest.yaml
+# Scans user state, generates ~/arinanoLabs/user-manifest.yaml
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
-MANIFEST="$HOME/.arinanolabs/user-manifest.yaml"
+MANIFEST="$HOME/arinanoLabs/user-manifest.yaml"
 ROOTFS="/data/data/com.termux/files/usr/var/lib/proot-distro/containers/arinanolabs/rootfs"
 
 echo ">>> Generating user-manifest.yaml..."

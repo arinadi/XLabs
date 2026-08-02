@@ -47,7 +47,7 @@ if [ "$SDK" -ge 34 ]; then
         echo "  ║  Android ${RELEASE} (SDK ${SDK})                          ║"
         echo "  ╠══════════════════════════════════════════════════════╣"
         echo "  ║  Mitigation: set PROOT_NO_SECCOMP=1               ║"
-        echo "  ║  Run: bash ~/.arinanolabs/scripts/seccomp-fix.sh     ║"
+        echo "  ║  Run: bash ~/arinanoLabs/scripts/seccomp-fix.sh     ║"
         echo "  ╚══════════════════════════════════════════════════════╝"
     else
         SEVERITY="patched"

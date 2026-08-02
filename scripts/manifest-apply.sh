@@ -6,7 +6,7 @@
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
-MANIFEST="$HOME/.arinanolabs/user-manifest.yaml"
+MANIFEST="$HOME/arinanoLabs/user-manifest.yaml"
 ROOTFS="/data/data/com.termux/files/usr/var/lib/proot-distro/containers/arinanolabs/rootfs"
 BACKUP_DIR="/sdcard/arinanolabs-backup"
 

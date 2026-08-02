@@ -8,7 +8,7 @@
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
-ARINANOX_DIR="$HOME/.arinanolabs"
+ARINANOLABS_DIR="$HOME/arinanoLabs"
 PROFILE="$HOME/.bashrc"
 
 echo ">>> seccomp-fix: applying PROOT_NO_SECCOMP=1"
