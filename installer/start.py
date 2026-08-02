@@ -169,9 +169,9 @@ def start_mate() -> bool:
     env_str = " ".join(f"export {k}={v}" for k, v in env_vars.items())
 
     # Start in background, capture output for debugging
-    # --shared-x11: bind X11 socket from Termux
+    # --isolated: no Termux binaries leak, --shared-x11: X11 socket access
     cmd = (
-        f"proot-distro login arinanolabs --shared-x11 -- su - admin -c '"
+        f"proot-distro login arinanolabs --isolated --shared-x11 -- su - admin -c '"
         f"mkdir -p /tmp/runtime-admin && chmod 700 /tmp/runtime-admin && "
         f"{env_str} && "
         f"dbus-launch --exit-with-session mate-session"
