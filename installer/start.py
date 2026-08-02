@@ -68,6 +68,10 @@ def stop_desktop() -> bool:
     rc, out = run_cmd("pkill -9 -f 'proot.*arinanolabs' 2>/dev/null")
     print(f"    proot wrapper: {'killed' if rc == 0 else 'not running'}")
 
+    # Kill orphaned dbus-daemon processes
+    rc, out = run_cmd("pkill -9 -f dbus-daemon 2>/dev/null")
+    print(f"    dbus-daemon: {'killed' if rc == 0 else 'not running'}")
+
     # Wait for processes to actually die
     time.sleep(1)
 
@@ -78,13 +82,20 @@ def stop_desktop() -> bool:
         rc, _ = run_cmd(f"rm -f {path} 2>/dev/null")
         print(f"    rm {path}: {'ok' if rc == 0 else 'failed'}")
 
-    # Cleanup stale dbus sockets
+    # Cleanup stale dbus sockets in Termux TMPDIR
     rc, _ = run_cmd(f"rm -f {tmpdir}/dbus-* 2>/dev/null")
-    print(f"    rm dbus sockets: {'ok' if rc == 0 else 'failed'}")
+    print(f"    rm dbus sockets (termux): {'ok' if rc == 0 else 'failed'}")
 
-    # Cleanup stale runtime dirs
+    # Cleanup stale runtime dirs in Termux TMPDIR
     rc, _ = run_cmd(f"rm -rf {tmpdir}/runtime-* 2>/dev/null")
-    print(f"    rm runtime dirs: {'ok' if rc == 0 else 'failed'}")
+    print(f"    rm runtime dirs (termux): {'ok' if rc == 0 else 'failed'}")
+
+    # Cleanup inside proot container's /tmp (dbus sockets + runtime dirs)
+    proot_tmp = os.path.join(PROOT_DIR, "rootfs/tmp")
+    rc, _ = run_cmd(f"rm -f {proot_tmp}/dbus-* 2>/dev/null")
+    print(f"    rm dbus sockets (proot): {'ok' if rc == 0 else 'failed'}")
+    rc, _ = run_cmd(f"rm -rf {proot_tmp}/runtime-* 2>/dev/null")
+    print(f"    rm runtime dirs (proot): {'ok' if rc == 0 else 'failed'}")
 
     # Verify all processes are dead
     rc, out = run_cmd("pgrep -f 'mate-session|pulseaudio|termux-x11|proot.*arinanolabs'")
