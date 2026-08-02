@@ -30,13 +30,16 @@ def is_installed() -> bool:
 
 
 def get_version() -> str:
-    """Get version from git commit hash."""
+    """Get version as date.hash."""
+    from datetime import datetime, timezone
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
             capture_output=True, text=True, timeout=5
         )
-        return result.stdout.strip() if result.returncode == 0 else "unknown"
+        git_hash = result.stdout.strip() if result.returncode == 0 else "unknown"
+        date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
+        return f"{date_str}.{git_hash}"
     except Exception:
         return "unknown"
 
