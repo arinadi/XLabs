@@ -60,7 +60,7 @@ def install():
     # Show completion
     console.print()
     console.print("[bold green]═══ Installation Complete ═══[/bold green]")
-    console.print("  Run [bold]alabs[/bold] to open the TUI menu\n")
+    console.print("  Open a [bold]new terminal session[/bold], then run [bold]alabs[/bold]\n")
 
 
 def continue_on_error() -> bool:
