@@ -115,11 +115,16 @@ def step_install_gpu() -> bool:
     return rc == 0
 
 
+def _container_exists() -> bool:
+    """Check if container rootfs directory exists."""
+    rootfs = os.path.join(PROOT_DIR, "rootfs")
+    return os.path.isdir(rootfs)
+
+
 def step_pull_image() -> bool:
     """Pull arinanoLabs image from GHCR (Debian + MATE + dev tools pre-installed)."""
     # Check if already exists
-    rc, _ = run_cmd(f"proot-distro list | grep {CONTAINER_NAME}")
-    if rc == 0:
+    if _container_exists():
         console.print("  [dim]Container already exists, skipping...[/dim]")
         return True
 
@@ -137,8 +142,7 @@ def step_pull_image() -> bool:
         return False
 
     # Verify container was created
-    rc, _ = run_cmd(f"proot-distro list | grep {CONTAINER_NAME}")
-    if rc != 0:
+    if not _container_exists():
         console.print("\n  [red]✗ Image pulled but container not created.[/red]")
         console.print("  Run manually: proot-distro install ghcr.io/arinadi/arinanolabs:latest --name arinanolabs")
         return False
