@@ -1,128 +1,100 @@
-"""npyscreen TUI for arinanoLabs — lightweight, Termux-compatible."""
+"""npyscreen TUI for arinanoLabs."""
 
 import npyscreen
 import os
-import sys
 
 
-class MainMenuForm(npyscreen.Form):
-    """Main menu with multi-select style buttons."""
-
-    def beforeEditing(self):
-        self.name = "📱 arinanoLabs"
+class MainMenuForm(npyscreen.FormWithMenus):
+    """Main menu."""
 
     def create(self):
         from .ui import get_version
-        version = get_version()
+        self.name = f"📱 arinanoLabs v{get_version()}"
 
-        self.add(npyscreen.MultiLineEdit, name="", value=f"  v{version}\n", editable=False, max_height=2)
+        self.menu = self.new_menu(name="Main Menu", footer="Press Enter to select")
+        self.menu.addItem("Start Desktop", self.on_start, "1")
+        self.menu.addItem("Stop Desktop", self.on_stop, "2")
+        self.menu.addItem("Update", self.on_update, "3")
+        self.menu.addItem("Extra Tools", self.on_tools, "4")
+        self.menu.addItem("Status", self.on_status, "5")
+        self.menu.addItem("Exit", self.on_exit, "0")
 
-        self.menu = self.add(
-            npyscreen.MultiSelect,
-            name="Menu",
-            values=[
-                "▶️  Start Desktop",
-                "⏹️  Stop Desktop",
-                "🔄  Update",
-                "🧰  Extra Tools",
-                "📊  Status",
-                "🚪  Exit",
-            ],
-            value=[],
-            scroll_exit=True,
-        )
+    def on_start(self):
+        self.parentApp.switchForm("START")
 
-    def afterEditing(self):
-        if not self.menu.value:
-            return
-        choice = self.menu.value[0]
+    def on_stop(self):
+        self.parentApp.switchForm("STOP")
 
-        if choice == 0:  # Start
-            self.parentApp.switchForm("START")
-        elif choice == 1:  # Stop
-            self.parentApp.switchForm("STOP")
-        elif choice == 2:  # Update
-            self.parentApp.switchForm("UPDATE")
-        elif choice == 3:  # Tools
-            self.parentApp.switchForm("TOOLS")
-        elif choice == 4:  # Status
-            self.parentApp.switchForm("STATUS")
-        elif choice == 5:  # Exit
-            self.parentApp.switchForm(None)
+    def on_update(self):
+        self.parentApp.switchForm("UPDATE")
+
+    def on_tools(self):
+        self.parentApp.switchForm("TOOLS")
+
+    def on_status(self):
+        self.parentApp.switchForm("STATUS")
+
+    def on_exit(self):
+        self.parentApp.switchForm(None)
 
 
-class StartForm(npyscreen.Form):
-    def beforeEditing(self):
-        self.name = "▶️  Start Desktop"
+class OutputForm(npyscreen.Form):
+    """Generic output form with Back button."""
 
     def create(self):
         self.output = self.add(
             npyscreen.MultiLineEdit,
             name="Output",
-            value="Starting desktop...\n",
+            value="",
             editable=False,
             max_height=15,
         )
         self.add(npyscreen.ButtonPress, name="Back", when_pressed_function=self.on_back)
+
+    def set_output(self, text):
+        self.output.value = text
+        self.display()
+
+    def on_back(self):
+        self.parentApp.switchForm("MAIN")
+
+
+class StartForm(OutputForm):
+    def beforeEditing(self):
+        self.name = "▶️  Start Desktop"
+        self.set_output("Starting desktop...")
 
     def on_edit(self):
         from .start import start_desktop
         success = start_desktop()
         if success:
-            self.output.value = "✓ Desktop started!\nOpen Termux:X11 app"
+            self.set_output("✓ Desktop started!\n\nOpen Termux:X11 app to see your desktop.")
         else:
-            self.output.value = "✗ Failed to start desktop"
-        self.display()
-
-    def on_back(self):
-        self.parentApp.switchForm("MAIN")
+            self.set_output("✗ Failed to start desktop")
 
 
-class StopForm(npyscreen.Form):
+class StopForm(OutputForm):
     def beforeEditing(self):
         self.name = "⏹️  Stop Desktop"
-
-    def create(self):
-        self.output = self.add(
-            npyscreen.MultiLineEdit,
-            name="Output",
-            value="Stopping...\n",
-            editable=False,
-            max_height=15,
-        )
-        self.add(npyscreen.ButtonPress, name="Back", when_pressed_function=self.on_back)
+        self.set_output("Stopping desktop...")
 
     def on_edit(self):
         from .start import stop_desktop
         stop_desktop()
-        self.output.value = "✓ Desktop stopped"
-        self.display()
-
-    def on_back(self):
-        self.parentApp.switchForm("MAIN")
+        self.set_output("✓ Desktop stopped")
 
 
-class UpdateForm(npyscreen.Form):
+class UpdateForm(OutputForm):
     def beforeEditing(self):
         self.name = "🔄  Update"
-
-    def create(self):
-        self.output = self.add(
-            npyscreen.MultiLineEdit,
-            name="Output",
-            value="Pulling latest...\n",
-            editable=False,
-            max_height=15,
-        )
-        self.add(npyscreen.ButtonPress, name="Back", when_pressed_function=self.on_back)
+        self.set_output("Pulling latest changes...")
 
     def on_edit(self):
         import subprocess
         repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
         if not os.path.exists(os.path.join(repo_dir, ".git")):
-            self.output.value = "✗ Not a git repository"
-            self.display()
+            self.set_output("✗ Not a git repository\nReinstall via install.sh")
             return
 
         result = subprocess.run(["git", "pull"], cwd=repo_dir, capture_output=True, text=True)
@@ -133,46 +105,29 @@ class UpdateForm(npyscreen.Form):
 
         if result.returncode == 0:
             if "Already up to date" in result.stdout:
-                self.output.value = "✓ Already on latest version"
+                self.set_output("✓ Already on latest version")
             else:
-                self.output.value = "✓ Updated!\nRestart alabs to use new version"
+                self.set_output("✓ Updated!\n\nRestart alabs to use new version")
         else:
-            self.output.value = "✗ Update failed"
-        self.display()
-
-    def on_back(self):
-        self.parentApp.switchForm("MAIN")
+            self.set_output("✗ Update failed")
 
 
-class ToolsForm(npyscreen.Form):
+class ToolsForm(OutputForm):
     def beforeEditing(self):
         self.name = "🧰  Extra Tools"
-
-    def create(self):
-        self.tools = self.add(
-            npyscreen.MultiSelect,
-            name="Tools",
-            values=[
-                "Chromium Browser",
-                "VS Code (code-server)",
-                "Zsh + Oh My Zsh",
-                "Neovim",
-                "GitHub CLI",
-            ],
-            value=[],
-            scroll_exit=True,
+        self.set_output(
+            "  [1] Chromium Browser\n"
+            "  [2] VS Code (code-server)\n"
+            "  [3] Zsh + Oh My Zsh\n"
+            "  [4] Neovim\n"
+            "  [5] GitHub CLI\n\n"
+            "  Coming soon!"
         )
-        self.add(npyscreen.ButtonPress, name="Back", when_pressed_function=self.on_back)
-
-    def on_back(self):
-        self.parentApp.switchForm("MAIN")
 
 
-class StatusForm(npyscreen.Form):
+class StatusForm(OutputForm):
     def beforeEditing(self):
         self.name = "📊  Status"
-
-    def create(self):
         from .start import is_running
         from .ui import is_installed, get_version
         from .gpu import detect_gpu, get_gpu_summary
@@ -181,35 +136,25 @@ class StatusForm(npyscreen.Form):
         running = is_running()
         gpu = detect_gpu()
 
-        status = (
+        self.set_output(
             f"  Container:  {'✓ Installed' if container else '✗ Not found'}\n"
             f"  Desktop:    {'● Running' if running else '○ Not running'}\n"
             f"  GPU:        {get_gpu_summary(gpu)}\n"
             f"  Version:    {get_version()}\n"
         )
 
-        self.add(npyscreen.MultiLineEdit, name="", value=status, editable=False, max_height=8)
-        self.add(npyscreen.ButtonPress, name="Back", when_pressed_function=self.on_back)
-
-    def on_back(self):
-        self.parentApp.switchForm("MAIN")
-
 
 class ArinanoLabsApp(npyscreen.NPSApp):
-    """Main Application."""
-
     def main(self):
         self.addForm("MAIN", MainMenuForm, name="arinanoLabs")
-        self.addForm("START", StartForm, name="Start Desktop")
-        self.addForm("STOP", StopForm, name="Stop Desktop")
-        self.addForm("UPDATE", UpdateForm, name="Update")
-        self.addForm("TOOLS", ToolsForm, name="Extra Tools")
-        self.addForm("STATUS", StatusForm, name="Status")
-
+        self.addForm("START", StartForm)
+        self.addForm("STOP", StopForm)
+        self.addForm("UPDATE", UpdateForm)
+        self.addForm("TOOLS", ToolsForm)
+        self.addForm("STATUS", StatusForm)
         self.switchForm("MAIN")
 
 
 def run_npyscreen():
-    """Run the npyscreen TUI."""
     app = ArinanoLabsApp()
     app.run()
