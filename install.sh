@@ -92,9 +92,9 @@ sync_repo() {
     if [ -d "$REPO_DIR/.git" ]; then
         info "Pulling latest changes..."
         cd "$REPO_DIR"
-        git pull --ff-only --depth=1 || {
+        git pull || {
             warn "Pull failed, resetting..."
-            git fetch --depth=1 origin main
+            git fetch origin main
             git reset --hard origin/main
         }
     else
