@@ -58,10 +58,14 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         git python3-pip python3-venv python3-dev \
         build-essential cmake pkg-config \
-        htop tmux openssh-client && \
+        htop tmux openssh-client \
+        zsh fzf ripgrep bat lazygit && \
     apt-get clean && rm -rf /var/lib/apt/lists/* \
     /usr/share/doc/* /usr/share/man/* /usr/share/info/* \
     /usr/share/locale/* /var/cache/apt/archives/*
+
+# Install Oh My Zsh
+RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 
 # ═══════════════════════════════════════════════
 # Layer 6  NODE.JS
