@@ -224,16 +224,16 @@ def handle_update():
     import subprocess
     console.print("  [cyan]→[/cyan] Pulling latest changes...")
 
-    # Try fast-forward first
+    # Normal pull
     result = subprocess.run(
-        ["git", "pull", "--ff-only", "--depth=1"],
+        ["git", "pull"],
         cwd=repo_dir, capture_output=True, text=True
     )
 
-    # If failed, fetch + reset (normal for shallow clones)
+    # If failed, fetch + reset
     if result.returncode != 0:
         console.print("  [dim]Fetching latest...[/dim]")
-        subprocess.run(["git", "fetch", "--depth=1", "origin", "main"], cwd=repo_dir, capture_output=True)
+        subprocess.run(["git", "fetch", "origin", "main"], cwd=repo_dir, capture_output=True)
         result = subprocess.run(
             ["git", "reset", "--hard", "origin/main"],
             cwd=repo_dir, capture_output=True, text=True

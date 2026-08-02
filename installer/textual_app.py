@@ -173,13 +173,13 @@ class ArinanoLabsApp(App):
 
         log.write("[cyan]→ Pulling latest changes...[/cyan]")
         result = subprocess.run(
-            ["git", "pull", "--ff-only", "--depth=1"],
+            ["git", "pull"],
             cwd=repo_dir, capture_output=True, text=True
         )
 
         if result.returncode != 0:
             log.write("[dim]Fetching latest...[/dim]")
-            subprocess.run(["git", "fetch", "--depth=1", "origin", "main"], cwd=repo_dir, capture_output=True)
+            subprocess.run(["git", "fetch", "origin", "main"], cwd=repo_dir, capture_output=True)
             result = subprocess.run(
                 ["git", "reset", "--hard", "origin/main"],
                 cwd=repo_dir, capture_output=True, text=True
