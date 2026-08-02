@@ -160,6 +160,7 @@ def start_mate() -> bool:
         "PULSE_SERVER": "tcp:127.0.0.1:4713",
         "NO_AT_BRIDGE": "1",
         "LIBGL_ALWAYS_SOFTWARE": "0",
+        "XDG_RUNTIME_DIR": "/tmp/runtime-admin",
     }
 
     # Add GPU-specific env vars
@@ -170,8 +171,8 @@ def start_mate() -> bool:
     # Start in background, capture output for debugging
     cmd = (
         f"proot-distro login arinanolabs --isolated --bind /tmp:/tmp -- su - admin -c '"
+        f"mkdir -p /tmp/runtime-admin && chmod 700 /tmp/runtime-admin && "
         f"{env_str} && "
-        f"rm -f /tmp/dbus-* 2>/dev/null && "
         f"dbus-launch --exit-with-session mate-session"
         f"'"
     )
