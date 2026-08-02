@@ -1,11 +1,6 @@
 name: Build arinanoLabs Image
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'image/**'
-      - '.github/workflows/**'
   workflow_dispatch:
 
 jobs:
