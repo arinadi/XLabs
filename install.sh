@@ -3,7 +3,7 @@
 #  arinanoLabs Installer — Bootstrapper
 #  Usage: curl -sL https://raw.githubusercontent.com/arinadi/arinanoLabs/main/install.sh | bash
 #
-#  Flow: install git → clone/pull repo → run install.py
+#  Flow: check deps → clone/pull repo → install libs → run install.py
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -22,24 +22,69 @@ ok()    { echo -e "${GREEN}✓${NC} $1"; }
 warn()  { echo -e "${YELLOW}⚠${NC} $1"; }
 fail()  { echo -e "${RED}✗${NC} $1"; exit 1; }
 
+# ── Package Manager ────────────────────────────────────────
+pkg_install() {
+    if command -v pkg &>/dev/null; then
+        pkg install -y "$@"
+    elif command -v apt-get &>/dev/null; then
+        sudo apt-get update -qq && sudo apt-get install -y "$@"
+    elif command -v brew &>/dev/null; then
+        brew install "$@"
+    else
+        fail "Cannot install packages. Please install manually: $*"
+    fi
+}
+
 # ── Check/Install Git ──────────────────────────────────────
 check_git() {
     if command -v git &>/dev/null; then
         ok "Git installed"
         return
     fi
-
     info "Installing git..."
-    if command -v pkg &>/dev/null; then
-        pkg install -y git
-    elif command -v apt-get &>/dev/null; then
-        sudo apt-get update -qq && sudo apt-get install -y git
-    elif command -v brew &>/dev/null; then
-        brew install git
-    else
-        fail "Cannot install git. Please install manually."
-    fi
+    pkg_install git
     ok "Git installed"
+}
+
+# ── Check/Install Python ──────────────────────────────────
+check_python() {
+    if command -v python3 &>/dev/null; then
+        PYTHON="python3"
+    elif command -v python &>/dev/null; then
+        PYTHON="python"
+    else
+        info "Installing Python..."
+        pkg_install python
+        PYTHON="python3"
+    fi
+    ok "Python $($PYTHON --version 2>&1 | awk '{print $2}')"
+}
+
+# ── Check/Install pip ─────────────────────────────────────
+check_pip() {
+    if $PYTHON -m pip --version &>/dev/null; then
+        PIP="$PYTHON -m pip"
+    else
+        info "Installing pip..."
+        if command -v pkg &>/dev/null; then
+            pkg install -y python
+        else
+            $PYTHON -m ensurepip --upgrade 2>/dev/null || {
+                curl -sS https://bootstrap.pypa.io/get-pip.py | $PYTHON
+            }
+        fi
+        PIP="$PYTHON -m pip"
+    fi
+    ok "pip installed"
+}
+
+# ── Install TUI libraries ────────────────────────────────
+install_libs() {
+    info "Installing TUI libraries..."
+    $PIP install rich requests --quiet --break-system-packages 2>/dev/null || \
+    $PIP install rich requests --quiet 2>/dev/null || \
+    $PIP install rich requests --quiet --user 2>/dev/null || true
+    ok "Libraries installed"
 }
 
 # ── Clone or Pull ──────────────────────────────────────────
@@ -57,16 +102,15 @@ sync_repo() {
         git clone --depth 1 "$REPO_URL" "$REPO_DIR"
         cd "$REPO_DIR"
     fi
-    ok "Repository ready at $REPO_DIR"
+    ok "Repository ready"
 }
 
 # ── Run Installer ──────────────────────────────────────────
 run_installer() {
     info "Launching TUI installer..."
     echo ""
-
     cd "$REPO_DIR"
-    python install.py
+    $PYTHON install.py
 }
 
 # ── Main ────────────────────────────────────────────────────
@@ -78,6 +122,9 @@ main() {
     echo ""
 
     check_git
+    check_python
+    check_pip
+    install_libs
     sync_repo
     run_installer
 }
