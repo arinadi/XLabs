@@ -115,7 +115,7 @@ fix_launcher() {
     # Remove old PATH line from bashrc
     if [ -f "$HOME/.bashrc" ]; then
         sed -i '/# arinanoLabs/d' "$HOME/.bashrc" 2>/dev/null
-        sed -i '\|$HOME/.local/bin|d' "$HOME/.bashrc" 2>/dev/null
+        sed -i "\|$HOME/.local/bin|d" "$HOME/.bashrc" 2>/dev/null
     fi
 
     # Create symlink in ~/bin (Termux default PATH)
