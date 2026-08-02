@@ -16,7 +16,7 @@ from rich.align import Align
 console = Console()
 
 # ── Constants ──────────────────────────────────────────────
-PROOT_DIR = "/data/data/com.termux/files/usr/var/lib/proot-distro/containers/arinanox"
+PROOT_DIR = "/data/data/com.termux/files/usr/var/lib/proot-distro/containers/arinanolabs"
 VERSION_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "VERSION")
 
 

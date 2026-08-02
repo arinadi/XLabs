@@ -19,7 +19,7 @@ from .welcome import show_post_install_info
 
 REPO_URL = "https://raw.githubusercontent.com/arinadi/arinanoLabs/main"
 PROOT_DISTRO = "debian"
-CONTAINER_NAME = "arinanox"
+CONTAINER_NAME = "arinanolabs"
 ADMIN_USER = "admin"
 
 
@@ -130,7 +130,7 @@ def step_create_container() -> bool:
         console.print(f"  [red]{output}[/red]")
         return False
 
-    # Rename to arinanox
+    # Rename to arinanolabs
     rc, _ = run_cmd(f"proot-distro rename {PROOT_DISTRO} {CONTAINER_NAME}", timeout=30)
     return rc == 0
 

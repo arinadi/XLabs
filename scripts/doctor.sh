@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # ═══════════════════════════════════════════════════════════════
 # arinanoX — Doctor (health-check)
-# Usage: bash ~/.arinanox/scripts/doctor.sh
+# Usage: bash ~/.arinanolabs/scripts/doctor.sh
 # ═══════════════════════════════════════════════════════════════
 set -uo pipefail
 
@@ -27,7 +27,7 @@ echo "  ${DIM} Android ${ANDROID_VER} (SDK ${ANDROID_SDK}) · $(uname -m) · $(f
 # ── Seccomp ─────────────────────────────────────────────────
 echo "── Seccomp ──"
 SECCOMP_OK=0
-if bash "$HOME/.arinanox/scripts/seccomp-check.sh" 2>/dev/null; then
+if bash "$HOME/.arinanolabs/scripts/seccomp-check.sh" 2>/dev/null; then
     SECCOMP_OK=1
     echo "  ${GREEN} seccomp OK"
 else
@@ -48,14 +48,14 @@ done
 
 # ── Proot Container ─────────────────────────────────────────
 echo "── Proot Container ──"
-ROOTFS="/data/data/com.termux/files/usr/var/lib/proot-distro/containers/arinanox/rootfs"
+ROOTFS="/data/data/com.termux/files/usr/var/lib/proot-distro/containers/arinanolabs/rootfs"
 if [ -d "$ROOTFS/home/admin" ]; then
-    SIZE=$(du -sh /data/data/com.termux/files/usr/var/lib/proot-distro/containers/arinanox/rootfs 2>/dev/null | awk '{print $1}')
-    echo "  ${GREEN} arinanox (${SIZE:-?})"
+    SIZE=$(du -sh /data/data/com.termux/files/usr/var/lib/proot-distro/containers/arinanolabs/rootfs 2>/dev/null | awk '{print $1}')
+    echo "  ${GREEN} arinanolabs (${SIZE:-?})"
     
     # Check core packages inside
     for bin in firefox-esr mate-session; do
-        if proot-distro login arinanox -- which "$bin" &>/dev/null; then
+        if proot-distro login arinanolabs -- which "$bin" &>/dev/null; then
             echo "  ${GREEN}   $bin"
         else
             echo "  ${WARN}   $bin — MISSING"
@@ -63,7 +63,7 @@ if [ -d "$ROOTFS/home/admin" ]; then
         fi
     done
 else
-    echo "  ${RED} arinanox container NOT FOUND"
+    echo "  ${RED} arinanolabs container NOT FOUND"
     FAILS=$((FAILS + 1))
 fi
 
@@ -81,12 +81,12 @@ fi
 # ── Storage ─────────────────────────────────────────────────
 echo "── Storage ──"
 FREE=$(df -h /data 2>/dev/null | awk 'NR==2{print $4}' || echo "?")
-ARINANOX_DIR="$HOME/.arinanox"
+ARINANOX_DIR="$HOME/.arinanolabs"
 if [ -d "$ARINANOX_DIR" ]; then
     DIR_SIZE=$(du -sh "$ARINANOX_DIR" 2>/dev/null | awk '{print $1}')
-    echo "  ${DIM} ~/.arinanox: ${DIR_SIZE} · /data free: ${FREE}"
+    echo "  ${DIM} ~/.arinanolabs: ${DIR_SIZE} · /data free: ${FREE}"
 else
-    echo "  ${WARN} ~/.arinanox not found (not installed?)"
+    echo "  ${WARN} ~/.arinanolabs not found (not installed?)"
     WARNS=$((WARNS + 1))
 fi
 

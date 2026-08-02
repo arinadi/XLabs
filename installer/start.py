@@ -158,7 +158,7 @@ def start_mate() -> bool:
 
     # Start in background
     cmd = f"""
-        proot-distro login arinanox --shared-tmp -- su - admin -c "
+        proot-distro login arinanolabs --shared-tmp -- su - admin -c "
             {env_str}
             rm -f /tmp/dbus-* 2>/dev/null
             dbus-launch --exit-with-session mate-session

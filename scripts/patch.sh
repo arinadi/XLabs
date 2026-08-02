@@ -4,7 +4,7 @@ set -euo pipefail
 # patch.sh — Install optional software into arinanoX proot
 # Interactive (no args) or CLI (with flags)
 
-CONTAINER="arinanox"
+CONTAINER="arinanolabs"
 
 declare -A PATCHES
 
@@ -100,7 +100,7 @@ echo ""
 echo ">>> Installing ${#SELECTED[@]} patches..."
 
 # Track layered packages (Silverblue-style)
-LAYERS_FILE="$HOME/.arinanox/layers.txt"
+LAYERS_FILE="$HOME/.arinanolabs/layers.txt"
 touch "$LAYERS_FILE"
 
 for key in "${SELECTED[@]}"; do

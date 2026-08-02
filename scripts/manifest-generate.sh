@@ -1,22 +1,22 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # ═══════════════════════════════════════════════════════════════
 # arinanoX — Manifest Generator
-# Scans user state, generates ~/.arinanox/user-manifest.yaml
+# Scans user state, generates ~/.arinanolabs/user-manifest.yaml
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
-MANIFEST="$HOME/.arinanox/user-manifest.yaml"
-ROOTFS="/data/data/com.termux/files/usr/var/lib/proot-distro/containers/arinanox/rootfs"
+MANIFEST="$HOME/.arinanolabs/user-manifest.yaml"
+ROOTFS="/data/data/com.termux/files/usr/var/lib/proot-distro/containers/arinanolabs/rootfs"
 
 echo ">>> Generating user-manifest.yaml..."
 
 # ── Detect user-added APT packages ──────────────────────────
 # Compare apt-mark showmanual against base image packages
-BASE_PKGS="${TMPDIR:-/data/data/com.termux/files/usr/tmp}/arinanox-base-pkgs.txt"
-USER_PKGS="${TMPDIR:-/data/data/com.termux/files/usr/tmp}/arinanox-user-pkgs.txt"
+BASE_PKGS="${TMPDIR:-/data/data/com.termux/files/usr/tmp}/arinanolabs-base-pkgs.txt"
+USER_PKGS="${TMPDIR:-/data/data/com.termux/files/usr/tmp}/arinanolabs-user-pkgs.txt"
 
 # Get all manually-installed packages
-proot-distro login arinanox -- bash -c 'apt-mark showmanual 2>/dev/null | sort' > "$USER_PKGS" 2>/dev/null || true
+proot-distro login arinanolabs -- bash -c 'apt-mark showmanual 2>/dev/null | sort' > "$USER_PKGS" 2>/dev/null || true
 
 # Get base packages from fresh image (from Dockerfile-like list)
 # For now: list known core packages and exclude them
@@ -69,8 +69,8 @@ yad
 BASE
 
 # Add packages from Dockerfile — merge with actual base
-EXTRA_FILE="${TMPDIR:-/data/data/com.termux/files/usr/tmp}/arinanox-extra.txt"
-proot-distro login arinanox -- bash -c 'dpkg -l 2>/dev/null | grep "^ii" | awk "{print \$2}"' \
+EXTRA_FILE="${TMPDIR:-/data/data/com.termux/files/usr/tmp}/arinanolabs-extra.txt"
+proot-distro login arinanolabs -- bash -c 'dpkg -l 2>/dev/null | grep "^ii" | awk "{print \$2}"' \
     | grep -v -f "$BASE_PKGS" - > "$EXTRA_FILE" 2>/dev/null || true
 
 EXTRA=$(cat "$EXTRA_FILE" 2>/dev/null | head -30 | tr '\n' ' ')
@@ -91,8 +91,8 @@ cat > "$MANIFEST" <<YAML
 # Generated: $(date -Iseconds)
 # This file tracks your customizations so they survive updates.
 #
-# Run after customizing:  arinanox snapshot create
-# Run after update:       arinanox install   (auto-applied)
+# Run after customizing:  arinanolabs snapshot create
+# Run after update:       arinanolabs install   (auto-applied)
 
 # User-installed packages (auto-detected from apt-mark)
 packages:
@@ -106,7 +106,7 @@ echo ""
 echo "  ✓ Manifest written: $MANIFEST"
 echo ""
 echo "  Review & customize it, then:"
-echo "    arinanox snapshot create    # checkpoint before update"
-echo "    arinanox update             # update + re-apply"
+echo "    arinanolabs snapshot create    # checkpoint before update"
+echo "    arinanolabs update             # update + re-apply"
 
 cat "$MANIFEST"

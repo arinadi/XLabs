@@ -21,11 +21,11 @@ proot_exec_root() {
 # ── Commands ─────────────────────────────────────────────────
 cmd_setup() {
     echo ">>> [1/4] Copying project into proot..."
-    proot_exec_root "mkdir -p /home/$ADMIN/arinanox"
-    proot_exec_root "rsync -a --exclude='.git' --exclude='node_modules' $PROJECT_DIR/ /home/$ADMIN/arinanox/"
+    proot_exec_root "mkdir -p /home/$ADMIN/arinanolabs"
+    proot_exec_root "rsync -a --exclude='.git' --exclude='node_modules' $PROJECT_DIR/ /home/$ADMIN/arinanolabs/"
 
     echo ">>> [2/4] Setting permissions..."
-    proot_exec_root "chown -R $ADMIN:$ADMIN /home/$ADMIN/arinanox"
+    proot_exec_root "chown -R $ADMIN:$ADMIN /home/$ADMIN/arinanolabs"
 
     echo ">>> [3/4] Installing locale..."
     proot_exec_root "sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && locale-gen" 2>/dev/null || true

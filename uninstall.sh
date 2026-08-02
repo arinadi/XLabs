@@ -1,21 +1,20 @@
 #!/data/data/com.termux/files/usr/bin/bash
 set -euo pipefail
 
-# uninstall.sh — Clean uninstall of arinanoX
-# Removes: proot container, generated scripts, symlinks, configs
+# uninstall.sh — Clean uninstall of arinanoLabs
+# Removes: proot container, generated scripts, configs
 
 echo "╔═══════════════════════════════════╗"
-echo "║  🗑️  arinanoX Uninstaller        ║"
+echo "║  🗑️  arinanoLabs Uninstaller      ║"
 echo "╠═══════════════════════════════════╣"
 echo ""
 echo "This will remove:"
-echo "  • proot container (arinanox)"
-echo "  • launcher scripts (~/.shortcuts/)"
-echo "  • home symlinks (start-*, kill-*, update*)"
-echo "  • ~/.arinanox/ cache"
+echo "  • proot container (arinanolabs)"
+echo "  • ~/.local/bin/alabs"
+echo "  • ~/.arinanolabs/ cache"
 echo ""
 echo "This will NOT remove:"
-echo "  • ~/arinanoX/ (git repo)"
+echo "  • ~/arinanoLabs/ (git repo)"
 echo "  • ~/storage/ (Android storage)"
 echo "  • ~/.bashrc (Termux config)"
 echo ""
@@ -40,36 +39,21 @@ sleep 1
 # 2. Remove proot container
 echo ""
 echo ">>> Removing proot container..."
-if proot-distro list 2>/dev/null | grep -q "arinanox"; then
-    proot-distro remove arinanox 2>&1 && echo "  [x] arinanox removed" || echo "  [-] Failed to remove"
-fi
-if proot-distro list 2>/dev/null | grep -q "arinanox-prev"; then
-    proot-distro remove arinanox-prev 2>&1 && echo "  [x] arinanox-prev removed" || echo "  [-] Failed to remove"
+if proot-distro list 2>/dev/null | grep -q "arinanolabs"; then
+    proot-distro remove arinanolabs 2>&1 && echo "  [x] arinanolabs removed" || echo "  [-] Failed to remove"
 fi
 
-# 3. Remove launcher scripts
+# 3. Remove alabs launcher
 echo ""
-echo ">>> Removing launcher scripts..."
-rm -f ~/.shortcuts/0-stop-arinanox.sh ~/.shortcuts/1-start-arinanox.sh ~/.shortcuts/2-update-arinanox.sh \
-      ~/.shortcuts/stop.sh \
-      ~/.shortcuts/update.sh \
-      ~/.shortcuts/update-arinanox.sh
-echo "  [x] ~/.shortcuts/ cleaned"
+echo ">>> Removing alabs launcher..."
+rm -f ~/.local/bin/alabs
+echo "  [x] ~/.local/bin/alabs removed"
 
-# 4. Remove home symlinks
+# 4. Remove ~/.arinanolabs cache
 echo ""
-echo ">>> Removing home symlinks..."
-rm -f ~/start.sh \
-      ~/stop.sh \
-      ~/update.sh \
-      ~/update-arinanox.sh
-echo "  [x] Home symlinks removed"
-
-# 5. Remove ~/.arinanox cache
-echo ""
-echo ">>> Removing ~/.arinanox cache..."
-rm -rf ~/.arinanox
-echo "  [x] ~/.arinanox removed"
+echo ">>> Removing ~/.arinanolabs cache..."
+rm -rf ~/.arinanolabs
+echo "  [x] ~/.arinanolabs removed"
 
 # 6. Clean Termux tmp
 echo ""

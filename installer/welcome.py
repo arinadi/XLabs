@@ -92,13 +92,10 @@ def show_post_install_info():
 
 [bold]Quick start:[/bold]
   [cyan]alabs[/cyan]              Launch TUI menu
-  [cyan]arinanox start[/cyan]     Start desktop (CLI)
+  [cyan]alabs[/cyan]              Launch TUI menu
 
 [bold]Useful commands:[/bold]
   alabs                  Open main menu
-  arinanox start         Start desktop
-  arinanox stop          Stop desktop
-  arinanox doctor        Health check
 """
 
     show_panel(info_text, title="✅ Ready!", style="green")

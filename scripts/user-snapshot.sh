@@ -2,12 +2,12 @@
 # ═══════════════════════════════════════════════════════════════
 # arinanoX — User Snapshot
 # rsync --link-dest hardlinked snapshots of /home/admin
-# Usage: arinanox snapshot create|list|restore <id>
+# Usage: arinanolabs snapshot create|list|restore <id>
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
-SNAPSHOT_DIR="$HOME/.arinanox/snapshots"
-ROOTFS="/data/data/com.termux/files/usr/var/lib/proot-distro/containers/arinanox/rootfs"
+SNAPSHOT_DIR="$HOME/.arinanolabs/snapshots"
+ROOTFS="/data/data/com.termux/files/usr/var/lib/proot-distro/containers/arinanolabs/rootfs"
 HOME_SRC="$ROOTFS/home/admin"
 MAX_SNAPSHOTS=3
 
@@ -17,9 +17,9 @@ SNAP_ID="${2:-}"
 # ── create ───────────────────────────────────────────────────
 do_create() {
     # Generate manifest first
-    if [ -f "$HOME/.arinanox/scripts/manifest-generate.sh" ]; then
+    if [ -f "$HOME/.arinanolabs/scripts/manifest-generate.sh" ]; then
         echo ">>> Generating manifest..."
-        bash "$HOME/.arinanox/scripts/manifest-generate.sh" 2>/dev/null || true
+        bash "$HOME/.arinanolabs/scripts/manifest-generate.sh" 2>/dev/null || true
     fi
     
     # Create hardlinked snapshot
@@ -39,8 +39,8 @@ do_create() {
     rsync -a $LINK_DEST "$HOME_SRC/" "$SNAP_PATH/" 2>&1 | tail -2
     
     # Update "current" symlink
-    rm -f "$HOME/.arinanox/snapshot-current"
-    ln -sf "$SNAP_PATH" "$HOME/.arinanox/snapshot-current"
+    rm -f "$HOME/.arinanolabs/snapshot-current"
+    ln -sf "$SNAP_PATH" "$HOME/.arinanolabs/snapshot-current"
     
     # Rotate: keep only last N
     COUNT=$(ls -1t "$SNAPSHOT_DIR" 2>/dev/null | wc -l)
@@ -67,13 +67,13 @@ do_list() {
         done
     fi
     echo ""
-    echo "Current → $([ -L "$HOME/.arinanox/snapshot-current" ] && basename "$(readlink "$HOME/.arinanox/snapshot-current")" || echo "none")"
+    echo "Current → $([ -L "$HOME/.arinanolabs/snapshot-current" ] && basename "$(readlink "$HOME/.arinanolabs/snapshot-current")" || echo "none")"
 }
 
 # ── restore ──────────────────────────────────────────────────
 do_restore() {
     if [ -z "$SNAP_ID" ]; then
-        echo "Usage: arinanox snapshot restore <snapshot-id>"
+        echo "Usage: arinanolabs snapshot restore <snapshot-id>"
         do_list
         exit 1
     fi
@@ -91,9 +91,9 @@ do_restore() {
     case "$confirm" in [yY]*) ;; *) echo "    Cancelled."; exit 0 ;; esac
     
     rsync -a --delete "$SNAP_PATH/" "$HOME_SRC/" 2>&1 | tail -2
-    ln -sf "$SNAP_PATH" "$HOME/.arinanox/snapshot-current"
+    ln -sf "$SNAP_PATH" "$HOME/.arinanolabs/snapshot-current"
     echo "  ✓ Restored to $SNAP_ID"
-    echo "  Restart desktop to apply: arinanox stop && arinanox start"
+    echo "  Restart desktop to apply: arinanolabs stop && arinanolabs start"
 }
 
 # ── Dispatch ─────────────────────────────────────────────────
@@ -102,7 +102,7 @@ case "$CMD" in
     list|ls|l)  do_list ;;
     restore|r)  do_restore ;;
     *)
-        echo "Usage: arinanox snapshot create|list|restore <id>"
+        echo "Usage: arinanolabs snapshot create|list|restore <id>"
         exit 1
         ;;
 esac

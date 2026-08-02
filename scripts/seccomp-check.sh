@@ -22,7 +22,7 @@ PROBE_RESULT="unknown"
 
 # ── Probe: try a glibc binary through proot ─────────────────
 if command -v proot-distro &>/dev/null; then
-    if proot-distro login arinanox -- bash -c 'echo ok' &>/dev/null; then
+    if proot-distro login arinanolabs -- bash -c 'echo ok' &>/dev/null; then
         PROBE_RESULT="pass"
         echo "  Probe:       ✓ proot exec works"
     else
@@ -47,7 +47,7 @@ if [ "$SDK" -ge 34 ]; then
         echo "  ║  Android ${RELEASE} (SDK ${SDK})                          ║"
         echo "  ╠══════════════════════════════════════════════════════╣"
         echo "  ║  Mitigation: set PROOT_NO_SECCOMP=1               ║"
-        echo "  ║  Run: bash ~/.arinanox/scripts/seccomp-fix.sh     ║"
+        echo "  ║  Run: bash ~/.arinanolabs/scripts/seccomp-fix.sh     ║"
         echo "  ╚══════════════════════════════════════════════════════╝"
     else
         SEVERITY="patched"

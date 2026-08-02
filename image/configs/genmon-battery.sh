@@ -5,7 +5,7 @@
 # ===========================================
 #  MATE: mate-panel → Add → Notification Area
 #  XFCE: xfce4-panel → Add → Generic Monitor
-#  Command: bash ~/.arinanox/tools/genmon-battery.sh
+#  Command: bash ~/.arinanolabs/tools/genmon-battery.sh
 #  Interval: 30s
 # ═══════════════════════════════════════════
 

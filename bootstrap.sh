@@ -2,17 +2,17 @@
 set -euo pipefail
 
 # ══════════════════════════════════════════
-#  arinanoX Bootstrap — curl | bash
-#  https://github.com/arinadi/arinanoX
+#  arinanoLabs Bootstrap — curl | bash
+#  https://github.com/arinadi/arinanoLabs
 # ══════════════════════════════════════════
 
 REPO="https://raw.githubusercontent.com/arinadi/arinanoLabs/main"
-ARINANOX_DIR="$HOME/.arinanox"
-SCRIPTS_DIR="${ARINANOX_DIR}/scripts"
-LAUNCHERS_DIR="${ARINANOX_DIR}/launchers"
+ARINANOLABS_DIR="$HOME/.arinanolabs"
+SCRIPTS_DIR="${ARINANOLABS_DIR}/scripts"
+LAUNCHERS_DIR="${ARINANOLABS_DIR}/launchers"
 
 INSTALLED=false
-[ -d "$ARINANOX_DIR" ] && INSTALLED=true
+[ -d "$ARINANOLABS_DIR" ] && INSTALLED=true
 
 # --- Menu (only when interactive) ---
 if [ -t 0 ]; then
@@ -91,13 +91,9 @@ bash "${SCRIPTS_DIR}/motd-setup.sh"
 
 echo ""
 echo "╔═══════════════════════════════════════╗"
-echo "║  ✅ arinanoX ready!                  ║"
+echo "║  ✅ arinanoLabs ready!                ║"
 echo "╠═══════════════════════════════════════╣"
-echo "║  Widget:  0-stop · 1-start            ║"
-echo "║  CLI:    arinanox start               ║"
-echo "║          arinanox stop                ║"
-echo "║          arinanox help                ║"
 echo "║                                       ║"
-echo "║  ⚠️ arinanox update = fresh install    ║"
-echo "║  Run 'arinanox snapshot' first.       ║"
+echo "║  TUI:  alabs                          ║"
+echo "║                                       ║"
 echo "╚═══════════════════════════════════════╝"

@@ -8,18 +8,18 @@
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
-ARINANOX_DIR="$HOME/.arinanox"
+ARINANOX_DIR="$HOME/.arinanolabs"
 PROFILE="$HOME/.bashrc"
 
 echo ">>> seccomp-fix: applying PROOT_NO_SECCOMP=1"
 
 # ── Patch start.sh ──────────────────────────────────────────
-START_SH="$HOME/.shortcuts/1-start-arinanox.sh"
+START_SH="$HOME/.shortcuts/1-start-arinanolabs.sh"
 if [ -f "$START_SH" ]; then
     # Add PROOT_NO_SECCOMP=1 to proot-distro login line
     if ! grep -q "PROOT_NO_SECCOMP" "$START_SH"; then
         echo "  → patching $START_SH"
-        sed -i 's|proot-distro login arinanox|PROOT_NO_SECCOMP=1 proot-distro login arinanox|g' "$START_SH"
+        sed -i 's|proot-distro login arinanolabs|PROOT_NO_SECCOMP=1 proot-distro login arinanolabs|g' "$START_SH"
         echo "  ✓ start.sh patched"
     else
         echo "  ✓ start.sh already patched"
@@ -29,7 +29,7 @@ fi
 # Also patch source in launchers dir
 START_SRC="$ARINANOX_DIR/launchers/start.sh"
 if [ -f "$START_SRC" ] && ! grep -q "PROOT_NO_SECCOMP" "$START_SRC"; then
-    sed -i 's|proot-distro login arinanox|PROOT_NO_SECCOMP=1 proot-distro login arinanox|g' "$START_SRC"
+    sed -i 's|proot-distro login arinanolabs|PROOT_NO_SECCOMP=1 proot-distro login arinanolabs|g' "$START_SRC"
 fi
 
 # ── Patch profile ───────────────────────────────────────────

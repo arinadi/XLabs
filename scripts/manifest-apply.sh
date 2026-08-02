@@ -2,13 +2,13 @@
 # ═══════════════════════════════════════════════════════════════
 # arinanoX — Manifest Apply
 # Reads user-manifest.yaml, installs packages, restores dotfiles
-# Called automatically after `arinanox update`
+# Called automatically after `arinanolabs update`
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
-MANIFEST="$HOME/.arinanox/user-manifest.yaml"
-ROOTFS="/data/data/com.termux/files/usr/var/lib/proot-distro/containers/arinanox/rootfs"
-BACKUP_DIR="/sdcard/arinanox-backup"
+MANIFEST="$HOME/.arinanolabs/user-manifest.yaml"
+ROOTFS="/data/data/com.termux/files/usr/var/lib/proot-distro/containers/arinanolabs/rootfs"
+BACKUP_DIR="/sdcard/arinanolabs-backup"
 
 if [ ! -f "$MANIFEST" ]; then
     echo "  • No user-manifest.yaml — skipping user layer"
@@ -24,7 +24,7 @@ if grep -q "^packages:" "$MANIFEST" 2>/dev/null; then
     
     if [ -n "$PKGS" ]; then
         echo "  Installing: $PKGS"
-        proot-distro login arinanox -- bash -c "
+        proot-distro login arinanolabs -- bash -c "
             sudo apt-get update -qq 2>/dev/null
             for pkg in $PKGS; do
                 echo \"    → \$pkg\"
@@ -56,4 +56,4 @@ fi
 
 echo ""
 echo "  ✓ User manifest applied."
-echo "  Start: arinanox start"
+echo "  Start: arinanolabs start"
