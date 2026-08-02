@@ -189,8 +189,8 @@ def step_install_launchers() -> bool:
 python3 -c "
 import sys
 sys.path.insert(0, '{installer_dir}')
-from installer.menu import main
-main()
+from installer.textual_app import run_textual
+run_textual()
 "
 """)
     os.chmod(alabs_script, 0o755)
