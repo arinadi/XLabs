@@ -115,9 +115,9 @@ def handle_update():
         cwd=repo_dir, capture_output=True, text=True
     )
 
-    # If diverged, reset to remote
-    if result.returncode != 0 and "diverging" in (result.stderr + result.stdout).lower():
-        console.print("  [dim]Local diverged, resetting to remote...[/dim]")
+    # If failed, fetch + reset (normal for shallow clones)
+    if result.returncode != 0:
+        console.print("  [dim]Fetching latest...[/dim]")
         subprocess.run(["git", "fetch", "--depth=1", "origin", "main"], cwd=repo_dir, capture_output=True)
         result = subprocess.run(
             ["git", "reset", "--hard", "origin/main"],
@@ -131,8 +131,7 @@ def handle_update():
         else:
             console.print("  [dim]Restart alabs to use the new version[/dim]")
     else:
-        console.print(f"  [red]✗ Update failed:[/red]")
-        console.print(f"  [dim]{result.stderr.strip()}[/dim]")
+        console.print(f"  [red]✗ Update failed[/red]")
 
     press_any_key()
 
