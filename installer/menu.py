@@ -80,20 +80,19 @@ def run_installed_menu():
             clear()
             show_banner()
 
-            menu_text = """
-  [1] ▶️  Start Desktop
-  [2] ⏹️  Stop Desktop
-  [3] 🔄 Update
-  [4] 🧰 Extra Tools
-  [5] 📊 Status
-  [6] 🗑️  Uninstall
-
-  [0] 🚪 Exit
-"""
-
-            show_panel(menu_text, title="Main Menu", style="green")
             console.print()
-            console.print("  [dim]Click a number or type to select:[/dim]")
+            console.print("  [bold]Main Menu[/bold]")
+            console.print()
+            console.print("  [cyan]1[/cyan]  ▶️  Start Desktop")
+            console.print("  [cyan]2[/cyan]  ⏹️  Stop Desktop")
+            console.print("  [cyan]3[/cyan]  🔄  Update")
+            console.print("  [cyan]4[/cyan]  🧰  Extra Tools")
+            console.print("  [cyan]5[/cyan]  📊  Status")
+            console.print("  [cyan]6[/cyan]  🗑️   Uninstall")
+            console.print()
+            console.print("  [dim]0  🚪  Exit[/dim]")
+            console.print()
+            console.print("  [dim]Click or type to select:[/dim]")
             console.print()
 
             choice = _get_choice_with_mouse()
@@ -257,21 +256,20 @@ def handle_tools():
     clear()
     show_banner()
 
-    tools_text = """
-  [1] Chromium Browser
-  [2] VS Code (code-server)
-  [3] Zsh + Oh My Zsh
-  [4] Docker (rootless)
-  [5] Neovim
-  [6] GitHub CLI (gh)
-
-  [0] Back
-"""
-
-    show_panel(tools_text, title="Extra Tools", style="magenta")
-
     console.print()
-    choice = read_input("  Select tools to install: ")
+    console.print("  [bold]Extra Tools[/bold]")
+    console.print()
+    console.print("  [cyan]1[/cyan]  Chromium Browser")
+    console.print("  [cyan]2[/cyan]  VS Code (code-server)")
+    console.print("  [cyan]3[/cyan]  Zsh + Oh My Zsh")
+    console.print("  [cyan]4[/cyan]  Docker (rootless)")
+    console.print("  [cyan]5[/cyan]  Neovim")
+    console.print("  [cyan]6[/cyan]  GitHub CLI (gh)")
+    console.print()
+    console.print("  [dim]0  Back[/dim]")
+    console.print()
+
+    choice = read_input("  Select: ")
 
     if choice == "0":
         return
@@ -291,14 +289,14 @@ def handle_status():
     running = is_running()
     gpu = detect_gpu()
 
-    status_text = f"""
-  Container:  {"✓ Installed" if container_exists else "✗ Not found"}
-  Desktop:    {"● Running" if running else "○ Not running"}
-  GPU:        {get_gpu_summary(gpu)}
-  Version:    {get_version()}
-"""
-
-    show_panel(status_text, title="System Status", style="cyan")
+    console.print()
+    console.print("  [bold]System Status[/bold]")
+    console.print()
+    console.print(f"  Container:  {'✓ Installed' if container_exists else '✗ Not found'}")
+    console.print(f"  Desktop:    {'● Running' if running else '○ Not running'}")
+    console.print(f"  GPU:        {get_gpu_summary(gpu)}")
+    console.print(f"  Version:    {get_version()}")
+    console.print()
     press_any_key()
 
 

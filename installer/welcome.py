@@ -13,22 +13,20 @@ def show_welcome():
     clear()
     show_banner()
 
-    welcome_text = """
-[bold cyan]Debian 13 · MATE · Firefox ESR · Dev tools[/bold cyan]
-
-  ✓ No root required
-  ✓ ~30 seconds install
-  ✓ GPU accelerated
-  ✓ Auto-configured
-
-[dim]What you get:[/dim]
-  • Full MATE desktop environment
-  • Firefox ESR browser
-  • Node.js 22, Python 3, GCC, CMake
-  • Touch-optimized for mobile
-"""
-
-    show_panel(welcome_text, title="Welcome", style="blue")
+    console.print()
+    console.print("  [bold cyan]Debian 13 · MATE · Firefox ESR · Dev tools[/bold cyan]")
+    console.print()
+    console.print("  ✓ No root required")
+    console.print("  ✓ ~30 seconds install")
+    console.print("  ✓ GPU accelerated")
+    console.print("  ✓ Auto-configured")
+    console.print()
+    console.print("  [dim]What you get:[/dim]")
+    console.print("  • Full MATE desktop environment")
+    console.print("  • Firefox ESR browser")
+    console.print("  • Node.js 22, Python 3, GCC, CMake")
+    console.print("  • Touch-optimized for mobile")
+    console.print()
 
 
 def show_already_installed():
