@@ -2,6 +2,9 @@
 
 import os
 import sys
+import select
+import termios
+import tty
 
 from .ui import (
     console, clear, read_input, is_installed, get_version, show_banner,
@@ -16,61 +19,174 @@ from .start import start_desktop, stop_desktop, is_running
 from .gpu import detect_gpu, get_gpu_summary
 
 
-def main():
-    """Main entry point for TUI."""
-    try:
-        if is_installed():
-            run_installed_menu()
-        else:
-            run_fresh_install()
-    except KeyboardInterrupt:
-        console.print("\n\n[dim]Exiting...[/dim]\n")
-        sys.exit(0)
+# ── Mouse Support ──────────────────────────────────────────
+
+def _enable_mouse():
+    """Enable mouse tracking in terminal."""
+    sys.stdout.write("\033[?1003h\033[?1006h")  # Track all mouse movement + SGR mode
+    sys.stdout.flush()
 
 
-def run_fresh_install():
-    """Run fresh install flow."""
-    show_welcome()
+def _disable_mouse():
+    """Disable mouse tracking."""
+    sys.stdout.write("\033[?1003l\033[?1006l")
+    sys.stdout.flush()
 
-    # Run pre-flight
-    if not run_preflight():
-        console.print("\n[red]Pre-flight checks failed. Fix issues and try again.[/red]")
-        press_any_key()
-        return
 
-    # Show install button
-    if not show_install_button():
-        console.print("\n[dim]Installation cancelled.[/dim]")
-        return
+def _read_mouse_event():
+    """Read mouse event from stdin. Returns (x, y, pressed) or None."""
+    if not sys.stdin.isatty():
+        return None
 
-    # Run install
-    install()
+    # Non-blocking read
+    if select.select([sys.stdin], [], [], 0.1)[0]:
+        data = sys.stdin.read(20)  # Read enough for mouse escape sequence
+
+        # SGR mouse format: ESC [ < Cb ; Cx ; Cy M/m
+        if "\033[<" in data:
+            try:
+                params = data.split("M")[0].split("m")[0]
+                parts = params.replace("\033[<", "").split(";")
+                if len(parts) >= 3:
+                    cb = int(parts[0])  # button
+                    cx = int(parts[1])  # column
+                    cy = int(parts[2])  # row
+                    pressed = "M" in data  # M=press, m=release
+                    return (cx, cy, pressed)
+            except (ValueError, IndexError):
+                pass
+
+    return None
+
+
+# ── Menu Items (y positions for click detection) ──────────
+
+MENU_ITEMS = {
+    1: "start",
+    2: "stop",
+    3: "update",
+    4: "tools",
+    5: "status",
+    6: "uninstall",
+    0: "exit",
+}
 
 
 def run_installed_menu():
     """Run main menu when already installed."""
-    while True:
-        show_already_installed()
-        choice = get_user_choice()
+    _enable_mouse()
+    try:
+        while True:
+            clear()
+            show_banner()
 
-        if choice == "1":
-            handle_start()
-        elif choice == "2":
-            handle_stop()
-        elif choice == "3":
-            handle_update()
-        elif choice == "4":
-            handle_tools()
-        elif choice == "5":
-            handle_status()
-        elif choice == "6":
-            handle_uninstall()
-        elif choice == "0":
-            console.print("\n[dim]Goodbye! 👋[/dim]\n")
-            break
-        else:
-            console.print("\n[yellow]Invalid option. Try again.[/yellow]")
-            press_any_key()
+            menu_text = """
+  [1] ▶️  Start Desktop
+  [2] ⏹️  Stop Desktop
+  [3] 🔄 Update
+  [4] 🧰 Extra Tools
+  [5] 📊 Status
+  [6] 🗑️  Uninstall
+
+  [0] 🚪 Exit
+"""
+
+            show_panel(menu_text, title="Main Menu", style="green")
+            console.print()
+            console.print("  [dim]Click a number or type to select:[/dim]")
+            console.print()
+
+            choice = _get_choice_with_mouse()
+
+            if choice == "1":
+                handle_start()
+            elif choice == "2":
+                handle_stop()
+            elif choice == "3":
+                handle_update()
+            elif choice == "4":
+                handle_tools()
+            elif choice == "5":
+                handle_status()
+            elif choice == "6":
+                handle_uninstall()
+            elif choice == "0":
+                console.print("\n[dim]Goodbye! 👋[/dim]\n")
+                break
+            else:
+                console.print("\n[yellow]Invalid option. Try again.[/yellow]")
+                press_any_key()
+    finally:
+        _disable_mouse()
+
+
+def _get_choice_with_mouse() -> str:
+    """Get menu choice via keyboard or mouse click."""
+    if not sys.stdin.isatty():
+        return read_input("  Select option: ")
+
+    # Reset terminal state
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+
+        while True:
+            event = _read_mouse_event()
+            if event:
+                cx, cy, pressed = event
+                if pressed:
+                    # Map y position to menu item (approximate)
+                    # Panel starts at some y, items are spaced
+                    # This is a rough mapping — adjust based on actual layout
+                    return _map_click_to_choice(cy)
+
+            # Also check for keyboard input
+            if select.select([sys.stdin], [], [], 0)[0]:
+                ch = sys.stdin.read(1)
+                if ch in ("\n", "\r"):
+                    return ""
+                elif ch.isdigit():
+                    return ch
+                elif ch == "\x03":  # Ctrl+C
+                    raise KeyboardInterrupt()
+                elif ch == "\x04":  # Ctrl+D
+                    return "0"
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+
+def _map_click_to_choice(y: int) -> str:
+    """Map terminal y-coordinate to menu choice."""
+    # Menu layout (approximate y positions):
+    # Banner: ~3 lines
+    # Panel border: 1 line
+    # [1] Start: +2
+    # [2] Stop: +1
+    # [3] Update: +1
+    # [4] Tools: +1
+    # [5] Status: +1
+    # [6] Uninstall: +1
+    # Panel border: 1 line
+    #
+    # Adjust these offsets based on actual rendering
+    menu_start_y = 8  # Approximate y where [1] starts
+
+    offset = y - menu_start_y
+    if offset == 0:
+        return "1"
+    elif offset == 1:
+        return "2"
+    elif offset == 2:
+        return "3"
+    elif offset == 3:
+        return "4"
+    elif offset == 4:
+        return "5"
+    elif offset == 5:
+        return "6"
+    else:
+        return ""
 
 
 # ── Handlers ───────────────────────────────────────────────
@@ -205,6 +321,38 @@ def handle_uninstall():
     # TODO: Implement uninstall
     console.print("\n[yellow]Uninstall coming soon![/yellow]")
     press_any_key()
+
+
+def main():
+    """Main entry point for TUI."""
+    try:
+        if is_installed():
+            run_installed_menu()
+        else:
+            run_fresh_install()
+    except KeyboardInterrupt:
+        _disable_mouse()
+        console.print("\n\n[dim]Exiting...[/dim]\n")
+        sys.exit(0)
+
+
+def run_fresh_install():
+    """Run fresh install flow."""
+    show_welcome()
+
+    # Run pre-flight
+    if not run_preflight():
+        console.print("\n[red]Pre-flight checks failed. Fix issues and try again.[/red]")
+        press_any_key()
+        return
+
+    # Show install button
+    if not show_install_button():
+        console.print("\n[dim]Installation cancelled.[/dim]")
+        return
+
+    # Run install
+    install()
 
 
 if __name__ == "__main__":
