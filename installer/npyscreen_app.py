@@ -79,8 +79,7 @@ def show_menu():
     table.add_row("3", "🔄  Update")
     table.add_row("4", "🧰  Extra Tools")
     table.add_row("5", "📊  Status")
-    table.add_row("6", "🔄  Reinstall")
-    table.add_row("7", "🗑️   Reset (Clean Install)")
+    table.add_row("6", "🗑️   Reset (Clean Install)")
     table.add_row("", "")
     table.add_row("0", "🚪  Exit")
     console.print()
@@ -263,59 +262,6 @@ def handle_status():
     wait_key()
 
 
-# ── Reinstall ──────────────────────────────────────────────
-
-def handle_reinstall():
-    """Reinstall container from latest image."""
-    clear()
-    console.print("[bold cyan]🔄  Reinstall[/bold cyan]\n")
-    console.print("[yellow]This will:[/yellow]")
-    console.print("  • Stop the desktop if running")
-    console.print("  • Remove the container")
-    console.print("  • Install fresh from latest image\n")
-    console.print("[red bold]All data inside the container will be lost.[/red bold]\n")
-
-    confirm = input("  Type 'yes' to confirm: ").strip().lower()
-    if confirm != "yes":
-        console.print("\n[dim]Reinstall cancelled.[/dim]")
-        wait_key()
-        return
-
-    # Step 1: Stop desktop
-    console.print("\n[cyan]→ Stopping desktop...[/cyan]")
-    if is_running():
-        handle_stop()
-    else:
-        console.print("  [dim]Desktop not running[/dim]")
-
-    # Step 2: Remove container
-    console.print("\n[cyan]→ Removing container...[/cyan]")
-    rc, out = run_cmd("proot-distro remove arinanolabs 2>&1")
-    if rc == 0:
-        console.print("  [green]✓ Container removed[/green]")
-    else:
-        console.print(f"  [yellow]⚠ {out.strip()}[/yellow]")
-
-    # Step 3: Install from latest image
-    console.print("\n[cyan]→ Pulling latest image...[/cyan]")
-    console.print("  [dim]This may take a few minutes...[/dim]")
-    rc, out = run_cmd(
-        "proot-distro install ghcr.io/arinadi/arinanolabs:latest "
-        "--name arinanolabs 2>&1",
-        timeout=900,
-    )
-    if rc == 0:
-        console.print("  [green]✓ Installed[/green]")
-    else:
-        console.print(f"  [red]✗ Install failed: {out.strip()}[/red]")
-        wait_key()
-        return
-
-    console.print("\n[green bold]✓ Reinstall complete![/green bold]")
-    console.print("[dim]Run Start to launch the desktop.[/dim]")
-    wait_key()
-
-
 # ── Reset ──────────────────────────────────────────────────
 
 def handle_reset():
@@ -327,8 +273,7 @@ def handle_reset():
     console.print("[yellow]This will:[/yellow]")
     console.print("  • Stop the desktop if running")
     console.print("  • Delete the entire container (all data lost!)")
-    console.print("  • Re-install from latest image")
-    console.print("  • Re-create the admin user\n")
+    console.print("  • Re-install from latest image\n")
     console.print("[red bold]All files, settings, and installed packages inside the container will be permanently deleted.[/red bold]\n")
 
     confirm = input("  Type 'yes' to confirm reset: ").strip().lower()
@@ -367,20 +312,6 @@ def handle_reset():
         wait_key()
         return
 
-    # Step 4: Setup admin user
-    console.print("\n[cyan]→ Setting up admin user...[/cyan]")
-    rc, out = run_cmd(
-        "proot-distro login arinanolabs -- "
-        "useradd -m -s /bin/bash admin && "
-        "echo 'admin:admin' | chpasswd && "
-        "echo 'admin ALL=(ALL:ALL) NOPASSWD: ALL' > /etc/sudoers.d/admin && "
-        "chmod 0440 /etc/sudoers.d/admin 2>&1"
-    )
-    if rc == 0:
-        console.print("  [green]✓ Admin user created[/green]")
-    else:
-        console.print(f"  [yellow]⚠ {out.strip()}[/yellow]")
-
     console.print("\n[green bold]✓ Reset complete![/green bold]")
     console.print("[dim]Run Start to launch the desktop.[/dim]")
     wait_key()
@@ -396,8 +327,7 @@ def run_npyscreen():
         "3": handle_update,
         "4": handle_tools,
         "5": handle_status,
-        "6": handle_reinstall,
-        "7": handle_reset,
+        "6": handle_reset,
     }
 
     while True:
