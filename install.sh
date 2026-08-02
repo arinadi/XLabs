@@ -132,11 +132,14 @@ fix_launcher() {
 
 # ── Run Installer ──────────────────────────────────────────
 run_installer() {
-    info "Launching TUI installer..."
-    echo ""
     cd "$REPO_DIR"
     chmod +x alabs
-    $PYTHON install.py
+
+    echo ""
+    ok "Install complete!"
+    echo ""
+    echo "  Run: ~/arinanoLabs/alabs"
+    echo ""
 }
 
 # ── Main ────────────────────────────────────────────────────
