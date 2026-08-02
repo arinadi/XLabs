@@ -108,10 +108,21 @@ def handle_update():
     # Git pull (shallow — no history)
     import subprocess
     console.print("  [cyan]→[/cyan] Pulling latest changes...")
+
+    # Try fast-forward first
     result = subprocess.run(
         ["git", "pull", "--ff-only", "--depth=1"],
         cwd=repo_dir, capture_output=True, text=True
     )
+
+    # If diverged, reset to remote
+    if result.returncode != 0 and "diverging" in (result.stderr + result.stdout).lower():
+        console.print("  [dim]Local diverged, resetting to remote...[/dim]")
+        subprocess.run(["git", "fetch", "--depth=1", "origin", "main"], cwd=repo_dir, capture_output=True)
+        result = subprocess.run(
+            ["git", "reset", "--hard", "origin/main"],
+            cwd=repo_dir, capture_output=True, text=True
+        )
 
     if result.returncode == 0:
         console.print(f"  [green]✓ Updated[/green]")
@@ -120,7 +131,7 @@ def handle_update():
         else:
             console.print("  [dim]Restart alabs to use the new version[/dim]")
     else:
-        console.print(f"  [red]✗ Pull failed:[/red]")
+        console.print(f"  [red]✗ Update failed:[/red]")
         console.print(f"  [dim]{result.stderr.strip()}[/dim]")
 
     press_any_key()
