@@ -21,9 +21,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         dbus-x11 \
         mate-desktop-environment \
-        network-manager-gnome \
         pulseaudio-utils x11-xserver-utils \
-        thunar \
         firefox-esr \
         mesa-utils glmark2 \
         xdotool \
