@@ -83,8 +83,11 @@ def handle_update():
         if "Already up to date" in result.stdout:
             print("  ✓ Already on latest version")
         else:
-            print("  ✓ Updated!")
-            print("  Restart alabs to use new version")
+            print("  ✓ Updated! Restarting...")
+            print()
+            input("  Press Enter to restart...")
+            # Restart process with new code
+            os.execl(sys.executable, sys.executable, *sys.argv)
     else:
         print("  ✗ Update failed")
 
