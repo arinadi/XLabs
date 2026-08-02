@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 arinanoLabs Installer
-Usage: curl -sL https://raw.githubusercontent.com/arinadi/arinanoLabs/main/install.py | python
+Usage: curl -sL https://raw.githubusercontent.com/arinadi/arinanoLabs/main/install.sh | bash
 """
 
 import sys
