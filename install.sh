@@ -122,10 +122,11 @@ fix_launcher() {
     mkdir -p "$HOME/bin"
     ln -sf "$REPO_DIR/alabs" "$HOME/bin/alabs"
 
-    # Ensure ~/bin is in PATH
-    if ! echo "$PATH" | grep -q "$HOME/bin"; then
-        export PATH="$HOME/bin:$PATH"
+    # Ensure ~/bin is in PATH (persist in bashrc)
+    if ! grep -q '$HOME/bin' "$HOME/.bashrc" 2>/dev/null; then
+        echo 'export PATH="$HOME/bin:$PATH"' >> "$HOME/.bashrc"
     fi
+    export PATH="$HOME/bin:$PATH"
 
     ok "Launcher ready: ~/bin/alabs -> $REPO_DIR/alabs"
 }
