@@ -289,7 +289,12 @@ def handle_reset():
     else:
         console.print("  [dim]Desktop not running[/dim]")
 
-    # Step 2: Remove container
+    # Step 2: Kill all proot processes
+    console.print("\n[cyan]→ Killing proot processes...[/cyan]")
+    rc, _ = run_cmd("pkill -9 -f 'proot' 2>/dev/null")
+    console.print("  [dim]done[/dim]")
+
+    # Step 3: Remove container
     console.print("\n[cyan]→ Removing container...[/cyan]")
     rc, out = run_cmd("proot-distro remove arinanolabs 2>&1")
     if rc == 0:
@@ -297,7 +302,7 @@ def handle_reset():
     else:
         console.print(f"  [yellow]⚠ {out.strip()}[/yellow]")
 
-    # Step 3: Re-install from latest image
+    # Step 4: Re-install from latest image
     console.print("\n[cyan]→ Pulling latest image...[/cyan]")
     console.print("  [dim]This may take a few minutes...[/dim]")
     rc, out = run_cmd(
