@@ -43,33 +43,23 @@ def stop_desktop() -> bool:
     """Stop all desktop processes."""
     print("\n  Stopping desktop...\n")
 
-    processes = [
-        "mate-session",
-        "marco",
-        "mate-panel",
-        "dbus-launch",
-        "virgl_test_server",
-        "termux-x11",
-        "pulseaudio",
-    ]
-
-    stopped = 0
-    for proc in processes:
-        rc, _ = run_cmd(f"pkill -f '{proc}' 2>/dev/null")
-        if rc == 0:
-            print(f"  -> Stopped {proc}")
-            stopped += 1
-
-    # Force kill remaining
-    run_cmd("pkill -9 -f 'mate-session' 2>/dev/null")
-    run_cmd("pkill -9 -f 'virgl_test_server' 2>/dev/null")
+    # Kill all at once
+    run_cmd("pkill -9 -f mate-session 2>/dev/null")
+    run_cmd("pkill -9 -f marco 2>/dev/null")
+    run_cmd("pkill -9 -f mate-panel 2>/dev/null")
+    run_cmd("pkill -9 -f dbus-launch 2>/dev/null")
+    run_cmd("pkill -9 -f virgl_test_server 2>/dev/null")
+    run_cmd("pkill -9 -f termux-x11 2>/dev/null")
+    run_cmd("pkill -9 -f pulseaudio 2>/dev/null")
+    run_cmd("pkill -9 -f pactl 2>/dev/null")
 
     # Cleanup temp files
     tmpdir = os.environ.get("TMPDIR", "/data/data/com.termux/files/usr/tmp")
     for f in [".X0-lock", ".X11-unix"]:
         run_cmd(f"rm -rf {tmpdir}/{f} 2>/dev/null")
 
-    print(f"\n  Desktop stopped. ({stopped} processes killed)")
+    print("  All processes killed.")
+    return True
 
     print("\n  Desktop stopped.")
     return True
@@ -85,17 +75,28 @@ def is_running() -> bool:
 
 def start_pulseaudio() -> bool:
     """Start PulseAudio server."""
-    run_cmd("pulseaudio --kill 2>/dev/null")  # Kill existing
-    time.sleep(0.3)
-    rc = run_cmd_stream("pulseaudio --start --exit-idle-time=-1 2>&1")
-    return rc == 0
+    # Kill existing
+    run_cmd("pulseaudio --kill 2>/dev/null")
+    time.sleep(0.5)
+
+    # Remove stale socket
+    tmpdir = os.environ.get("TMPDIR", "/data/data/com.termux/files/usr/tmp")
+    run_cmd(f"rm -rf {tmpdir}/pulse* 2>/dev/null")
+
+    # Start fresh
+    rc, out = run_cmd("pulseaudio --start --exit-idle-time=-1 2>&1")
+    if rc != 0 and "already running" not in out.lower():
+        print(f"    PulseAudio warning: {out.strip()}")
+    return True
 
 
 def load_audio_modules() -> bool:
     """Load audio sink modules."""
-    run_cmd_stream("pactl load-module module-aaudio-sink 2>&1")
-    run_cmd_stream("pactl load-module module-sles-sink 2>&1")
-    run_cmd_stream("pactl load-module module-native-protocol-tcp auth-ip-acl=127.0.0.1 auth-anonymous=1 port=4713 2>&1")
+    # Load modules, ignore errors
+    run_cmd("pactl load-module module-native-protocol-tcp auth-ip-acl=127.0.0.1 auth-anonymous=1 port=4713 2>/dev/null")
+    # Try Android-specific modules (may not exist)
+    run_cmd("pactl load-module module-aaudio-sink 2>/dev/null")
+    run_cmd("pactl load-module module-sles-sink 2>/dev/null")
     return True
 
 
