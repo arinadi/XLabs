@@ -10,11 +10,9 @@ from .gpu import detect_gpu, GPU_CONFIGS
 
 def start_desktop() -> bool:
     """Start the full desktop stack."""
-    console.print("\n[bold]Starting arinanoLabs desktop...[/bold]\n")
-
     # Check if already running
     if is_running():
-        console.print("  [yellow]Desktop is already running![/yellow]")
+        print("  Desktop is already running!")
         return True
 
     steps = [
@@ -27,22 +25,23 @@ def start_desktop() -> bool:
     ]
 
     for name, step_fn in steps:
-        console.print(f"  [cyan]→[/cyan] {name}...")
+        print(f"  -> {name}...")
         try:
             success = step_fn()
             if not success:
-                console.print(f"    [yellow]⚠ Warning[/yellow]")
+                print(f"    Warning")
         except Exception as e:
-            console.print(f"    [red]✗ {e}[/red]")
+            print(f"    Failed: {e}")
 
-    console.print("\n[green]✓ Desktop started![/green]")
-    console.print("  Open Termux:X11 app to see your desktop.\n")
+    print()
+    print("  Desktop started!")
+    print("  Open Termux:X11 app to see your desktop.")
     return True
 
 
 def stop_desktop() -> bool:
     """Stop all desktop processes."""
-    console.print("\n[bold]Stopping arinanoLabs desktop...[/bold]\n")
+    print("\n  Stopping desktop...\n")
 
     processes = [
         "mate-session",
@@ -57,7 +56,7 @@ def stop_desktop() -> bool:
     for proc in processes:
         rc, _ = run_cmd(f"pkill -f '{proc}' 2>/dev/null")
         if rc == 0:
-            console.print(f"  [dim]Stopped {proc}[/dim]")
+            print(f"  Stopped {proc}")
 
     # Force kill remaining
     run_cmd("pkill -9 -f 'mate-session' 2>/dev/null")
@@ -68,7 +67,7 @@ def stop_desktop() -> bool:
     for f in [".X0-lock", ".X11-unix"]:
         run_cmd(f"rm -rf {tmpdir}/{f} 2>/dev/null")
 
-    console.print("\n[green]✓ Desktop stopped.[/green]\n")
+    print("\n  Desktop stopped.")
     return True
 
 
@@ -99,33 +98,37 @@ def load_audio_modules() -> bool:
 def start_virgl() -> bool:
     """Start virgl renderer (auto-detect path)."""
     # Try Android path first
-    rc = run_cmd_stream("which virgl_test_server_android 2>&1")
+    rc, _ = run_cmd("which virgl_test_server_android 2>/dev/null")
     if rc == 0:
-        run_cmd_stream("virgl_test_server_android &")
+        subprocess.Popen("virgl_test_server_android", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return True
 
     # Try ANGLE path
     angle_dir = "/data/data/com.termux/files/usr/opt/angle-android"
     if os.path.exists(f"{angle_dir}/vulkan-null"):
-        run_cmd_stream(f"LD_LIBRARY_PATH={angle_dir}/vulkan-null virgl_test_server --use-egl-surfaceless --use-gles &")
+        env = os.environ.copy()
+        env["LD_LIBRARY_PATH"] = f"{angle_dir}/vulkan-null"
+        subprocess.Popen("virgl_test_server --use-egl-surfaceless --use-gles", shell=True, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return True
 
     if os.path.exists(f"{angle_dir}/vulkan"):
-        run_cmd_stream(f"LD_LIBRARY_PATH={angle_dir}/vulkan virgl_test_server --use-egl-surfaceless --use-gles &")
+        env = os.environ.copy()
+        env["LD_LIBRARY_PATH"] = f"{angle_dir}/vulkan"
+        subprocess.Popen("virgl_test_server --use-egl-surfaceless --use-gles", shell=True, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return True
 
     # Fallback - no virgl
-    console.print("    [dim]No virgl renderer found, using software rendering[/dim]")
+    print("    No virgl renderer found, using software rendering")
     return False
 
 
 def start_x11() -> bool:
     """Start Termux:X11 server."""
-    rc = run_cmd_stream("termux-x11 :0 -ac 2>&1")
+    subprocess.Popen("termux-x11 :0 -ac", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(2)
 
     # Auto-open X11 app
-    run_cmd_stream("am start -n com.termux.x11/com.termux.x11.MainActivity 2>&1")
+    subprocess.Popen("am start -n com.termux.x11/com.termux.x11.MainActivity", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return True
 
 
@@ -159,16 +162,16 @@ def start_mate() -> bool:
 
     env_str = " ".join(f"export {k}={v}" for k, v in env_vars.items())
 
-    # Start in background (--isolated: no Termux binaries leak into container)
+    # Start in background
     cmd = (
         f"proot-distro login arinanolabs --isolated --bind /tmp:/tmp -- su - admin -c '"
         f"{env_str} && "
         f"rm -f /tmp/dbus-* 2>/dev/null && "
         f"dbus-launch --exit-with-session mate-session"
-        f"' &"
+        f"'"
     )
 
-    run_cmd_stream(cmd)
+    subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(3)
 
     # Verify
