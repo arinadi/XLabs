@@ -58,7 +58,9 @@ def install():
                 sys.exit(1)
 
     # Show completion
-    show_post_install_info()
+    console.print()
+    console.print("[bold green]═══ Installation Complete ═══[/bold green]")
+    console.print("  Run [bold]alabs[/bold] to open the TUI menu\n")
 
 
 def continue_on_error() -> bool:
