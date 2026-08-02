@@ -57,17 +57,58 @@ def run_cmd(cmd: str, timeout: int = 60) -> tuple[int, str]:
         return 1, str(e)
 
 
-def run_cmd_stream(cmd: str, callback=None):
+def run_cmd_stream(cmd: str, callback=None, timeout: int = 600):
     """Run command and stream output line by line."""
+    import select
+    import time
+
     process = subprocess.Popen(
         cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
     )
-    for line in process.stdout:
-        if callback:
-            callback(line.strip())
-        else:
-            print(line.strip())
-    process.wait()
+
+    start = time.time()
+    while True:
+        # Check timeout
+        if time.time() - start > timeout:
+            process.kill()
+            console.print(f"\n  [red]✗ Command timed out after {timeout}s[/red]")
+            return 1
+
+        # Check if process finished
+        if process.poll() is not None:
+            # Read remaining output
+            for line in process.stdout:
+                if callback:
+                    callback(line.strip())
+                else:
+                    print(line.strip())
+            break
+
+        # Read available output (non-blocking)
+        try:
+            import selectors
+            sel = selectors.DefaultSelector()
+            sel.register(process.stdout, selectors.EVENT_READ)
+            events = sel.select(timeout=1)
+            for key, mask in events:
+                line = key.fileobj.readline()
+                if line:
+                    if callback:
+                        callback(line.strip())
+                    else:
+                        print(line.strip())
+                else:
+                    break
+            sel.close()
+        except Exception:
+            # Fallback: read line by line (blocks)
+            line = process.stdout.readline()
+            if line:
+                if callback:
+                    callback(line.strip())
+                else:
+                    print(line.strip())
+
     return process.returncode
 
 

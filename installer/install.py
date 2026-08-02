@@ -123,8 +123,25 @@ def step_pull_image() -> bool:
 
     # Pull from GitHub Container Registry
     image_ref = "ghcr.io/arinadi/arinanolabs:latest"
-    rc = run_cmd_stream(f"proot-distro install {image_ref} --name {CONTAINER_NAME}")
-    return rc == 0
+    console.print(f"  [dim]Pulling {image_ref} (this may take a few minutes)...[/dim]")
+    rc = run_cmd_stream(f"proot-distro install {image_ref} --name {CONTAINER_NAME}", timeout=900)
+
+    if rc != 0:
+        console.print("\n  [red]✗ Failed to pull image.[/red]")
+        console.print("  Possible causes:")
+        console.print("    • No internet connection")
+        console.print("    • GHCR package is private (needs to be public)")
+        console.print("    • Download timed out")
+        return False
+
+    # Verify container was created
+    rc, _ = run_cmd(f"proot-distro list | grep {CONTAINER_NAME}")
+    if rc != 0:
+        console.print("\n  [red]✗ Image pulled but container not created.[/red]")
+        console.print("  Run manually: proot-distro install ghcr.io/arinadi/arinanolabs:latest --name arinanolabs")
+        return False
+
+    return True
 
 
 def step_configure_gpu() -> bool:
