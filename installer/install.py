@@ -7,8 +7,8 @@ import urllib.request
 from pathlib import Path
 
 from .ui import (
-    console, clear, run_cmd, run_cmd_stream, show_banner, show_panel,
-    show_progress_download, show_error, show_success, show_warning
+    console, clear, read_input, run_cmd, run_cmd_stream, show_banner,
+    show_panel, show_progress_download, show_error, show_success, show_warning
 )
 from .mirror import ensure_mirror
 from .gpu import detect_gpu, write_gpu_config, get_gpu_summary
@@ -64,7 +64,7 @@ def install():
 def continue_on_error() -> bool:
     """Ask user if they want to continue on error."""
     console.print()
-    response = input("  Continue anyway? [y/N] ").strip().lower()
+    response = read_input("  Continue anyway? [y/N] ").lower()
     return response in ("y", "yes")
 
 

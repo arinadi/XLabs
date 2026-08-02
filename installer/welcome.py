@@ -2,8 +2,8 @@
 
 import os
 from .ui import (
-    console, clear, is_installed, get_version, show_banner, show_panel,
-    show_status_line, PROOT_DIR
+    console, clear, read_input, is_installed, get_version, show_banner,
+    show_panel, show_status_line, PROOT_DIR
 )
 from .preflight import run_all_checks, print_checks, check_already_installed
 
@@ -53,7 +53,7 @@ def show_already_installed():
 def get_user_choice() -> str:
     """Get user menu choice."""
     console.print()
-    choice = input("  Select option: ").strip()
+    choice = read_input("  Select option: ")
     return choice
 
 
@@ -78,7 +78,7 @@ def show_install_button():
     console.print()
     console.print("  [bold cyan]Ready to install![/bold cyan]")
     console.print()
-    response = input("  Press [Enter] to install, or Ctrl+C to cancel... ").strip()
+    response = read_input("  Press [Enter] to install, or Ctrl+C to cancel... ")
     return response == ""
 
 

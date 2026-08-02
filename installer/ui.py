@@ -103,17 +103,25 @@ def show_progress_download(description: str, total: int, iterator):
             progress.advance(task, len(data) if hasattr(data, '__len__') else 1)
 
 
+def read_input(prompt: str) -> str:
+    """Read input, handling piped stdin (curl | bash)."""
+    if not sys.stdin.isatty():
+        return ""
+    return input(prompt).strip()
+
+
 def confirm_action(message: str) -> bool:
     """Ask user for confirmation."""
     console.print(f"\n{message}")
-    response = input("  Continue? [y/N] ").strip().lower()
+    response = read_input("  Continue? [y/N] ").lower()
     return response in ("y", "yes")
 
 
 def press_any_key():
     """Wait for user to press any key."""
     console.print("\n  [dim]Press any key to return...[/dim]")
-    input()
+    if sys.stdin.isatty():
+        input()
 
 
 def show_error(message: str):

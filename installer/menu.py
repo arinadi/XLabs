@@ -4,8 +4,8 @@ import os
 import sys
 
 from .ui import (
-    console, clear, is_installed, get_version, show_banner, show_panel,
-    press_any_key, PROOT_DIR
+    console, clear, read_input, is_installed, get_version, show_banner,
+    show_panel, press_any_key, PROOT_DIR
 )
 from .welcome import (
     show_welcome, show_already_installed, get_user_choice,
@@ -121,7 +121,7 @@ def handle_tools():
     show_panel(tools_text, title="Extra Tools", style="magenta")
 
     console.print()
-    choice = input("  Select tools to install: ").strip()
+    choice = read_input("  Select tools to install: ")
 
     if choice == "0":
         return
@@ -162,7 +162,7 @@ def handle_uninstall():
     console.print("  • Launcher scripts")
     console.print("  • Config files\n")
 
-    confirm = input("  Type 'yes' to confirm: ").strip()
+    confirm = read_input("  Type 'yes' to confirm: ")
     if confirm != "yes":
         console.print("\n[dim]Uninstall cancelled.[/dim]")
         press_any_key()
