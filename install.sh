@@ -2,13 +2,13 @@
 # ═══════════════════════════════════════════════════════════════
 #  arinanoLabs Installer — Bootstrapper
 #  Usage: curl -sL https://raw.githubusercontent.com/arinadi/arinanoLabs/main/install.sh | bash
+#
+#  Flow: install git → clone/pull repo → run install.py
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
-REPO="https://raw.githubusercontent.com/arinadi/arinanoLabs/main"
-INSTALL_DIR="$HOME/.arinanolabs"
-PYTHON=""
-PIP=""
+REPO_URL="https://github.com/arinadi/arinanoLabs.git"
+REPO_DIR="$HOME/arinanoLabs"
 
 # ── Colors ──────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -22,122 +22,51 @@ ok()    { echo -e "${GREEN}✓${NC} $1"; }
 warn()  { echo -e "${YELLOW}⚠${NC} $1"; }
 fail()  { echo -e "${RED}✗${NC} $1"; exit 1; }
 
-# ── Check Python ────────────────────────────────────────────
-check_python() {
-    info "Checking Python..."
-
-    if command -v python3 &>/dev/null; then
-        PYTHON="python3"
-    elif command -v python &>/dev/null; then
-        PYTHON="python"
-    else
-        warn "Python not found. Installing..."
-        install_python
-        PYTHON="python3"
+# ── Check/Install Git ──────────────────────────────────────
+check_git() {
+    if command -v git &>/dev/null; then
+        ok "Git installed"
+        return
     fi
 
-    local version
-    version=$($PYTHON --version 2>&1 | awk '{print $2}')
-    ok "Python $version"
-}
-
-install_python() {
+    info "Installing git..."
     if command -v pkg &>/dev/null; then
-        # Termux
-        pkg install -y python
+        pkg install -y git
     elif command -v apt-get &>/dev/null; then
-        # Debian/Ubuntu
-        sudo apt-get update -qq
-        sudo apt-get install -y python3 python3-pip
+        sudo apt-get update -qq && sudo apt-get install -y git
     elif command -v brew &>/dev/null; then
-        # macOS
-        brew install python
+        brew install git
     else
-        fail "Cannot install Python. Please install manually."
+        fail "Cannot install git. Please install manually."
     fi
+    ok "Git installed"
 }
 
-# ── Check pip ───────────────────────────────────────────────
-check_pip() {
-    info "Checking pip..."
-
-    if $PYTHON -m pip --version &>/dev/null; then
-        PIP="$PYTHON -m pip"
-    elif command -v pip3 &>/dev/null; then
-        PIP="pip3"
-    elif command -v pip &>/dev/null; then
-        PIP="pip"
-    else
-        warn "pip not found. Installing..."
-        install_pip
-        PIP="$PYTHON -m pip"
-    fi
-
-    ok "pip available"
-}
-
-install_pip() {
-    if command -v pkg &>/dev/null; then
-        pkg install -y python
-    else
-        $PYTHON -m ensurepip --upgrade 2>/dev/null || {
-            curl -sS https://bootstrap.pypa.io/get-pip.py | $PYTHON
+# ── Clone or Pull ──────────────────────────────────────────
+sync_repo() {
+    if [ -d "$REPO_DIR/.git" ]; then
+        info "Pulling latest changes..."
+        cd "$REPO_DIR"
+        git pull --ff-only || {
+            warn "Pull failed, resetting..."
+            git fetch origin main
+            git reset --hard origin/main
         }
-    fi
-}
-
-# ── Check rich library ──────────────────────────────────────
-check_rich() {
-    info "Checking rich library..."
-
-    if $PYTHON -c "import rich" 2>/dev/null; then
-        ok "rich installed"
     else
-        warn "rich not found. Installing..."
-        $PIP install rich requests --quiet
-        ok "rich installed"
+        info "Cloning repository..."
+        git clone --depth 1 "$REPO_URL" "$REPO_DIR"
+        cd "$REPO_DIR"
     fi
+    ok "Repository ready at $REPO_DIR"
 }
 
-# ── Download and run ────────────────────────────────────────
+# ── Run Installer ──────────────────────────────────────────
 run_installer() {
-    info "Downloading installer..."
-
-    mkdir -p "$INSTALL_DIR"
-
-    # Download all installer files
-    local files=(
-        "install.py"
-        "VERSION"
-        "requirements.txt"
-        "installer/__init__.py"
-        "installer/ui.py"
-        "installer/menu.py"
-        "installer/welcome.py"
-        "installer/preflight.py"
-        "installer/mirror.py"
-        "installer/gpu.py"
-        "installer/install.py"
-        "installer/start.py"
-    )
-
-    for file in "${files[@]}"; do
-        local dir
-        dir=$(dirname "$INSTALL_DIR/$file")
-        mkdir -p "$dir"
-
-        if ! curl -sSf "${REPO}/${file}" -o "$INSTALL_DIR/$file"; then
-            fail "Failed to download: $file"
-        fi
-    done
-
-    ok "Installer downloaded"
-
-    info "Launching TUI..."
+    info "Launching TUI installer..."
     echo ""
 
-    cd "$INSTALL_DIR"
-    $PYTHON install.py
+    cd "$REPO_DIR"
+    python install.py
 }
 
 # ── Main ────────────────────────────────────────────────────
@@ -148,11 +77,8 @@ main() {
     echo -e "${CYAN}═══════════════════════════════════════════${NC}"
     echo ""
 
-    check_python
-    check_pip
-    check_rich
-
-    echo ""
+    check_git
+    sync_repo
     run_installer
 }
 
