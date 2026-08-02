@@ -25,9 +25,6 @@ RUN apt-get update && \
         mate-tweak \
         mate-utils \
         mate-applets \
-        mate-media \
-        mate-screensaver \
-        mate-power-manager \
         caja-admin && \
     apt-get clean && rm -rf /var/lib/apt/lists/* \
     /usr/share/doc/* /usr/share/man/* /usr/share/info/* \
