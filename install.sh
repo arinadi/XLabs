@@ -81,9 +81,9 @@ check_pip() {
 # ── Install TUI libraries ────────────────────────────────
 install_libs() {
     info "Installing TUI libraries..."
-    $PIP install textual rich requests --quiet --break-system-packages 2>/dev/null || \
-    $PIP install textual rich requests --quiet 2>/dev/null || \
-    $PIP install textual rich requests --quiet --user 2>/dev/null || true
+    $PIP install textual requests --quiet --break-system-packages 2>/dev/null || \
+    $PIP install textual requests --quiet 2>/dev/null || \
+    $PIP install textual requests --quiet --user 2>/dev/null || true
     ok "Libraries installed"
 }
 
