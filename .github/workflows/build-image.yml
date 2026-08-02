@@ -42,3 +42,9 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/arinanolabs:latest
             ghcr.io/${{ github.repository_owner }}/arinanolabs:${{ steps.tag.outputs.tag }}
+
+      - name: Make package public
+        run: |
+          gh api --method PATCH \
+            repos/${{ github.repository_owner }}/arinanoLabs/packages/container/arinanolabs \
+            -f visibility=public || echo "Package may already be public"
