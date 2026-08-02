@@ -201,22 +201,14 @@ def start_mate() -> bool:
     # Add GPU-specific env vars
     env_vars.update(gpu.mesa_config)
 
-    # Build a single export with all vars — no repeated "export" keywords
-    exports = " ".join(f"{k}={v}" for k, v in env_vars.items())
-
-    # Build full command: export vars → create XDG_RUNTIME_DIR (dbus needs 0700) → launch
-    # Use $PPID for unique runtime dir; all inside single -c string
-    inner_cmd = (
-        f"export {exports} && "
-        f"XDG=/tmp/runtime-$PPID && mkdir -p $XDG && chmod 0700 $XDG && "
-        f"export XDG_RUNTIME_DIR=$XDG && "
-        f"dbus-launch mate-session"
-    )
+    env_str = " ".join(f"export {k}={v}" for k, v in env_vars.items())
 
     # Start in background
     cmd = (
-        f"proot-distro login arinanolabs --shared-x11 -- "
-        f"su - admin -c '{inner_cmd}'"
+        f"proot-distro login arinanolabs --shared-x11 -- su - admin -c '"
+        f"{env_str} && "
+        f"dbus-launch mate-session"
+        f"'"
     )
 
     # Log to file for debugging
