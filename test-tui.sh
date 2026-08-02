@@ -1,7 +1,11 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════
-#  arinanoLabs TUI Test Script (Podman)
+#  arinanoLabs TUI Test Script
+#  Purpose: Test TUI locally on PC using Podman
 #  Usage: bash test-tui.sh
+#
+#  NOTE: This is for LOCAL TESTING ONLY.
+#        Actual install happens on Android (Termux).
 # ═══════════════════════════════════════════════════════════════
 set -e
 
