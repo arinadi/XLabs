@@ -110,12 +110,8 @@ run_installer() {
     info "Launching TUI installer..."
     echo ""
     cd "$REPO_DIR"
+    chmod +x alabs
     $PYTHON install.py
-
-    # Refresh PATH so alabs is available in current session
-    if [ -f "$HOME/.bashrc" ]; then
-        export PATH="$HOME/.local/bin:$PATH"
-    fi
 }
 
 # ── Main ────────────────────────────────────────────────────

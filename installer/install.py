@@ -41,7 +41,6 @@ def install():
         ("Pulling arinanoLabs image", step_pull_image),
         ("Configuring GPU", step_configure_gpu),
         ("Setting up user", step_setup_user),
-        ("Installing launcher scripts", step_install_launchers),
     ]
 
     for i, (name, step_fn) in enumerate(steps, 1):

@@ -1,0 +1,9 @@
+#!/bin/bash
+# arinanoLabs TUI — run from repo
+cd "$(dirname "$0")"
+python3 -c "
+import sys, os
+sys.path.insert(0, os.getcwd())
+from installer.npyscreen_app import run_npyscreen
+run_npyscreen()
+"
