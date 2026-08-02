@@ -6,7 +6,7 @@ set -euo pipefail
 #  https://github.com/arinadi/arinanoX
 # ══════════════════════════════════════════
 
-REPO="https://raw.githubusercontent.com/arinadi/arinanoX/main"
+REPO="https://raw.githubusercontent.com/arinadi/arinanoLabs/main"
 ARINANOX_DIR="$HOME/.arinanox"
 SCRIPTS_DIR="${ARINANOX_DIR}/scripts"
 LAUNCHERS_DIR="${ARINANOX_DIR}/launchers"

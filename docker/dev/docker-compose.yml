@@ -1,16 +1,16 @@
 services:
-  arinanox-dev:
+  arinanolabs-dev:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: arinanox-dev
-    hostname: arinanox-dev
+    container_name: arinanolabs-dev
+    hostname: arinanolabs-dev
     stdin_open: true
     tty: true
 
     volumes:
       # Live project mount
-      - ../../:/data/data/com.termux/files/home/arinanoX
+      - ../../:/data/data/com.termux/files/home/arinanoLabs
       # Persist proot container data
       - proot-root:/data/data/com.termux/files/usr/var/lib/proot-distro
       # WSLg X11 socket

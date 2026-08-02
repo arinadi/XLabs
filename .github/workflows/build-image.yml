@@ -1,4 +1,4 @@
-name: Build arinanoX Image
+name: Build arinanoLabs Image
 
 on:
   push:
@@ -37,5 +37,5 @@ jobs:
           platforms: linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/arinanox:latest
-            ghcr.io/${{ github.repository_owner }}/arinanox:1.0.${{ github.run_number }}
+            ghcr.io/${{ github.repository_owner }}/arinanolabs:latest
+            ghcr.io/${{ github.repository_owner }}/arinanolabs:1.0.${{ github.run_number }}

@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>📱 arinanoX</h1>
+  <h1>📱 arinanoLabs</h1>
   <p><strong>Your phone is a Linux workstation — ~30s to a working desktop, not 30 minutes of apt.</strong></p>
   <p>
     <a href="https://arinano.work"><img src="https://img.shields.io/badge/site-arinano.work-blue"></a>
@@ -8,7 +8,7 @@
   </p>
 
   ```bash
-curl -sL https://raw.githubusercontent.com/arinadi/arinanoX/main/bootstrap.sh | bash
+curl -sL https://raw.githubusercontent.com/arinadi/arinanoLabs/main/bootstrap.sh | bash
 ```
 
   <img src="docs/arinanox-screenshot.jpg" alt="arinanoX desktop" width="360" style="border-radius:12px;">
@@ -53,7 +53,7 @@ Your Android phone is a pocket PC with 8GB+ RAM and an ARM64 CPU — it deserves
 │  VS Code, Chromium, etc.            │     Preserved across updates
 ├─────────────────────────────────────┤
 │  CORE LAYER (declarative & reproducible) │  ← Built from Dockerfile in CI
-│  Debian 13 + MATE + Firefox + dev   │     ghcr.io/arinadi/arinanox
+│  Debian 13 + MATE + Firefox + dev   │     ghcr.io/arinadi/arinanolabs
 └─────────────────────────────────────┘
 ```
 

@@ -1,13 +1,13 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # ═══════════════════════════════════════════════════════════════
-# arinanoX Dev — Docker development wrapper
+# arinanoLabs Dev — Docker development wrapper
 #  Usage: dev.sh [setup|start|shell|stop|status]
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
 PROOT_DISTRO="debian"
 ADMIN="admin"
-PROJECT_DIR="/data/data/com.termux/files/home/arinanoX"
+PROJECT_DIR="/data/data/com.termux/files/home/arinanoLabs"
 
 # ── Helpers ──────────────────────────────────────────────────
 proot_exec() {
