@@ -53,10 +53,12 @@ def stop_desktop() -> bool:
         "pulseaudio",
     ]
 
+    stopped = 0
     for proc in processes:
         rc, _ = run_cmd(f"pkill -f '{proc}' 2>/dev/null")
         if rc == 0:
-            print(f"  Stopped {proc}")
+            print(f"  -> Stopped {proc}")
+            stopped += 1
 
     # Force kill remaining
     run_cmd("pkill -9 -f 'mate-session' 2>/dev/null")
@@ -66,6 +68,8 @@ def stop_desktop() -> bool:
     tmpdir = os.environ.get("TMPDIR", "/data/data/com.termux/files/usr/tmp")
     for f in [".X0-lock", ".X11-unix"]:
         run_cmd(f"rm -rf {tmpdir}/{f} 2>/dev/null")
+
+    print(f"\n  Desktop stopped. ({stopped} processes killed)")
 
     print("\n  Desktop stopped.")
     return True
