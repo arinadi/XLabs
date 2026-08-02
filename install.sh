@@ -105,6 +105,31 @@ sync_repo() {
     ok "Repository ready"
 }
 
+# ── Force update launcher ──────────────────────────────────
+fix_launcher() {
+    info "Fixing launcher..."
+
+    # Remove old launcher
+    rm -f "$HOME/.local/bin/alabs" 2>/dev/null
+
+    # Remove old PATH line from bashrc
+    if [ -f "$HOME/.bashrc" ]; then
+        sed -i '/# arinanoLabs/d' "$HOME/.bashrc" 2>/dev/null
+        sed -i '\|$HOME/.local/bin|d' "$HOME/.bashrc" 2>/dev/null
+    fi
+
+    # Create symlink in ~/bin (Termux default PATH)
+    mkdir -p "$HOME/bin"
+    ln -sf "$REPO_DIR/alabs" "$HOME/bin/alabs"
+
+    # Ensure ~/bin is in PATH
+    if ! echo "$PATH" | grep -q "$HOME/bin"; then
+        export PATH="$HOME/bin:$PATH"
+    fi
+
+    ok "Launcher ready: ~/bin/alabs -> $REPO_DIR/alabs"
+}
+
 # ── Run Installer ──────────────────────────────────────────
 run_installer() {
     info "Launching TUI installer..."
@@ -127,6 +152,7 @@ main() {
     check_pip
     install_libs
     sync_repo
+    fix_launcher
     run_installer
 }
 
