@@ -101,26 +101,68 @@ if os.path.exists(PROOT_DIR):
 
 ---
 
-## 3. Post-Install: CLI Commands
+## 3. Post-Install: TUI via `alabs`
 
-After install, user runs CLI commands directly in Termux (no TUI needed for日常操作).
+After install, user runs single command → TUI appears.
 
 ```bash
-arinanox start        # Start desktop
-arinanox stop         # Stop desktop
-arinanox doctor       # Health check
-arinanox update       # Update
-arinanox uninstall    # Remove
+alabs                  # Launch TUI
 ```
 
-**`arinanox status` = plain CLI output, NOT TUI:**
+### Main Menu TUI
 
 ```
-$ arinanox status
-Container:  ✓ arinanox (580 MB)
-Desktop:    ○ not running
-GPU:        ✓ Turnip (Adreno A660)
-Version:    2.0.0
+╔═══════════════════════════════════════════════╗
+║          📱 arinanoLabs v2.0                  ║
+║     Debian 13 · MATE · Ready                 ║
+╠═══════════════════════════════════════════════╣
+║                                               ║
+║   [1] ▶️  Start Desktop                       ║
+║   [2] ⏹️  Stop Desktop                        ║
+║   [3] 🔄 Update                               ║
+║   [4] 🧰 Extra Tools                          ║
+║   [5] 📊 Status                                ║
+║   [6] 🗑️  Uninstall                            ║
+║                                               ║
+║   [0] 🚪 Exit                                  ║
+║                                               ║
+╚═══════════════════════════════════════════════╝
+```
+
+### Status Screen (option 5)
+
+```
+╔═══════════════════════════════════════════════╗
+║  📊 arinanoLabs Status                       ║
+╠═══════════════════════════════════════════════╣
+║                                               ║
+║  Container:  ✓ arinanox (580 MB)              ║
+║  Desktop:    ● MATE running                   ║
+║  GPU:        ✓ Turnip (Adreno A660)           ║
+║  Audio:      ✓ PulseAudio                     ║
+║  Version:    2.0.0 (latest)                   ║
+║                                               ║
+║         [ Press any key to return ]            ║
+║                                               ║
+╚═══════════════════════════════════════════════╝
+```
+
+### Extra Tools (option 4)
+
+```
+╔═══════════════════════════════════════════════╗
+║  🧰 Extra Tools                              ║
+╠═══════════════════════════════════════════════╣
+║                                               ║
+║  [✓] 1. Chromium Browser                     ║
+║  [✓] 2. VS Code (code-server)                ║
+║  [ ] 3. Zsh + Oh My Zsh                      ║
+║  [ ] 4. Docker (rootless)                     ║
+║  [ ] 5. Neovim                                ║
+║                                               ║
+║         [ Install Selected ]                  ║
+║                                               ║
+╚═══════════════════════════════════════════════╝
 ```
 
 ---
@@ -245,24 +287,26 @@ with Progress() as progress:
 ```
 arinanoLabs/
 ├── install.py               # Entry point (curl | python)
+├── alabs                    # Post-install TUI launcher (installed to PATH)
 ├── installer/
 │   ├── __init__.py
 │   ├── welcome.py           # Welcome/already-installed screen
+│   ├── menu.py              # Main menu TUI (post-install)
 │   ├── install.py           # Install logic + progress
 │   ├── start.py             # Start desktop
 │   ├── stop.py              # Stop desktop
 │   ├── update.py            # Self-update
 │   ├── uninstall.py         # Uninstall
-│   ├── doctor.py            # Health check (replaces doctor.sh)
+│   ├── status.py            # Status screen
+│   ├── tools.py             # Extra tools menu
 │   ├── gpu.py               # GPU detection
 │   ├── preflight.py         # Pre-flight checks
 │   ├── mirror.py            # Mirror fallback
-│   ├── tools.py             # Extra tools menu
 │   └── ui.py                # Shared UI components
 ├── VERSION                  # "2.0.0"
 ├── requirements.txt         # rich, requests
 └── scripts/                 # Legacy CLI wrappers
-    └── arinanox             # Bash CLI (calls installer modules)
+    └── arinanox             # Bash CLI (backward compat)
 ```
 
 ---
@@ -335,21 +379,30 @@ arinanox start               # CLI
 
 ### v2.0 (proposed)
 ```bash
-curl install.py | python    # Python TUI
-arinanox start               # CLI (still works)
+# Install (one-time)
+curl install.py | python
+
+# Daily use
+alabs                        # Launch TUI
 ```
 
-**Backward compatible:** Bash CLI remains as wrapper.
+**Commands:**
+| Command | Interface | Description |
+|---------|-----------|-------------|
+| `curl \| python` | TUI | First-time install |
+| `alabs` | TUI | Post-install menu |
+| `arinanox` | CLI | Backward compat wrapper |
 
 ---
 
 ## 9. Success Criteria
 
-- [ ] `curl | python` launches TUI
+- [ ] `curl | python` launches Welcome TUI
+- [ ] `alabs` launches Main Menu TUI
 - [ ] Detects already-installed via proot-distro dir
 - [ ] Pre-flight checks run before install
 - [ ] GPU auto-detected
 - [ ] Progress bar with speed + ETA
 - [ ] Self-update checks GitHub
-- [ ] `arinanox status` = plain CLI output
+- [ ] All 6 features working
 - [ ] Works on Android 7.0+, 2GB+ RAM
