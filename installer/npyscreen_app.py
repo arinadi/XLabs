@@ -55,8 +55,7 @@ def _start_desktop():
     print("\n  Starting desktop...\n")
     from .start import start_desktop
     if start_desktop():
-        print("  Desktop started!")
-        print("  Open Termux:X11 app to see your desktop.")
+        pass  # start_desktop() already prints success message
     else:
         print("  Failed to start desktop")
     input("\n  Press Enter...")

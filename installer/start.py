@@ -44,41 +44,60 @@ def stop_desktop() -> bool:
     print("\n  Stopping desktop...\n")
 
     # Kill processes — order matters: apps first, then infrastructure
-    run_cmd("pkill -9 -f mate-session 2>/dev/null")
-    run_cmd("pkill -9 -f marco 2>/dev/null")
-    run_cmd("pkill -9 -f mate-panel 2>/dev/null")
-    run_cmd("pkill -9 -f dbus-launch 2>/dev/null")
-    run_cmd("pkill -9 -f virgl_test_server 2>/dev/null")
-    run_cmd("pkill -9 -f termux-x11 2>/dev/null")
-    run_cmd("pactl unload-module module-null-sink 2>/dev/null")
-    run_cmd("pactl unload-module module-native-protocol-tcp 2>/dev/null")
-    run_cmd("pkill -9 -f pulseaudio 2>/dev/null")
+    for name, cmd in [
+        ("mate-session", "pkill -9 -f mate-session 2>/dev/null"),
+        ("marco", "pkill -9 -f marco 2>/dev/null"),
+        ("mate-panel", "pkill -9 -f mate-panel 2>/dev/null"),
+        ("dbus-launch", "pkill -9 -f dbus-launch 2>/dev/null"),
+        ("virgl", "pkill -9 -f virgl_test_server 2>/dev/null"),
+        ("termux-x11", "pkill -9 -f termux-x11 2>/dev/null"),
+    ]:
+        rc, out = run_cmd(cmd)
+        status = "killed" if rc == 0 else "not running"
+        print(f"    {name}: {status}")
+
+    # Unload PulseAudio modules
+    for mod in ["module-null-sink", "module-native-protocol-tcp"]:
+        rc, out = run_cmd(f"pactl unload-module {mod} 2>/dev/null")
+        print(f"    pulseaudio {mod}: {'unloaded' if rc == 0 else 'not loaded'}")
+
+    rc, out = run_cmd("pkill -9 -f pulseaudio 2>/dev/null")
+    print(f"    pulseaudio: {'killed' if rc == 0 else 'not running'}")
 
     # Kill any leftover proot wrapper processes
-    run_cmd("pkill -9 -f 'proot.*arinanolabs' 2>/dev/null")
+    rc, out = run_cmd("pkill -9 -f 'proot.*arinanolabs' 2>/dev/null")
+    print(f"    proot wrapper: {'killed' if rc == 0 else 'not running'}")
 
     # Wait for processes to actually die
     time.sleep(1)
 
     # Cleanup X11 lock and socket (keep the directory itself)
     tmpdir = os.environ.get("TMPDIR", "/data/data/com.termux/files/usr/tmp")
-    run_cmd(f"rm -f {tmpdir}/.X0-lock 2>/dev/null")
-    run_cmd(f"rm -f {tmpdir}/.X11-unix/X0 2>/dev/null")
+    for f in [".X0-lock", ".X11-unix/X0"]:
+        path = f"{tmpdir}/{f}"
+        rc, _ = run_cmd(f"rm -f {path} 2>/dev/null")
+        print(f"    rm {path}: {'ok' if rc == 0 else 'failed'}")
 
     # Cleanup stale dbus sockets
-    run_cmd(f"rm -f {tmpdir}/dbus-* 2>/dev/null")
+    rc, _ = run_cmd(f"rm -f {tmpdir}/dbus-* 2>/dev/null")
+    print(f"    rm dbus sockets: {'ok' if rc == 0 else 'failed'}")
+
+    # Cleanup stale runtime dirs
+    rc, _ = run_cmd(f"rm -rf {tmpdir}/runtime-* 2>/dev/null")
+    print(f"    rm runtime dirs: {'ok' if rc == 0 else 'failed'}")
 
     # Verify all processes are dead
-    rc, _ = run_cmd("pgrep -f 'mate-session|pulseaudio|termux-x11|proot.*arinanolabs'")
+    rc, out = run_cmd("pgrep -f 'mate-session|pulseaudio|termux-x11|proot.*arinanolabs'")
     if rc == 0:
-        print("  ⚠ Some processes may still be running")
+        print(f"\n  ⚠ Processes still alive: {out.strip()}")
         run_cmd("pkill -9 -f mate-session 2>/dev/null")
         run_cmd("pkill -9 -f pulseaudio 2>/dev/null")
         run_cmd("pkill -9 -f termux-x11 2>/dev/null")
         run_cmd("pkill -9 -f 'proot.*arinanolabs' 2>/dev/null")
         time.sleep(0.5)
+    else:
+        print("\n  ✓ All processes stopped.")
 
-    print("  Desktop stopped.")
     return True
 
 
@@ -184,10 +203,13 @@ def start_mate() -> bool:
 
     env_str = " ".join(f"export {k}={v}" for k, v in env_vars.items())
 
+    # Create XDG_RUNTIME_DIR with proper perms (dbus requires 0700)
+    runtime_setup = "mkdir -p /tmp/runtime-$$ && chmod 0700 /tmp/runtime-$$ && export XDG_RUNTIME_DIR=/tmp/runtime-$$"
+
     # Start in background
     cmd = (
         f"proot-distro login arinanolabs --shared-x11 -- su - admin -c '"
-        f"{env_str} && "
+        f"{env_str} && {runtime_setup} && "
         f"dbus-launch mate-session"
         f"'"
     )
