@@ -72,11 +72,9 @@ mkdir -p "$SCRIPTS_DIR" "$LAUNCHERS_DIR"
 
 for f in host-setup.sh \
          launcher-gen.sh motd-setup.sh \
-         proot-backup.sh proot-restore.sh \
          patch.sh \
          seccomp-check.sh seccomp-fix.sh doctor.sh \
-         manifest-generate.sh manifest-apply.sh user-snapshot.sh \
-         status.sh; do
+         manifest-generate.sh manifest-apply.sh user-snapshot.sh; do
     curl -sL --retry 2 "${REPO}/scripts/${f}" -o "${SCRIPTS_DIR}/${f}"
     chmod +x "${SCRIPTS_DIR}/${f}"
 done
