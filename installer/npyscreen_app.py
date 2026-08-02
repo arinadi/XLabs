@@ -29,6 +29,7 @@ def run_npyscreen():
         print("  3  🔄  Update")
         print("  4  🧰  Extra Tools")
         print("  5  📊  Status")
+        print("  6  🔧  Refresh Launcher")
         print("  0  🚪  Exit")
         print()
 
@@ -44,6 +45,8 @@ def run_npyscreen():
             _tools()
         elif choice == "5":
             _status()
+        elif choice == "6":
+            _refresh_launcher()
         elif choice == "0":
             os.system("cls" if os.name == "nt" else "clear")
             print("\n  Goodbye! 👋\n")
@@ -129,4 +132,36 @@ def _status():
     print(f"  Container:  {'✓ Installed' if container else '✗ Not found'}")
     print(f"  Desktop:    {'● Running' if running else '○ Not running'}")
     print(f"  GPU:        {get_gpu_summary(gpu)}")
+    input("\n  Press Enter...")
+
+
+def _refresh_launcher():
+    """Regenerate alabs launcher from current repo code."""
+    import subprocess
+
+    os.system("cls" if os.name == "nt" else "clear")
+    print("\n  🔧  Refreshing launcher...\n")
+
+    repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    alabs_script = os.path.expanduser("~/.local/bin/alabs")
+    installer_dir = repo_dir
+
+    os.makedirs(os.path.dirname(alabs_script), exist_ok=True)
+
+    with open(alabs_script, "w") as f:
+        f.write(f"""#!/bin/bash
+# arinanoLabs TUI launcher
+python3 -c "
+import sys
+sys.path.insert(0, '{installer_dir}')
+from installer.npyscreen_app import run_npyscreen
+run_npyscreen()
+"
+""")
+    os.chmod(alabs_script, 0o755)
+
+    print(f"  ✓ Launcher updated: {alabs_script}")
+    print(f"  ✓ Points to: {installer_dir}")
+    print()
+    print("  Restart terminal or run: source ~/.bashrc")
     input("\n  Press Enter...")
