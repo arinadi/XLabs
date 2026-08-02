@@ -156,9 +156,9 @@ def start_mate() -> bool:
 
     env_str = " ".join(f"{k}={v}" for k, v in env_vars.items())
 
-    # Start in background
+    # Start in background (--isolated: no Termux binaries leak into container)
     cmd = f"""
-        proot-distro login arinanolabs --shared-tmp -- su - admin -c "
+        proot-distro login arinanolabs --isolated --bind /tmp:/tmp -- su - admin -c "
             {env_str}
             rm -f /tmp/dbus-* 2>/dev/null
             dbus-launch --exit-with-session mate-session
