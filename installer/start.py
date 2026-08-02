@@ -21,7 +21,7 @@ def start_desktop() -> bool:
         ("Starting virgl renderer", start_virgl),
         ("Starting X11 server", start_x11),
         ("Waiting for X11 socket", wait_for_x11),
-        ("Launching MATE desktop", start_mate),
+        ("Launching Xfce4 desktop", start_xfce4),
     ]
 
     for name, step_fn in steps:
@@ -45,9 +45,10 @@ def stop_desktop() -> bool:
 
     # Kill processes — order matters: apps first, then infrastructure
     for name, cmd in [
-        ("mate-session", "pkill -9 -f mate-session 2>/dev/null"),
-        ("marco", "pkill -9 -f marco 2>/dev/null"),
-        ("mate-panel", "pkill -9 -f mate-panel 2>/dev/null"),
+        ("xfce4-session", "pkill -9 -f xfce4-session 2>/dev/null"),
+        ("xfce4-panel", "pkill -9 -f xfce4-panel 2>/dev/null"),
+        ("xfwm4", "pkill -9 -f xfwm4 2>/dev/null"),
+        ("thunar", "pkill -9 -f thunar 2>/dev/null"),
         ("dbus-launch", "pkill -9 -f dbus-launch 2>/dev/null"),
         ("virgl", "pkill -9 -f virgl_test_server 2>/dev/null"),
         ("termux-x11", "pkill -9 -f termux-x11 2>/dev/null"),
@@ -75,12 +76,10 @@ def stop_desktop() -> bool:
     # Wait for processes to actually die
     time.sleep(1)
 
-    # Cleanup X11 lock and socket (keep the directory itself)
+    # Cleanup X11 lock files and socket (keep the directory itself)
     tmpdir = os.environ.get("TMPDIR", "/data/data/com.termux/files/usr/tmp")
-    for f in [".X0-lock", ".X11-unix/X0"]:
-        path = f"{tmpdir}/{f}"
-        rc, _ = run_cmd(f"rm -f {path} 2>/dev/null")
-        print(f"    rm {path}: {'ok' if rc == 0 else 'failed'}")
+    run_cmd(f"rm -f {tmpdir}/.X*-lock {tmpdir}/.X11-unix/X* 2>/dev/null")
+    print(f"    rm X11 locks+socket: ok")
 
     # Cleanup stale dbus sockets in Termux TMPDIR
     rc, _ = run_cmd(f"rm -f {tmpdir}/dbus-* 2>/dev/null")
@@ -98,10 +97,10 @@ def stop_desktop() -> bool:
     print(f"    rm runtime dirs (proot): {'ok' if rc == 0 else 'failed'}")
 
     # Verify all processes are dead
-    rc, out = run_cmd("pgrep -f 'mate-session|pulseaudio|termux-x11|proot.*arinanolabs'")
+    rc, out = run_cmd("pgrep -f 'xfce4-session|xfwm4|pulseaudio|termux-x11|proot.*arinanolabs'")
     if rc == 0:
         print(f"\n  ⚠ Processes still alive: {out.strip()}")
-        run_cmd("pkill -9 -f mate-session 2>/dev/null")
+        run_cmd("pkill -9 -f xfce4-session 2>/dev/null")
         run_cmd("pkill -9 -f pulseaudio 2>/dev/null")
         run_cmd("pkill -9 -f termux-x11 2>/dev/null")
         run_cmd("pkill -9 -f 'proot.*arinanolabs' 2>/dev/null")
@@ -113,8 +112,8 @@ def stop_desktop() -> bool:
 
 
 def is_running() -> bool:
-    """Check if MATE session is running."""
-    rc, _ = run_cmd("pgrep -f mate-session")
+    """Check if Xfce4 session is running."""
+    rc, _ = run_cmd("pgrep -f 'xfce4-session|startxfce4'")
     return rc == 0
 
 
@@ -176,8 +175,23 @@ def start_virgl() -> bool:
 
 def start_x11() -> bool:
     """Start Termux:X11 server."""
+    # Kill any stale termux-x11 and clean ALL lock/socket files
+    run_cmd("pkill -9 -f termux-x11 2>/dev/null")
+    time.sleep(0.5)
+    tmpdir = os.environ.get("TMPDIR", "/data/data/com.termux/files/usr/tmp")
+    # Remove ALL X lock files (X0-lock, X1-lock, etc.) and socket
+    run_cmd(f"rm -f {tmpdir}/.X*-lock {tmpdir}/.X11-unix/X* 2>/dev/null")
+    time.sleep(0.5)
+
     subprocess.Popen("termux-x11 :0 -ac", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(2)
+    time.sleep(3)
+
+    # Verify termux-x11 is actually running AND socket exists
+    rc, _ = run_cmd("pgrep -f termux-x11")
+    socket_path = f"{tmpdir}/.X11-unix/X0"
+    if rc != 0 or not os.path.exists(socket_path):
+        console.print("    [red]✗ termux-x11 failed to start[/red]")
+        return False
 
     # Auto-open X11 app
     subprocess.Popen("am start -n com.termux.x11/com.termux.x11.MainActivity", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -185,22 +199,30 @@ def start_x11() -> bool:
 
 
 def wait_for_x11() -> bool:
-    """Wait for X11 socket to be ready."""
+    """Wait for X11 socket to be ready and accepting connections."""
+    import socket as sock
     tmpdir = os.environ.get("TMPDIR", "/data/data/com.termux/files/usr/tmp")
     socket_path = f"{tmpdir}/.X11-unix/X0"
 
     for i in range(50):  # Wait up to 5 seconds
         if os.path.exists(socket_path):
-            console.print(f"    [green]✓ X11 ready ({(i+1)*100}ms)[/green]")
-            return True
+            # Verify actual connection (not just stale socket file)
+            try:
+                s = sock.socket(sock.AF_UNIX, sock.SOCK_STREAM)
+                s.connect(socket_path)
+                s.close()
+                console.print(f"    [green]✓ X11 ready ({(i+1)*100}ms)[/green]")
+                return True
+            except (ConnectionRefusedError, OSError):
+                pass
         time.sleep(0.1)
 
     console.print("    [yellow]⚠ X11 socket timeout, proceeding anyway[/yellow]")
     return True
 
 
-def start_mate() -> bool:
-    """Start MATE session in proot."""
+def start_xfce4() -> bool:
+    """Start Xfce4 session in proot."""
     gpu = detect_gpu()
     env_vars = {
         "DISPLAY": ":0",
@@ -214,15 +236,13 @@ def start_mate() -> bool:
 
     exports = " ".join(f"{k}={v}" for k, v in env_vars.items())
 
-    # Use 'su admin' (no -) to avoid .bashrc overriding XDG_RUNTIME_DIR=/tmp
-    # Use 'eval $(dbus-launch --sh-syntax)' so DBUS_SESSION_BUS_ADDRESS is set
-    # in the shell env before mate-session inherits it
+    # Use 'su admin' (no -) to avoid .bashrc overriding XDG_RUNTIME_DIR
+    # Create proper XDG_RUNTIME_DIR (mode 0700) for dbus
     inner_cmd = (
         f"export {exports} && "
         f"XDG=/tmp/runtime-$$ && mkdir -p $XDG && chmod 0700 $XDG && "
         f"export XDG_RUNTIME_DIR=$XDG && "
-        f"eval $(dbus-launch --sh-syntax) && "
-        f"exec mate-session"
+        f"exec startxfce4"
     )
 
     # Start in background
@@ -232,7 +252,7 @@ def start_mate() -> bool:
     )
 
     # Log to file for debugging
-    log_file = os.path.expanduser("~/arinanoLabs/mate.log")
+    log_file = os.path.expanduser("~/arinanoLabs/xfce4.log")
     with open(log_file, "w") as f:
         subprocess.Popen(cmd, shell=True, stdout=f, stderr=f)
 
@@ -247,11 +267,11 @@ def start_mate() -> bool:
                 print(f"    {line}")
 
     # Verify
-    rc, _ = run_cmd("pgrep -f mate-session")
+    rc, _ = run_cmd("pgrep -f 'xfce4-session|startxfce4'")
     if rc == 0:
-        print("    MATE session running")
+        print("    Xfce4 session running")
         return True
     else:
-        print("    MATE session failed to start")
+        print("    Xfce4 session failed to start")
         print(f"    Check log: {log_file}")
         return False

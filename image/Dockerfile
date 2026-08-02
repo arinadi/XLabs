@@ -16,16 +16,18 @@ RUN apt-get update && \
     /usr/share/locale/* /var/cache/apt/archives/*
 
 # ═══════════════════════════════════════════════
-# Layer 2  MATE CORE + APPS
+# Layer 2  XFCE4 DESKTOP
 # ═══════════════════════════════════════════════
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         dbus-x11 \
-        mate-desktop-environment \
-        mate-tweak \
-        mate-utils \
-        mate-applets \
-        caja-admin && \
+        xfce4 xfce4-goodies \
+        thunar thunar-archive-plugin \
+        xfce4-terminal xfce4-panel \
+        xfce4-session xfce4-settings \
+        xfce4-notifyd xfce4-screenshooter \
+        mousepad ristretto xfburn \
+        menu gnome-keyring && \
     apt-get clean && rm -rf /var/lib/apt/lists/* \
     /usr/share/doc/* /usr/share/man/* /usr/share/info/* \
     /usr/share/locale/* /var/cache/apt/archives/*

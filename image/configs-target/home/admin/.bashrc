@@ -1,5 +1,4 @@
 export DISPLAY=:0
-export XDG_RUNTIME_DIR=/tmp
 export NO_AT_BRIDGE=1
 export LIBGL_ALWAYS_SOFTWARE=1
 # Firefox: suppress sandbox video device spam in proot
