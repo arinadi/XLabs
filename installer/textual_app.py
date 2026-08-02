@@ -1,82 +1,32 @@
-"""Textual TUI for arinanoLabs — flicker-free single screen."""
+"""Textual TUI for arinanoLabs."""
 
 from textual.app import App, ComposeResult
-from textual.widgets import (
-    Header, Footer, Static, Label, Button, RichLog
-)
-from textual.containers import Vertical, Horizontal
+from textual.widgets import Header, Footer, Static, Label, Button, RichLog
+from textual.containers import Vertical
 from textual.reactive import reactive
 
 
-# ── Styles ─────────────────────────────────────────────────
-
 CSS = """
-Screen {
-    background: $surface;
-}
-
-#main {
-    width: 100%;
-    height: 100%;
-    align: center middle;
-}
-
-#content {
-    width: 42;
-    height: auto;
-    padding: 1 2;
-}
-
-#content-title {
-    text-style: bold;
-    color: $accent;
-    text-align: center;
-    width: 100%;
-    padding: 0 0 0 0;
-}
-
-#version {
-    text-align: center;
-    color: $text-muted;
-    width: 100%;
-    padding: 0 0 1 0;
-}
-
-.menu-btn {
-    width: 100%;
-    min-height: 3;
-    margin: 0 0 0 0;
-}
-
-#start { background: $accent; color: $text; border-top: hidden; }
+Screen { background: $surface; }
+#main { width: 100%; height: 100%; align: center middle; }
+#content { width: 42; height: auto; padding: 1 2; }
+#content-title { text-style: bold; color: $accent; text-align: center; width: 100%; }
+#version { text-align: center; color: $text-muted; width: 100%; padding: 0 0 1 0; }
+.menu-btn { width: 100%; min-height: 3; }
+#start { background: $accent; color: $text; }
 #stop { background: $warning; color: $text; }
-
-#back {
-    width: 100%;
-    margin: 1 0 0 0;
-}
-
-#exit {
-    width: 100%;
-    margin: 1 0 0 0;
-}
+#back { width: 100%; margin: 1 0 0 0; }
+#exit { width: 100%; margin: 1 0 0 0; }
 """
 
 
 class ArinanoLabsApp(App):
-    """Main TUI — single screen, no push/pop."""
-
     TITLE = "arinanoLabs"
     CSS = CSS
 
     BINDINGS = [
         ("q", "quit", "Quit"),
-        ("escape", "back", "Back"),
-        ("1", "action_start", "Start"),
-        ("2", "action_stop", "Stop"),
-        ("3", "action_update", "Update"),
-        ("4", "action_tools", "Tools"),
-        ("5", "action_status", "Status"),
+        ("escape", "quit", "Quit"),
     ]
 
     view = reactive("menu")
@@ -91,7 +41,6 @@ class ArinanoLabsApp(App):
         self.show_menu()
 
     def _set_content(self, *widgets):
-        """Replace content without flicker."""
         content = self.query_one("#content")
         content.remove_children()
         content.mount(*widgets)
@@ -114,11 +63,10 @@ class ArinanoLabsApp(App):
             Button("🚪  Exit", id="exit", variant="default", classes="menu-btn"),
         )
 
-    # ── Actions ────────────────────────────────────────────
+    # ── Button Pressed ─────────────────────────────────────
 
-    def action_start(self):
-        if self.view != "menu":
-            return
+    @on(Button.Pressed, "#start")
+    def on_start(self):
         self.view = "start"
         self._set_content(
             Label("▶️  Starting desktop...", id="content-title"),
@@ -142,9 +90,8 @@ class ArinanoLabsApp(App):
         else:
             log.write("[red]✗ Failed to start desktop[/red]")
 
-    def action_stop(self):
-        if self.view != "menu":
-            return
+    @on(Button.Pressed, "#stop")
+    def on_stop(self):
         self.view = "stop"
         self._set_content(
             Label("⏹️  Stopping desktop...", id="content-title"),
@@ -158,9 +105,8 @@ class ArinanoLabsApp(App):
         stop_desktop()
         log.write("[green]✓ Desktop stopped[/green]")
 
-    def action_update(self):
-        if self.view != "menu":
-            return
+    @on(Button.Pressed, "#update")
+    def on_update(self):
         self.view = "update"
         self._set_content(
             Label("🔄  Updating...", id="content-title"),
@@ -171,8 +117,7 @@ class ArinanoLabsApp(App):
         self.run_worker(self._do_update)
 
     async def _do_update(self):
-        import subprocess
-        import os
+        import subprocess, os
         log = self.query_one("#log", RichLog)
         repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -181,18 +126,12 @@ class ArinanoLabsApp(App):
             return
 
         log.write("[cyan]→ Pulling latest changes...[/cyan]")
-        result = subprocess.run(
-            ["git", "pull"],
-            cwd=repo_dir, capture_output=True, text=True
-        )
+        result = subprocess.run(["git", "pull"], cwd=repo_dir, capture_output=True, text=True)
 
         if result.returncode != 0:
             log.write("[dim]Fetching latest...[/dim]")
             subprocess.run(["git", "fetch", "origin", "main"], cwd=repo_dir, capture_output=True)
-            result = subprocess.run(
-                ["git", "reset", "--hard", "origin/main"],
-                cwd=repo_dir, capture_output=True, text=True
-            )
+            result = subprocess.run(["git", "reset", "--hard", "origin/main"], cwd=repo_dir, capture_output=True, text=True)
 
         if result.returncode == 0:
             if "Already up to date" in result.stdout:
@@ -203,9 +142,8 @@ class ArinanoLabsApp(App):
         else:
             log.write("[red]✗ Update failed[/red]")
 
-    def action_tools(self):
-        if self.view != "menu":
-            return
+    @on(Button.Pressed, "#tools")
+    def on_tools(self):
         self.view = "tools"
         self._set_content(
             Label("🧰  Extra Tools", id="content-title"),
@@ -219,9 +157,8 @@ class ArinanoLabsApp(App):
             Button("Back", id="back"),
         )
 
-    def action_status(self):
-        if self.view != "menu":
-            return
+    @on(Button.Pressed, "#status")
+    def on_status(self):
         self.view = "status"
         from .start import is_running
         from .ui import is_installed, get_version
@@ -242,31 +179,15 @@ class ArinanoLabsApp(App):
             Button("Back", id="back"),
         )
 
-    # ── Button handler ─────────────────────────────────────
+    @on(Button.Pressed, "#exit")
+    def on_exit(self):
+        self.exit()
 
-    @on(Button.Pressed)
-    def on_button(self, event: Button.Pressed):
-        if event.button.id == "exit":
-            self.exit()
-        elif event.button.id == "back":
-            self.show_menu()
-        elif event.button.id == "start":
-            self.action_start()
-        elif event.button.id == "stop":
-            self.action_stop()
-        elif event.button.id == "update":
-            self.action_update()
-        elif event.button.id == "tools":
-            self.action_tools()
-        elif event.button.id == "status":
-            self.action_status()
-
-    def action_back(self):
-        if self.view != "menu":
-            self.show_menu()
+    @on(Button.Pressed, "#back")
+    def on_back(self):
+        self.show_menu()
 
 
 def run_textual():
-    """Run the Textual TUI."""
     app = ArinanoLabsApp()
     app.run()
