@@ -219,29 +219,18 @@ def step_setup_user() -> bool:
 
 
 def step_install_launchers() -> bool:
-    """Install launcher scripts to Termux home."""
-    # Download scripts from repo
-    scripts = ["start.sh", "stop.sh"]
-
-    for script in scripts:
-        url = f"{REPO_URL}/launchers/{script}"
-        dest = os.path.expanduser(f"~/{script}")
-        try:
-            urllib.request.urlretrieve(url, dest)
-            os.chmod(dest, 0o755)
-        except Exception as e:
-            console.print(f"  [yellow]Warning: Could not download {script}: {e}[/yellow]")
-
-    # Create alabs launcher
+    """Install alabs launcher to Termux home."""
     alabs_script = os.path.expanduser("~/.local/bin/alabs")
     os.makedirs(os.path.dirname(alabs_script), exist_ok=True)
+
+    installer_dir = os.path.dirname(os.path.dirname(__file__))
 
     with open(alabs_script, "w") as f:
         f.write(f"""#!/bin/bash
 # arinanoLabs TUI launcher
 python3 -c "
 import sys
-sys.path.insert(0, '{os.path.dirname(os.path.dirname(__file__))}')
+sys.path.insert(0, '{installer_dir}')
 from installer.menu import main
 main()
 "

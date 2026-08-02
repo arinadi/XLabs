@@ -79,12 +79,6 @@ for f in host-setup.sh \
     chmod +x "${SCRIPTS_DIR}/${f}"
 done
 
-echo ">>> Downloading launchers..."
-for f in start.sh stop.sh update.sh; do
-    curl -sL --retry 2 "${REPO}/launchers/${f}" -o "${LAUNCHERS_DIR}/${f}"
-    chmod +x "${LAUNCHERS_DIR}/${f}"
-done
-
 # --- Execute Setup ---
 echo ">>> Running host setup..."
 bash "${SCRIPTS_DIR}/host-setup.sh"
