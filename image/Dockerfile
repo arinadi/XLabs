@@ -16,12 +16,19 @@ RUN apt-get update && \
     /usr/share/locale/* /var/cache/apt/archives/*
 
 # ═══════════════════════════════════════════════
-# Layer 2  MATE CORE
+# Layer 2  MATE CORE + APPS
 # ═══════════════════════════════════════════════
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         dbus-x11 \
-        mate-desktop-environment && \
+        mate-desktop-environment \
+        mate-tweak \
+        mate-utils \
+        mate-applets \
+        mate-media \
+        mate-screensaver \
+        mate-power-manager \
+        caja-admin && \
     apt-get clean && rm -rf /var/lib/apt/lists/* \
     /usr/share/doc/* /usr/share/man/* /usr/share/info/* \
     /usr/share/locale/* /var/cache/apt/archives/*
