@@ -18,14 +18,12 @@ Screen {
 #main {
     width: 100%;
     height: 100%;
-    align: center top;
-    padding: 1 0;
+    align: center middle;
 }
 
 #content {
-    width: 44;
+    width: 42;
     height: auto;
-    border: heavy $accent;
     padding: 1 2;
 }
 
@@ -33,24 +31,35 @@ Screen {
     text-style: bold;
     color: $accent;
     text-align: center;
-    padding: 0 0 1 0;
+    width: 100%;
+    padding: 0 0 0 0;
 }
 
 #version {
     text-align: center;
     color: $text-muted;
+    width: 100%;
     padding: 0 0 1 0;
 }
 
-Button {
+.menu-btn {
     width: 100%;
-    margin: 0 0 1 0;
+    min-height: 3;
+    margin: 0 0 0 0;
 }
 
-.menu-btn { width: 100%; margin: 0 0 1 0; }
-#start { background: $accent; color: $text; }
+#start { background: $accent; color: $text; border-top: hidden; }
 #stop { background: $warning; color: $text; }
-#back { width: 100%; margin: 1 0 0 0; }
+
+#back {
+    width: 100%;
+    margin: 1 0 0 0;
+}
+
+#exit {
+    width: 100%;
+    margin: 1 0 0 0;
+}
 """
 
 
