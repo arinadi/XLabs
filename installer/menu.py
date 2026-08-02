@@ -105,11 +105,11 @@ def handle_update():
         press_any_key()
         return
 
-    # Git pull
+    # Git pull (shallow — no history)
     import subprocess
     console.print("  [cyan]→[/cyan] Pulling latest changes...")
     result = subprocess.run(
-        ["git", "pull", "--ff-only"],
+        ["git", "pull", "--ff-only", "--depth=1"],
         cwd=repo_dir, capture_output=True, text=True
     )
 
