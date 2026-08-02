@@ -167,7 +167,7 @@ def start_mate() -> bool:
 
     env_str = " ".join(f"export {k}={v}" for k, v in env_vars.items())
 
-    # Start in background
+    # Start in background, capture output for debugging
     cmd = (
         f"proot-distro login arinanolabs --isolated --bind /tmp:/tmp -- su - admin -c '"
         f"{env_str} && "
@@ -176,9 +176,27 @@ def start_mate() -> bool:
         f"'"
     )
 
-    subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(3)
+    # Log to file for debugging
+    log_file = os.path.expanduser("~/arinanoLabs/mate.log")
+    with open(log_file, "w") as f:
+        subprocess.Popen(cmd, shell=True, stdout=f, stderr=f)
+
+    time.sleep(5)
+
+    # Check log for errors
+    if os.path.exists(log_file):
+        with open(log_file, "r") as f:
+            log = f.read()
+        if log.strip():
+            for line in log.strip().split("\n")[:5]:
+                print(f"    {line}")
 
     # Verify
     rc, _ = run_cmd("pgrep -f mate-session")
-    return rc == 0
+    if rc == 0:
+        print("    MATE session running")
+        return True
+    else:
+        print("    MATE session failed to start")
+        print(f"    Check log: {log_file}")
+        return False
