@@ -70,10 +70,10 @@ echo ">>> Downloading scripts..."
 rm -rf "$SCRIPTS_DIR" "$LAUNCHERS_DIR"
 mkdir -p "$SCRIPTS_DIR" "$LAUNCHERS_DIR"
 
-for f in host-setup.sh proot-setup.sh api-bridge-setup.sh xfce-config.sh \
+for f in host-setup.sh \
          launcher-gen.sh motd-setup.sh \
          proot-backup.sh proot-restore.sh \
-         proot-rollback.sh patch.sh \
+         patch.sh \
          seccomp-check.sh seccomp-fix.sh doctor.sh \
          manifest-generate.sh manifest-apply.sh user-snapshot.sh \
          status.sh; do
@@ -99,19 +99,9 @@ if ! grep -q '.arinanox/bin' "$HOME/.bashrc" 2>/dev/null; then
     echo 'export PATH="$HOME/.arinanox/bin:$PATH"' >> "$HOME/.bashrc"
 fi
 
-echo ">>> Downloading API bridge..."
-curl -sL --retry 2 "${REPO}/run-api-bridge.sh" -o "${ARINANOX_DIR}/run-api-bridge.sh"
-chmod +x "${ARINANOX_DIR}/run-api-bridge.sh"
-
 # --- Execute Setup ---
 echo ">>> Running host setup..."
 bash "${SCRIPTS_DIR}/host-setup.sh"
-
-echo ">>> Setting up Debian proot..."
-bash "${SCRIPTS_DIR}/proot-setup.sh"
-
-echo ">>> Setting up Termux:API bridge..."
-bash "${SCRIPTS_DIR}/api-bridge-setup.sh"
 
 echo ">>> Installing launchers..."
 bash "${SCRIPTS_DIR}/launcher-gen.sh"

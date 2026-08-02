@@ -28,7 +28,6 @@ RUN apt-get update && \
         pulseaudio-utils netcat-openbsd x11-xserver-utils \
         thunar \
         adwaita-icon-theme \
-        orchis-gtk-theme \
         firefox-esr \
         mesa-utils glmark2 \
         xdotool \
@@ -63,16 +62,8 @@ COPY configs-target/home/ /home/
 
 RUN chown -R admin:admin /home/admin && \
     chmod +x /home/admin/.arinanox/tools/*.sh && \
-    sed -i 's|.droiddesk/|.arinanox/|g' /home/admin/.bashrc && \
+    sed -i 's/.droiddesk/.arinanox/g' /home/admin/.bashrc && \
     sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && locale-gen
-
-# Compile dconf database for MATE settings
-RUN apt-get update && apt-get install -y --no-install-recommends dconf-cli && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* && \
-    mkdir -p /etc/dconf/db/arinanox.d && \
-    cp /home/admin/.config/dconf/db/arinanox /etc/dconf/db/arinanox.d/ && \
-    dconf compile /etc/dconf/db/arinanox /etc/dconf/db/arinanox.d && \
-    chown -R admin:admin /home/admin/.config/dconf
 
 ENV LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 

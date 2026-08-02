@@ -48,9 +48,6 @@ rm -rf "${TMPDIR:-/data/data/com.termux/files/usr/tmp}/.X11-unix" 2>/dev/null ||
 echo "  [*] Stopping PulseAudio..."
 pulseaudio --kill 2>/dev/null && echo "  [x] pulseaudio" || pkill -9 pulseaudio 2>/dev/null || true
 
-# ── API Bridge ──────────────────────────────────────────────
-pkill -f run-api-bridge.sh 2>/dev/null && echo "  [x] API bridge" || true
-
 # ── Wake lock ───────────────────────────────────────────────
 termux-wake-unlock 2>/dev/null || true
 

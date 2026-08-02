@@ -34,7 +34,6 @@ pkill -f "mate-session" 2>/dev/null && echo "  [x] MATE stopped" || true
 pkill -f "proot-distro login" 2>/dev/null && echo "  [x] proot login stopped" || true
 pkill -f "termux-x11" 2>/dev/null && echo "  [x] X11 stopped" || true
 pulseaudio --kill 2>/dev/null && echo "  [x] PulseAudio stopped" || true
-pkill -f run-api-bridge 2>/dev/null && echo "  [x] API bridge stopped" || true
 termux-wake-unlock 2>/dev/null && echo "  [x] Wake lock released" || true
 sleep 1
 
@@ -80,12 +79,6 @@ rm -f "${TERMUX_TMP}/.X0-lock" 2>/dev/null
 rm -rf "${TERMUX_TMP}/.X11-unix" 2>/dev/null
 rm -f "${TERMUX_TMP}/pulse-socket" 2>/dev/null
 echo "  [x] Temp files cleaned"
-
-# 7. Remove run-api-bridge.sh from home
-echo ""
-echo ">>> Removing API bridge..."
-rm -f ~/run-api-bridge.sh
-echo "  [x] run-api-bridge.sh removed"
 
 echo ""
 echo "╔═══════════════════════════════════╗"

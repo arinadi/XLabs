@@ -25,10 +25,8 @@ arinanoX v${VERSION} — Your phone is a Linux workstation.
   arinanox status        System status (image, storage, snapshots)
   arinanox doctor        Full health-check
   arinanox update        Full update (⚠️ resets core, preserves user layer)
-  arinanox rollback      Rollback core image to arinanox-prev
   arinanox backup        Backup /home/admin to /sdcard/arinanox-backup
   arinanox restore       Restore backup from /sdcard
-  arinanox store         APT Store GUI (install/search/upgrade packages)
   arinanox snapshot      Snapshot user home (hardlink, instant, 3 retained)
   arinanox install       Add packages via manifest (declarative user layer)
   arinanox help          Show this help
@@ -77,27 +75,6 @@ case "$CMD" in
             bash "$SCRIPTS_DIR/manifest-apply.sh"
         fi
         echo ">>> Done. Start: arinanox start"
-        ;;
-
-    rollback)
-        ROLLBACK_SCRIPT="$SCRIPTS_DIR/proot-rollback.sh"
-        if [ -f "$ROLLBACK_SCRIPT" ]; then
-            exec bash "$ROLLBACK_SCRIPT"
-        else
-            echo "✗ Rollback script not found. Run: arinanox update"
-            exit 1
-        fi
-        ;;
-
-    # ── Package management ──
-    store)
-        STORE_SCRIPT="$ARINANOX_DIR/tools/apt-store.sh"
-        if [ -f "$STORE_SCRIPT" ]; then
-            exec bash "$STORE_SCRIPT"
-        else
-            echo "✗ APT Store not found. Run: arinanox update"
-            exit 1
-        fi
         ;;
 
     install)

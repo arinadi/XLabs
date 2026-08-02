@@ -37,28 +37,10 @@ if grep -q "^packages:" "$MANIFEST" 2>/dev/null; then
     fi
 fi
 
-# ── Restore MATE configs ────────────────────────────────────
-CONFIG_DIR="$HOME/.arinanox/snapshot-current/home/.config/dconf"
-TARGET_DIR="$ROOTFS/home/admin/.config/dconf"
-
-if [ -d "$CONFIG_DIR" ]; then
-    echo "  Restoring MATE configs..."
-    mkdir -p "$TARGET_DIR"
-    if [ -f "$CONFIG_DIR/user" ]; then
-        cp "$CONFIG_DIR/user" "$TARGET_DIR/user"
-        echo "    → dconf/user"
-    fi
-    if [ -d "$CONFIG_DIR/db" ]; then
-        cp -r "$CONFIG_DIR/db" "$TARGET_DIR/"
-        echo "    → dconf/db/"
-    fi
-    echo "  ✓ Configs restored"
-fi
-
 # ── Restore dotfiles from backup ────────────────────────────
 if [ -d "$BACKUP_DIR/home" ]; then
     echo "  Restoring dotfiles from backup..."
-    for df in .bashrc .bash_aliases .gitconfig .config/gtk-3.0/gtk.css; do
+    for df in .bashrc .bash_aliases .gitconfig; do
         src="$BACKUP_DIR/home/$df"
         dest="$ROOTFS/home/admin/$df"
         if [ -f "$src" ]; then

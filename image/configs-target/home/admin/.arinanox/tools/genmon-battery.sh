@@ -9,15 +9,15 @@
 #  Interval: 30s
 # ═══════════════════════════════════════════
 
-DATA=$(tapi termux-battery-status 2>/dev/null)
-if [ -z "$DATA" ]; then
-    echo "<txt>🔌</txt><tool>Bridge offline</tool>"
+# Read battery from sysfs (works in proot without Termux:API)
+BAT_PATH="/sys/class/power_supply/battery"
+if [ ! -d "$BAT_PATH" ]; then
+    echo "<txt>🔌</txt><tool>No battery found</tool>"
     exit 0
 fi
 
-PCT=$(echo "$DATA"   | jq -r .percentage)
-STATUS=$(echo "$DATA" | jq -r .status)
-TEMP=$(echo "$DATA"   | jq -r .temperature)
+PCT=$(cat "$BAT_PATH/capacity" 2>/dev/null || echo "0")
+STATUS=$(cat "$BAT_PATH/status" 2>/dev/null || echo "Unknown")
 
 # Icon based on level
 if   [ "$PCT" -ge 90 ]; then ICON="🔋"
@@ -27,8 +27,7 @@ elif [ "$PCT" -ge 15 ]; then ICON="🪫"
 else                          ICON="🪫"; fi
 
 # Charging indicator
-[ "$STATUS" = "CHARGING" ] && ICON="⚡"
+[ "$STATUS" = "Charging" ] && ICON="⚡"
 
 echo "<txt>${ICON} ${PCT}%</txt>"
-echo "<tool>Battery: ${PCT}% (${STATUS}) | Temp: ${TEMP}°C</tool>"
-echo "<txtclick>bash ~/.arinanox/tools/tapi-utils.sh battery</txtclick>"
+echo "<tool>Battery: ${PCT}% (${STATUS})</tool>"

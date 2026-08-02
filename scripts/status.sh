@@ -21,13 +21,6 @@ else
     echo "║  Current:  NOT INSTALLED"
 fi
 
-# Rollback deployment
-PREV_ROOTFS="/data/data/com.termux/files/usr/var/lib/proot-distro/containers/${PREV_CONTAINER}/rootfs"
-if [ -d "$PREV_ROOTFS" ]; then
-    SIZE=$(du -sh "$PREV_ROOTFS" 2>/dev/null | cut -f1)
-    echo "║  Rollback: arinanox-prev ($SIZE)"
-fi
-
 echo "╠═══════════════════════════════════════╣"
 
 # Running status
@@ -67,5 +60,4 @@ fi
 echo "╚═══════════════════════════════════════╝"
 echo ""
 echo "  Update:  bash ~/update.sh"
-echo "  Rollback: bash ~/.arinanox/scripts/proot-rollback.sh"
 echo "  Status:  bash ~/.arinanox/scripts/status.sh"

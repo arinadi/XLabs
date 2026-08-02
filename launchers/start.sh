@@ -36,10 +36,6 @@ pactl load-module module-sles-sink 2>/dev/null || true
 pactl load-module module-native-protocol-tcp auth-ip-acl=127.0.0.1 \
     auth-anonymous=1 port=4713 2>/dev/null || true
 
-# API Bridge
-pkill -f run-api-bridge.sh 2>/dev/null || true
-bash ~/run-api-bridge.sh &>/dev/null &
-
 # virgl (auto-detect) — start in background
 VIRGL_MODE="cpu"
 if command -v virgl_test_server_android &>/dev/null; then
@@ -67,7 +63,7 @@ termux-wake-lock
 # Switch to X11 app (background — don't block)
 am start -n com.termux.x11/com.termux.x11.MainActivity &>/dev/null &
 
-echo "  PulseAudio + API + virgl($VIRGL_MODE) + X11 started"
+echo "  PulseAudio + virgl($VIRGL_MODE) + X11 started"
 
 # ── [2/3] Wait for X11 socket ───────────────────────────────
 echo ">>> [2/3] Waiting for X11..."

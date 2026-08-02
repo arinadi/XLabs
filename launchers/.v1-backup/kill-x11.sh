@@ -19,9 +19,6 @@ else
     pkill -9 "pulseaudio" 2>/dev/null && echo "  [x] pulseaudio force-killed" || echo "  [-] pulseaudio not running"
 fi
 
-# Kill Termux:API Bridge
-pkill -f run-api-bridge.sh 2>/dev/null && echo "  [x] termux-api bridge killed"
-
 # Release wake lock
 termux-wake-unlock 2>/dev/null && echo "  [x] wake lock released"
 

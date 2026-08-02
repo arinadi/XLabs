@@ -16,9 +16,6 @@ PATCHES[code]="VS Code (code-server)|curl -fsSL https://code-server.dev/install.
 PATCHES[geany]="Geany (Lightweight IDE)|apt-get install -y geany"
 PATCHES[neovim]="Neovim|apt-get install -y neovim"
 
-# AI
-PATCHES[ollama]="Ollama (local LLM)|curl -fsSL https://ollama.com/install.sh | sh"
-
 # System
 PATCHES[zsh]="Zsh + Oh My Zsh|apt-get install -y zsh && su - admin -c 'sh -c \"$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)\" \"\" --unattended'"
 PATCHES[nala]="Nala (Modern APT)|apt-get install -y nala"
@@ -45,7 +42,6 @@ if [ $# -gt 0 ]; then
             --code)       SELECTED+=("code") ;;
             --geany)      SELECTED+=("geany") ;;
             --neovim)     SELECTED+=("neovim") ;;
-            --ollama)     SELECTED+=("ollama") ;;
             --zsh)        SELECTED+=("zsh") ;;
             --nala)       SELECTED+=("nala") ;;
             --docker)     SELECTED+=("docker") ;;

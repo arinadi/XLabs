@@ -13,7 +13,7 @@ curl -sL https://raw.githubusercontent.com/arinadi/arinanoX/main/bootstrap.sh | 
 
   <img src="docs/arinanox-screenshot.jpg" alt="arinanoX desktop" width="360" style="border-radius:12px;">
   <p>
-    Debian 13 &nbsp;·&nbsp; MATE &nbsp;·&nbsp; Firefox ESR &nbsp;·&nbsp; Dev tools &nbsp;·&nbsp; Touch-optimized<br>
+    Debian 13 &nbsp;·&nbsp; MATE &nbsp;·&nbsp; Firefox ESR &nbsp;·&nbsp; Dev tools<br>
     <small>TermuX&nbsp;→&nbsp;X11&nbsp;→&nbsp;LinuX&nbsp;→&nbsp;Trixie&nbsp;→&nbsp;MATE</small>
   </p>
 </div>
@@ -30,8 +30,7 @@ Your Android phone is a pocket PC with 8GB+ RAM and an ARM64 CPU — it deserves
 | No glibc apps | Debian 13 proot — standard glibc |
 | No dev tools | Node.js 22, Python 3, GCC, CMake built-in |
 | Background killed | Termux:WakeLock keeps sessions alive |
-| No clipboard bridge | Auto-sync Android ↔ proot |
-| 30 min of apt + theme + GTK tweaks | Prebuilt image, ~580MB, extract and run |
+| 30 min of apt + config | Prebuilt image, ~580MB, extract and run |
 | No rollback if update breaks | Atomic image swap, instant revert |
 
 **What this can't do:** no Docker, no systemd services, no native x86, no root (proot emulates root-like behavior, not real root). Full details in [Limitations](#️-limitations) — read that before you invest time installing.
@@ -42,7 +41,6 @@ Your Android phone is a pocket PC with 8GB+ RAM and an ARM64 CPU — it deserves
 
 - Android ARM64 + [Termux](https://f-droid.org/en/packages/com.termux/) (F-Droid, NOT Play Store)
 - [Termux:X11](https://github.com/termux/termux-x11/releases/tag/nightly) — display server
-- [Termux:API](https://f-droid.org/en/packages/com.termux.api/) (optional — battery, clipboard, voice)
 - [Termux:Widget](https://f-droid.org/en/packages/com.termux.widget/) (recommended — home screen launchers)
 
 ---
@@ -52,7 +50,7 @@ Your Android phone is a pocket PC with 8GB+ RAM and an ARM64 CPU — it deserves
 ```
 ┌─────────────────────────────────────┐
 │  USER LAYER (mutable)               │  ← Your packages, configs, data
-│  VS Code, Chromium, Ollama, etc.    │     Preserved across updates
+│  VS Code, Chromium, etc.            │     Preserved across updates
 ├─────────────────────────────────────┤
 │  CORE LAYER (declarative & reproducible) │  ← Built from Dockerfile in CI
 │  Debian 13 + MATE + Firefox + dev   │     ghcr.io/arinadi/arinanox
@@ -63,22 +61,18 @@ Your Android phone is a pocket PC with 8GB+ RAM and an ARM64 CPU — it deserves
 
 The image is built from a **single Dockerfile** — your system as code, not a sequence of manual steps you have to remember and redo.
 
-- 📦 **All packages, configs, and themes** defined declaratively in one file
-- ⚙️ **MATE optimized for proot**: compositing off, DPI/scale, touch-friendly
-- 🎨 **Orchis Material Design + elementary-hidpi icons** — baked in
-- 🎯 **Proot-aware**: systemd warnings suppressed, power daemon removed, dbus locked down (mechanism detailed in [Protection Layers](#️-preventive-measures) below)
+- 📦 **All packages and configs** defined declaratively in one file
+- ⚙️ **MATE optimized for proot**: compositing off, power daemon removed
+- 🎯 **Proot-aware**: systemd warnings suppressed, dbus locked down (mechanism detailed in [Protection Layers](#️-preventive-measures) below)
 - ⚡ **CI-built and deployed** to GHCR on every push — image is exactly what's in the Dockerfile, every time
 
-**Silverblue-style atomic upgrades:** `bash ~/.arinanox/scripts/proot-setup.sh` renames the old deployment to `arinanox-prev` before deploying the new image. Instant rollback: `bash ~/.arinanox/scripts/proot-rollback.sh`.
+**Fresh reinstall:** `curl bootstrap.sh | bash` (~30s). User layer preserved via manifest.
 
 | Concept | NixOS | arinanoX |
 |---------|-------|-----------|
 | System definition | `configuration.nix` | `image/Dockerfile` |
 | Packages | declarative list | `RUN apt-get install` |
-| Config files | `environment.etc` | `COPY configs-target/ → /home/admin` |
 | Reproducible | yes (closures) | yes (CI + GHCR) |
-| Atomic upgrades | generations | rename + rollback script |
-| Rollback | `nixos-rebuild switch --rollback` | `proot-rollback.sh` |
 | User overlays | home-manager | `arinanox install`, `user-manifest.yaml` |
 
 **Base:** Debian 13 (Trixie). Firefox ESR from native repos — zero external APT sources.
@@ -92,11 +86,7 @@ If you've done the manual route before, this is the actual delta:
 | Download | ~580 MB (1 image) | ~450 MB (base distro) + packages |
 | Install time | ~30s on decent connection/storage — extract + setup, no compiling | 20–30 min (apt + config + theme) |
 | MATE desktop | configured, ready | must install + configure |
-| Orchis theme | baked-in | manual install + set |
-| Touch-friendly | scrollbars, single-click, scale 2x | manual GTK config |
 | Proot fixes | compositing off, warnings suppressed, power daemon removed | trial-and-error |
-| Termux:API utilities | included | must copy + configure |
-| Rollback | atomic (rename) | manual backup/restore |
 | Updates | `curl bootstrap.sh \| bash` (~30s) | re-do everything |
 
 ---
@@ -109,21 +99,9 @@ If you've done the manual route before, this is the actual delta:
 |----------|-------|
 | 🌐 Browser | Firefox ESR |
 | 🖥️ Desktop | MATE + Pluma (editor) + Caja (file manager) |
-| 🖱️ Touch | Single-click, large scrollbars, clipboard auto-sync |
 | 📝 Apps | Pluma (editor), Eye of MATE (images) |
 | 🔧 Dev | Git, Node.js 22 LTS, Python 3 (pip/venv/dev), GCC, Make, CMake |
 | 📊 Sys | htop, tmux, OpenSSH |
-| 🎨 Theme | Orchis-Dark (Material Design) + elementary-hidpi icons |
-### Install more with APT Store
-
-Launch **APT Store** from Menu → System, or:
-
-```bash
-bash ~/.arinanox/tools/apt-store.sh
-```
-
-Quick-add repos for VS Code, Firefox, Docker CLI (client only — see Limitations), OpenJDK right from the GUI.
-
 ### CLI extras (patch.sh)
 
 ```bash
@@ -134,7 +112,6 @@ bash ~/.arinanox/scripts/patch.sh --chromium --code --zsh
 |----------|----------|
 | 🌐 Browser | Chromium |
 | 💻 IDE | VS Code (code-server), Geany, Neovim |
-| 🤖 AI | Ollama (local LLM) |
 | 🖥️ System | Zsh + Oh My Zsh, Nala |
 | 🔧 CLI | ripgrep, GitHub CLI |
 | 🎨 GUI | Viewnior, Xarchiver, Galculator |
@@ -148,7 +125,6 @@ arinanox start        # One-command launch
 arinanox stop         # Stop everything
 arinanox status       # System overview
 arinanox doctor       # Full health-check
-arinanox store        # APT Store GUI
 arinanox backup       # Backup to /sdcard
 arinanox snapshot     # Instant checkpoint (hardlinked)
 arinanox update       # Fresh image + re-apply configs
@@ -186,30 +162,11 @@ arinanox update              # Fresh image + re-apply user-manifest.yaml
 
 ### Declarative User Layer
 
-`~/.arinanox/user-manifest.yaml` tracks your packages, dotfiles, and MATE configs. Auto-generated by snapshot, auto-reapplied after update.
+`~/.arinanox/user-manifest.yaml` tracks your packages and dotfiles. Auto-generated by snapshot, auto-reapplied after update.
 
 ```bash
 arinanox install  # Apply packages from manifest
 ```
-
----
-
-## 📋 Termux:API (inside proot)
-
-| Command | Action |
-|---------|--------|
-| `battery` | Battery % and health |
-| `clipget` / `clipset` | Android clipboard |
-| `vol-up` / `vol-down` | Media volume |
-| `bright 50` | Brightness 0-100 |
-| `toast "msg"` | Toast popup |
-| `notify "T" "B"` | Notification |
-| `buzz` | Short vibration |
-| `speak "hello"` | Text-to-speech |
-| `listen` | Speech-to-text |
-| `openurl` / `share` | Open / share in Android |
-| `whereami` / `wifi` | GPS / WiFi |
-| `photo` / `flash` | Camera / flashlight |
 
 ---
 
@@ -270,9 +227,9 @@ Background processes (including your desktop session) can get silently killed by
 arinanoX/
 ├── bootstrap.sh          ← one-command entry point
 ├── image/                ← 🎯 System definition (Dockerfile)
-│   ├── Dockerfile        ←    declarative: packages, configs, themes
-│   └── configs-target/    ←    MATE, bash, GTK, autostart
-├── scripts/              ← setup, patch, rollback, status
+│   ├── Dockerfile        ←    declarative: packages, configs
+│   └── configs-target/    ←    bash configs
+├── scripts/              ← setup, patch, status
 ├── launchers/             ← start/stop shortcuts
 ├── docs/                  ← documentation
 └── .github/workflows/     ← CI → GHCR image on push

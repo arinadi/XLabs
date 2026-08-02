@@ -77,23 +77,11 @@ EXTRA=$(cat "$EXTRA_FILE" 2>/dev/null | head -30 | tr '\n' ' ')
 
 # ── Detect custom dotfiles ──────────────────────────────────
 DOTFILES=""
-for df in .bashrc .bash_aliases .gitconfig .config/gtk-3.0/gtk.css \
-           .config/dconf/user .config/dconf/db/arinanox; do
+for df in .bashrc .bash_aliases .gitconfig; do
     src="$ROOTFS/home/admin/$df"
     if [ -f "$src" ]; then
         # Check if file differs from shipped config (skip if identical to configs-target)
         DOTFILES="$DOTFILES\n    - $df"
-    fi
-done
-
-# ── Detect custom themes/icons ──────────────────────────────
-THEMES=""
-for d in Orchis-Dark elementary-xfce-hidpi Orchis-Dark-xhdpi; do
-    if [ -d "$ROOTFS/usr/share/themes/$d" ]; then
-        THEMES="$THEMES\n    - $d"
-    fi
-    if [ -d "$ROOTFS/usr/share/icons/$d" ]; then
-        THEMES="$THEMES\n    - $d"
     fi
 done
 
@@ -112,11 +100,6 @@ $(echo "$EXTRA" | tr ' ' '\n' | grep -v "^$" | sed 's/^/  - /')
 
 # Custom dotfiles (tracked for backup/sync)
 dotfiles:$(echo -e "$DOTFILES")
-
-# MATE config files to preserve
-mate_config:
-  - .config/dconf/user
-  - .config/dconf/db/arinanox
 YAML
 
 echo ""

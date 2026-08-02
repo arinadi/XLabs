@@ -12,12 +12,6 @@ pactl load-module module-aaudio-sink 2>/dev/null || pactl load-module module-sle
 # Load TCP Protocol for Proot Access
 pactl load-module module-native-protocol-tcp auth-ip-acl=127.0.0.1 auth-anonymous=1 port=4713 2>/dev/null
 
-# Start Termux:API Bridge
-echo ">>> Starting Termux:API Bridge..."
-termux-wake-lock
-pkill -f run-api-bridge.sh 2>/dev/null
-bash ~/run-api-bridge.sh > /dev/null 2>&1 &
-
 # Start X11
 echo ">>> Starting Termux-X11..."
 termux-x11 :0 -ac &

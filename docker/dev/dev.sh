@@ -107,7 +107,7 @@ cmd_status() {
 }
 
 cmd_help() {
-    echo "arinanoX Dev — Docker development environment"
+    echo "arinanoX Dev — Docker/Podman development environment"
     echo ""
     echo "Usage: dev.sh <command>"
     echo ""
@@ -119,7 +119,11 @@ cmd_help() {
     echo "  status   Show environment status"
     echo "  help     Show this help"
     echo ""
-    echo "Host requirements:"
+    echo "Host requirements (Windows + WSLg):"
+    echo "  - Podman Desktop or Docker Desktop installed"
+    echo "  - WSLg enabled (Windows 11) — X11 auto-forwarded"
+    echo ""
+    echo "Host requirements (Linux/Mac):"
     echo "  - VcXsrv or X410 running (Display :0)"
     echo "  - export DISPLAY=:0"
 }

@@ -2,8 +2,6 @@ export DISPLAY=:0
 export XDG_RUNTIME_DIR=/tmp
 export NO_AT_BRIDGE=1
 export LIBGL_ALWAYS_SOFTWARE=1
-export GDK_SCALE=2
-export GDK_DPI_SCALE=0.5
 # Firefox: suppress sandbox video device spam in proot
 export MOZ_DISABLE_CONTENT_SANDBOX=1
 
@@ -32,27 +30,6 @@ alias df='df -h'
 alias free='free -h'
 alias ports='ss -tlnp'
 alias myip='curl -s ifconfig.me && echo'
-
-# ──── arinanoX TAPI utilities ────
-TAPI_UTILS="$HOME/.arinanox/tools/tapi-utils.sh"
-if [ -f "$TAPI_UTILS" ]; then
-    source "$TAPI_UTILS"
-fi
-
-# ──── Welcome ────
-if [ -f "$HOME/.arinanox/tools/tapi-utils.sh" ]; then
-    echo ""
-    echo "╔═══════════════════════════════════╗"
-    echo "║  📱 arinanoX — Ready             ║"
-    echo "╠═══════════════════════════════════╣"
-    echo "║  battery       clipget / clipset  ║"
-    echo "║  vol-up/down   bright 50          ║"
-    echo "║  toast 'msg'   buzz               ║"
-    echo "║  speak 'text'  listen             ║"
-    echo "║  whereami      wifi | photo pic   ║"
-    echo "╚═══════════════════════════════════╝"
-    echo ""
-fi
 
 # ──── Preventif: hapus Termux bind-mount dari PATH ──────────
 # termux-profile.sh (/etc/profile.d/) nambahin Termux ke PATH,
