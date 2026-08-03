@@ -11,46 +11,56 @@ from .ui import console, run_cmd, run_cmd_stream, PROOT_DIR
 
 def stop_desktop() -> bool:
     """Stop all desktop processes and clean up."""
-    # Kill desktop processes
-    for cmd in [
-        "pkill -9 -f xfce4-session 2>/dev/null",
-        "pkill -9 -f xfce4-panel 2>/dev/null",
-        "pkill -9 -f xfwm4 2>/dev/null",
-        "pkill -9 -f thunar 2>/dev/null",
-        "pkill -9 -f dbus-launch 2>/dev/null",
-        "pkill -9 -f virgl_test_server 2>/dev/null",
-        "pkill -9 -f termux-x11 2>/dev/null",
-        "pkill -9 -f pulseaudio 2>/dev/null",
-        "pkill -9 -f 'proot.*arinanolabs' 2>/dev/null",
-        "pkill -9 -f dbus-daemon 2>/dev/null",
-    ]:
-        run_cmd(cmd)
+    # Kill everything in one shot — broad patterns catch stragglers
+    kill_patterns = [
+        "xfce4-session", "xfce4-panel", "xfwm4", "xfdesktop",
+        "xfce4-appfinder", "xfce4-settingsd", "xfce4-power-manager",
+        "thunar", "dbus-launch", "dbus-daemon",
+        "virgl_test_server", "termux-x11",
+        "pulseaudio", "startxfce4",
+        "proot.*arinanolabs",
+    ]
+    for pat in kill_patterns:
+        run_cmd(f"pkill -9 -f '{pat}' 2>/dev/null")
 
     # Unload PulseAudio modules
     for mod in ["module-null-sink", "module-native-protocol-tcp"]:
         run_cmd(f"pactl unload-module {mod} 2>/dev/null")
 
+    # Wait for processes to actually die
     time.sleep(1)
 
-    # Clean X11 locks/sockets
+    # Verify and force-kill any survivors
+    rc, _ = run_cmd(
+        "pgrep -f 'xfce4|xfwm4|xfdesktop|thunar|pulseaudio|termux-x11|"
+        "dbus-launch|dbus-daemon|startxfce4|proot.*arinanolabs'"
+    )
+    if rc == 0:
+        run_cmd(
+            "pkill -9 -f 'xfce4|xfwm4|xfdesktop|thunar|pulseaudio|"
+            "termux-x11|dbus-launch|dbus-daemon|startxfce4|proot.*arinanolabs'"
+            " 2>/dev/null"
+        )
+        time.sleep(0.5)
+
+    # Clean X11 locks/sockets — must happen AFTER processes are dead
     tmpdir = os.environ.get("TMPDIR", "/data/data/com.termux/files/usr/tmp")
     run_cmd(f"rm -f {tmpdir}/.X*-lock {tmpdir}/.X11-unix/X* 2>/dev/null")
     run_cmd(f"rm -f {tmpdir}/dbus-* 2>/dev/null")
     run_cmd(f"rm -rf {tmpdir}/runtime-* 2>/dev/null")
 
-    # Clean proot container /tmp
+    # Clean proot container /tmp and session residue
     proot_tmp = os.path.join(PROOT_DIR, "rootfs/tmp")
     run_cmd(f"rm -f {proot_tmp}/dbus-* 2>/dev/null")
-    run_cmd(f"rm -rf {proot_tmp}/runtime-* 2>/dev/null")
+    run_cmd(f"rm -rf {proot_tmp}/runtime-* {proot_tmp}/xdg-* {proot_tmp}/.xfsm-ICE-* 2>/dev/null")
+    run_cmd(f"rm -rf {proot_tmp}/.X11-unix/* 2>/dev/null")
+    proot_home = os.path.join(PROOT_DIR, "rootfs/home/admin")
+    run_cmd(f"rm -f {proot_home}/.ICEauthority {proot_home}/.Xauthority 2>/dev/null")
+    run_cmd(f"rm -rf {proot_home}/.cache/sessions/* 2>/dev/null")
 
-    # Verify
-    rc, out = run_cmd("pgrep -f 'xfce4-session|xfwm4|pulseaudio|termux-x11|proot.*arinanolabs'")
-    if rc == 0:
-        run_cmd("pkill -9 -f xfce4-session 2>/dev/null")
-        run_cmd("pkill -9 -f pulseaudio 2>/dev/null")
-        run_cmd("pkill -9 -f termux-x11 2>/dev/null")
-        run_cmd("pkill -9 -f 'proot.*arinanolabs' 2>/dev/null")
-        time.sleep(0.5)
+    # Kill Android-side Termux:X11 app and release wake lock
+    run_cmd("am force-stop com.termux.x11 2>/dev/null")
+    run_cmd("termux-wake-unlock 2>/dev/null")
 
     return True
 
