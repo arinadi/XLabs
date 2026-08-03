@@ -10,56 +10,83 @@ from .ui import console, run_cmd, run_cmd_stream, PROOT_DIR
 # ── Shared Stop Logic ──────────────────────────────────────
 
 def stop_desktop() -> bool:
-    """Stop all desktop processes and clean up."""
-    # Kill everything in one shot — broad patterns catch stragglers
-    kill_patterns = [
-        "xfce4-session", "xfce4-panel", "xfwm4", "xfdesktop",
+    """Stop all desktop processes and clean up — aggressively."""
+    tmpdir = os.environ.get("TMPDIR", "/data/data/com.termux/files/usr/tmp")
+
+    # ── Phase 1: Kill Android-side X server first ──────────
+    run_cmd("am force-stop com.termux.x11 2>/dev/null")
+
+    # ── Phase 2: Graceful kill (let processes exit cleanly) ─
+    graceful = [
+        "termux-x11", "termux.x11",
+        "pulseaudio",
+    ]
+    for pat in graceful:
+        run_cmd(f"pkill -f '{pat}' 2>/dev/null")
+
+    # ── Phase 3: Force-kill everything ──────────────────────
+    force_kill = [
+        # X11
+        "termux-x11", "termux.x11",
+        # XFCE — leaf apps first, session last
+        "thunar", "xfdesktop4", "xfce4-panel", "xfce4-terminal",
         "xfce4-appfinder", "xfce4-settingsd", "xfce4-power-manager",
-        "thunar", "dbus-launch", "dbus-daemon",
-        "virgl_test_server", "termux-x11",
-        "pulseaudio", "startxfce4",
+        "xfwm4", "xfce4-session",
+        # D-Bus
+        "dbus-daemon", "dbus-launch",
+        # Other
+        "virgl_test_server", "pulseaudio", "startxfce4",
+        # Proot
         "proot.*arinanolabs",
     ]
-    for pat in kill_patterns:
+    for pat in force_kill:
         run_cmd(f"pkill -9 -f '{pat}' 2>/dev/null")
 
     # Unload PulseAudio modules
     for mod in ["module-null-sink", "module-native-protocol-tcp"]:
         run_cmd(f"pactl unload-module {mod} 2>/dev/null")
 
-    # Wait for processes to actually die
+    # ── Phase 4: Wait + verify + rekill survivors ───────────
     time.sleep(1)
 
-    # Verify and force-kill any survivors
     rc, _ = run_cmd(
-        "pgrep -f 'xfce4|xfwm4|xfdesktop|thunar|pulseaudio|termux-x11|"
-        "dbus-launch|dbus-daemon|startxfce4|proot.*arinanolabs'"
+        "pgrep -f 'xfce4|xfwm4|xfdesktop|thunar|pulseaudio|"
+        "termux-x11|termux.x11|dbus-|startxfce4|proot.*arinanolabs'"
     )
     if rc == 0:
         run_cmd(
             "pkill -9 -f 'xfce4|xfwm4|xfdesktop|thunar|pulseaudio|"
-            "termux-x11|dbus-launch|dbus-daemon|startxfce4|proot.*arinanolabs'"
+            "termux-x11|termux.x11|dbus-|startxfce4|proot.*arinanolabs'"
             " 2>/dev/null"
         )
         time.sleep(0.5)
 
-    # Clean X11 locks/sockets — must happen AFTER processes are dead
-    tmpdir = os.environ.get("TMPDIR", "/data/data/com.termux/files/usr/tmp")
-    run_cmd(f"rm -f {tmpdir}/.X*-lock {tmpdir}/.X11-unix/X* 2>/dev/null")
+    # ── Phase 5: Host-side file cleanup ─────────────────────
+    # Remove entire X11 socket directory (not just files inside)
+    run_cmd(f"rm -rf {tmpdir}/.X11-unix 2>/dev/null")
+    run_cmd(f"rm -f {tmpdir}/.X*-lock 2>/dev/null")
     run_cmd(f"rm -f {tmpdir}/dbus-* 2>/dev/null")
-    run_cmd(f"rm -rf {tmpdir}/runtime-* 2>/dev/null")
+    run_cmd(f"rm -rf {tmpdir}/runtime-* {tmpdir}/pulse* 2>/dev/null")
 
-    # Clean proot container /tmp and session residue
+    # ── Phase 6: Proot-side cleanup (two-layer) ────────────
+    # Inside proot container
+    run_cmd(
+        "proot-distro login arinanolabs -- bash -c "
+        "'rm -rf /tmp/xdg-* /tmp/dbus-* /tmp/.xfsm-ICE-* "
+        "/tmp/.X11-unix/* /tmp/runtime-* "
+        "/home/admin/.cache/sessions/* "
+        "/home/admin/.ICEauthority /home/admin/.Xauthority 2>/dev/null'"
+    )
+    # From host side (backup layer)
     proot_tmp = os.path.join(PROOT_DIR, "rootfs/tmp")
-    run_cmd(f"rm -f {proot_tmp}/dbus-* 2>/dev/null")
+    run_cmd(f"rm -rf {proot_tmp}/.X11-unix {proot_tmp}/.X*-lock 2>/dev/null")
+    run_cmd(f"rm -f {proot_tmp}/dbus-* {proot_tmp}/.dbus* 2>/dev/null")
     run_cmd(f"rm -rf {proot_tmp}/runtime-* {proot_tmp}/xdg-* {proot_tmp}/.xfsm-ICE-* 2>/dev/null")
-    run_cmd(f"rm -rf {proot_tmp}/.X11-unix/* 2>/dev/null")
     proot_home = os.path.join(PROOT_DIR, "rootfs/home/admin")
     run_cmd(f"rm -f {proot_home}/.ICEauthority {proot_home}/.Xauthority 2>/dev/null")
-    run_cmd(f"rm -rf {proot_home}/.cache/sessions/* 2>/dev/null")
+    run_cmd(f"rm -rf {proot_home}/.cache/sessions 2>/dev/null")
 
-    # Kill Android-side Termux:X11 app and release wake lock
-    run_cmd("am force-stop com.termux.x11 2>/dev/null")
+    # Release wake lock
     run_cmd("termux-wake-unlock 2>/dev/null")
 
     return True
