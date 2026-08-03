@@ -3,14 +3,12 @@
 import os
 import sys
 import subprocess
-from typing import Optional
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeRemainingColumn
-from rich.live import Live
 from rich.align import Align
 
 console = Console(force_terminal=True)
@@ -133,22 +131,6 @@ def show_status_line(label: str, value: str, ok: bool = True):
     console.print(f"  {icon} {label}: {value}")
 
 
-def show_progress_download(description: str, total: int, iterator):
-    """Show progress bar for download."""
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[bold blue]{task.description}"),
-        BarColumn(),
-        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-        TimeRemainingColumn(),
-        console=console,
-    ) as progress:
-        task = progress.add_task(description, total=total)
-        for data in iterator:
-            yield data
-            progress.advance(task, len(data) if hasattr(data, '__len__') else 1)
-
-
 def read_input(prompt: str) -> str:
     """Read input, handling piped stdin (curl | bash)."""
     if not sys.stdin.isatty():
@@ -156,30 +138,8 @@ def read_input(prompt: str) -> str:
     return input(prompt).strip()
 
 
-def confirm_action(message: str) -> bool:
-    """Ask user for confirmation."""
-    console.print(f"\n{message}")
-    response = read_input("  Continue? [y/N] ").lower()
-    return response in ("y", "yes")
-
-
 def press_any_key():
     """Wait for user to press any key."""
     console.print("\n  [dim]Press any key to return...[/dim]")
     if sys.stdin.isatty():
         input()
-
-
-def show_error(message: str):
-    """Show error message."""
-    console.print(f"\n[red]✗ {message}[/red]")
-
-
-def show_success(message: str):
-    """Show success message."""
-    console.print(f"\n[green]✓ {message}[/green]")
-
-
-def show_warning(message: str):
-    """Show warning message."""
-    console.print(f"\n[yellow]⚠ {message}[/yellow]")

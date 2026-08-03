@@ -3,15 +3,11 @@
 import os
 import sys
 import subprocess
-import urllib.request
-from pathlib import Path
 
 from .ui import (
     console, clear, read_input, run_cmd, run_cmd_stream, show_banner,
-    show_panel, show_progress_download, show_error, show_success, show_warning
+    show_panel,
 )
-from .mirror import ensure_mirror
-from .welcome import show_post_install_info
 
 
 # ── Config ─────────────────────────────────────────────────

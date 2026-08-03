@@ -4,6 +4,7 @@ import os
 import socket
 import shutil
 import subprocess
+import sys
 from typing import NamedTuple
 
 from .ui import console, run_cmd, PROOT_DIR
@@ -91,8 +92,4 @@ def print_checks(checks: list[CheckResult]):
 def all_passed(checks: list[CheckResult]) -> bool:
     """Check if all critical checks passed."""
     # Internet is critical, others are warnings
-    return any(c.name == "Internet" and not c.ok for c in checks)
-
-
-# Needed for sys import
-import sys
+    return all(c.ok for c in checks if c.name == "Internet")

@@ -3,9 +3,9 @@
 import os
 from .ui import (
     console, clear, read_input, is_installed, get_version, show_banner,
-    show_panel, show_status_line, PROOT_DIR
+    show_panel, PROOT_DIR
 )
-from .preflight import run_all_checks, print_checks, check_already_installed
+from .preflight import run_all_checks, print_checks
 
 
 def show_welcome():
