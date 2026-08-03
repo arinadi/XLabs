@@ -14,18 +14,18 @@ def show_welcome():
     show_banner()
 
     console.print()
-    console.print("  [bold cyan]Debian 13 · MATE · Firefox ESR · Dev tools[/bold cyan]")
+    console.print("  [bold cyan]Debian 13 · Xfce4 · Firefox ESR · Dev tools[/bold cyan]")
     console.print()
     console.print("  ✓ No root required")
     console.print("  ✓ ~30 seconds install")
-    console.print("  ✓ GPU accelerated")
+    console.print("  ✓ Touch-optimized for mobile")
     console.print("  ✓ Auto-configured")
     console.print()
     console.print("  [dim]What you get:[/dim]")
-    console.print("  • Full MATE desktop environment")
+    console.print("  • Xfce4 desktop with on-screen keyboard")
     console.print("  • Firefox ESR browser")
     console.print("  • Node.js 22, Python 3, GCC, CMake")
-    console.print("  • Touch-optimized for mobile")
+    console.print("  • HiDPI scaling for tablets")
     console.print()
 
 

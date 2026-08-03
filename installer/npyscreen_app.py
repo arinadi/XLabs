@@ -3,56 +3,20 @@
 import os
 import sys
 import subprocess
-from datetime import datetime, timezone
 
-from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.text import Text
 from rich import box
 
-console = Console(force_terminal=True)
-
-PROOT_DIR = "/data/data/com.termux/files/usr/var/lib/proot-distro/containers/arinanolabs"
-
-
-# ── Helpers ────────────────────────────────────────────────
-
-def clear():
-    os.system("clear" if os.name != "nt" else "cls")
-
-
-def get_version() -> str:
-    try:
-        r = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, timeout=5,
-            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        )
-        h = r.stdout.strip() if r.returncode == 0 else "unknown"
-    except Exception:
-        h = "unknown"
-    d = datetime.now(timezone.utc).strftime("%Y%m%d")
-    return f"{d}.{h}"
-
-
-def run_cmd(cmd: str, timeout: int = 60) -> tuple[int, str]:
-    try:
-        r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout)
-        return r.returncode, r.stdout + r.stderr
-    except subprocess.TimeoutExpired:
-        return 1, "timeout"
-    except Exception as e:
-        return 1, str(e)
+from .ui import (
+    console, clear, get_version, run_cmd, is_installed,
+    show_banner, PROOT_DIR,
+)
 
 
 def is_running() -> bool:
     rc, _ = run_cmd("pgrep -f 'xfce4-session|startxfce4'")
     return rc == 0
-
-
-def is_installed() -> bool:
-    return os.path.exists(PROOT_DIR)
 
 
 def wait_key():
