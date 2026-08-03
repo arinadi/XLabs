@@ -97,95 +97,13 @@ def handle_start():
 
 # ── Stop ───────────────────────────────────────────────────
 
-def _stop_desktop_silent():
-    """Stop desktop processes without UI (used by other handlers)."""
-    import time
-
-    for _, cmd in [
-        ("xfce4-session", "pkill -9 -f xfce4-session 2>/dev/null"),
-        ("xfwm4", "pkill -9 -f xfwm4 2>/dev/null"),
-        ("dbus-launch", "pkill -9 -f dbus-launch 2>/dev/null"),
-        ("virgl", "pkill -9 -f virgl_test_server 2>/dev/null"),
-        ("termux-x11", "pkill -9 -f termux-x11 2>/dev/null"),
-    ]:
-        run_cmd(cmd)
-
-    for mod in ["module-null-sink", "module-native-protocol-tcp"]:
-        run_cmd(f"pactl unload-module {mod} 2>/dev/null")
-
-    run_cmd("pkill -9 -f pulseaudio 2>/dev/null")
-    run_cmd("pkill -9 -f 'proot.*arinanolabs' 2>/dev/null")
-    run_cmd("pkill -9 -f dbus-daemon 2>/dev/null")
-    time.sleep(1)
-
-    tmpdir = os.environ.get("TMPDIR", "/data/data/com.termux/files/usr/tmp")
-    for f in [".X0-lock", ".X11-unix/X0", "dbus-*"]:
-        run_cmd(f"rm -f {tmpdir}/{f} 2>/dev/null")
-    run_cmd(f"rm -rf {tmpdir}/runtime-* 2>/dev/null")
-
-    proot_tmp = os.path.join(PROOT_DIR, "rootfs/tmp")
-    for f in ["dbus-*"]:
-        run_cmd(f"rm -f {proot_tmp}/{f} 2>/dev/null")
-    run_cmd(f"rm -rf {proot_tmp}/runtime-* 2>/dev/null")
-
-
 def handle_stop():
+    from .start import stop_desktop
+
     clear()
     console.print("[bold yellow]⏹️  Stopping Desktop[/bold yellow]\n")
-
-    procs = [
-        ("xfce4-session", "pkill -9 -f xfce4-session 2>/dev/null"),
-        ("xfce4-panel", "pkill -9 -f xfce4-panel 2>/dev/null"),
-        ("xfwm4", "pkill -9 -f xfwm4 2>/dev/null"),
-        ("thunar", "pkill -9 -f thunar 2>/dev/null"),
-        ("dbus-launch", "pkill -9 -f dbus-launch 2>/dev/null"),
-        ("virgl", "pkill -9 -f virgl_test_server 2>/dev/null"),
-        ("termux-x11", "pkill -9 -f termux-x11 2>/dev/null"),
-    ]
-    for name, cmd in procs:
-        rc, _ = run_cmd(cmd)
-        status = "killed" if rc == 0 else "not running"
-        console.print(f"  {name}: [dim]{status}[/dim]")
-
-    for mod in ["module-null-sink", "module-native-protocol-tcp"]:
-        rc, _ = run_cmd(f"pactl unload-module {mod} 2>/dev/null")
-        console.print(f"  pulseaudio {mod}: [dim]{'unloaded' if rc == 0 else 'not loaded'}[/dim]")
-
-    rc, _ = run_cmd("pkill -9 -f pulseaudio 2>/dev/null")
-    console.print(f"  pulseaudio: [dim]{'killed' if rc == 0 else 'not running'}[/dim]")
-
-    rc, _ = run_cmd("pkill -9 -f 'proot.*arinanolabs' 2>/dev/null")
-    console.print(f"  proot wrapper: [dim]{'killed' if rc == 0 else 'not running'}[/dim]")
-
-    rc, _ = run_cmd("pkill -9 -f dbus-daemon 2>/dev/null")
-    console.print(f"  dbus-daemon: [dim]{'killed' if rc == 0 else 'not running'}[/dim]")
-
-    import time
-    console.print("\n  [dim]Waiting...[/dim]")
-    time.sleep(1)
-
-    tmpdir = os.environ.get("TMPDIR", "/data/data/com.termux/files/usr/tmp")
-    for f in [".X0-lock", ".X11-unix/X0"]:
-        rc, _ = run_cmd(f"rm -f {tmpdir}/{f} 2>/dev/null")
-        console.print(f"  rm {f}: [dim]{'ok' if rc == 0 else 'failed'}[/dim]")
-
-    rc, _ = run_cmd(f"rm -f {tmpdir}/dbus-* 2>/dev/null")
-    console.print(f"  rm dbus (termux): [dim]{'ok' if rc == 0 else 'failed'}[/dim]")
-    rc, _ = run_cmd(f"rm -rf {tmpdir}/runtime-* 2>/dev/null")
-    console.print(f"  rm runtime (termux): [dim]{'ok' if rc == 0 else 'failed'}[/dim]")
-
-    proot_tmp = os.path.join(PROOT_DIR, "rootfs/tmp")
-    rc, _ = run_cmd(f"rm -f {proot_tmp}/dbus-* 2>/dev/null")
-    console.print(f"  rm dbus (proot): [dim]{'ok' if rc == 0 else 'failed'}[/dim]")
-    rc, _ = run_cmd(f"rm -rf {proot_tmp}/runtime-* 2>/dev/null")
-    console.print(f"  rm runtime (proot): [dim]{'ok' if rc == 0 else 'failed'}[/dim]")
-
-    rc, out = run_cmd("pgrep -f 'xfce4-session|xfwm4|pulseaudio|termux-x11|proot.*arinanolabs'")
-    if rc == 0:
-        console.print(f"\n[yellow]⚠ Processes still alive: {out.strip()}[/yellow]")
-    else:
-        console.print("\n[green]✓ All processes stopped.[/green]")
-
+    stop_desktop()
+    console.print("[green]✓ Desktop stopped.[/green]")
     wait_key()
 
 
@@ -349,8 +267,9 @@ def handle_clean_cache():
 
     # Stop desktop first
     if is_running():
+        from .start import stop_desktop
         console.print("\n  [cyan]→[/cyan] Stopping desktop...")
-        _stop_desktop_silent()
+        stop_desktop()
         console.print("  [green]✓ Desktop stopped[/green]")
 
     # Remove cache

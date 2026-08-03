@@ -1,4 +1,4 @@
-"""Start desktop (PulseAudio → virgl → X11 → Xfce4)."""
+"""Start/stop desktop (PulseAudio → virgl → X11 → Xfce4)."""
 
 import os
 import subprocess
@@ -7,12 +7,64 @@ import time
 from .ui import console, run_cmd, run_cmd_stream, PROOT_DIR
 
 
+# ── Shared Stop Logic ──────────────────────────────────────
+
+def stop_desktop() -> bool:
+    """Stop all desktop processes and clean up."""
+    # Kill desktop processes
+    for cmd in [
+        "pkill -9 -f xfce4-session 2>/dev/null",
+        "pkill -9 -f xfce4-panel 2>/dev/null",
+        "pkill -9 -f xfwm4 2>/dev/null",
+        "pkill -9 -f thunar 2>/dev/null",
+        "pkill -9 -f dbus-launch 2>/dev/null",
+        "pkill -9 -f virgl_test_server 2>/dev/null",
+        "pkill -9 -f termux-x11 2>/dev/null",
+        "pkill -9 -f pulseaudio 2>/dev/null",
+        "pkill -9 -f 'proot.*arinanolabs' 2>/dev/null",
+        "pkill -9 -f dbus-daemon 2>/dev/null",
+    ]:
+        run_cmd(cmd)
+
+    # Unload PulseAudio modules
+    for mod in ["module-null-sink", "module-native-protocol-tcp"]:
+        run_cmd(f"pactl unload-module {mod} 2>/dev/null")
+
+    time.sleep(1)
+
+    # Clean X11 locks/sockets
+    tmpdir = os.environ.get("TMPDIR", "/data/data/com.termux/files/usr/tmp")
+    run_cmd(f"rm -f {tmpdir}/.X*-lock {tmpdir}/.X11-unix/X* 2>/dev/null")
+    run_cmd(f"rm -f {tmpdir}/dbus-* 2>/dev/null")
+    run_cmd(f"rm -rf {tmpdir}/runtime-* 2>/dev/null")
+
+    # Clean proot container /tmp
+    proot_tmp = os.path.join(PROOT_DIR, "rootfs/tmp")
+    run_cmd(f"rm -f {proot_tmp}/dbus-* 2>/dev/null")
+    run_cmd(f"rm -rf {proot_tmp}/runtime-* 2>/dev/null")
+
+    # Verify
+    rc, out = run_cmd("pgrep -f 'xfce4-session|xfwm4|pulseaudio|termux-x11|proot.*arinanolabs'")
+    if rc == 0:
+        run_cmd("pkill -9 -f xfce4-session 2>/dev/null")
+        run_cmd("pkill -9 -f pulseaudio 2>/dev/null")
+        run_cmd("pkill -9 -f termux-x11 2>/dev/null")
+        run_cmd("pkill -9 -f 'proot.*arinanolabs' 2>/dev/null")
+        time.sleep(0.5)
+
+    return True
+
+
+def is_running() -> bool:
+    """Check if Xfce4 session is running."""
+    rc, _ = run_cmd("pgrep -f 'xfce4-session|startxfce4'")
+    return rc == 0
+
+
 def start_desktop() -> bool:
-    """Start the full desktop stack."""
-    # Check if already running
+    """Start the full desktop stack. Auto-stops if already running."""
     if is_running():
-        print("  Desktop is already running!")
-        return True
+        stop_desktop()
 
     steps = [
         ("Starting PulseAudio", start_pulseaudio),
@@ -26,94 +78,11 @@ def start_desktop() -> bool:
     for name, step_fn in steps:
         print(f"  -> {name}...")
         try:
-            success = step_fn()
-            if not success:
-                print(f"    Warning")
+            step_fn()
         except Exception as e:
             print(f"    Failed: {e}")
 
-    print()
-    print("  Desktop started!")
-    print("  Open Termux:X11 app to see your desktop.")
-    return True
-
-
-def stop_desktop() -> bool:
-    """Stop all desktop processes."""
-    print("\n  Stopping desktop...\n")
-
-    # Kill processes — order matters: apps first, then infrastructure
-    for name, cmd in [
-        ("xfce4-session", "pkill -9 -f xfce4-session 2>/dev/null"),
-        ("xfce4-panel", "pkill -9 -f xfce4-panel 2>/dev/null"),
-        ("xfwm4", "pkill -9 -f xfwm4 2>/dev/null"),
-        ("thunar", "pkill -9 -f thunar 2>/dev/null"),
-        ("dbus-launch", "pkill -9 -f dbus-launch 2>/dev/null"),
-        ("virgl", "pkill -9 -f virgl_test_server 2>/dev/null"),
-        ("termux-x11", "pkill -9 -f termux-x11 2>/dev/null"),
-    ]:
-        rc, out = run_cmd(cmd)
-        status = "killed" if rc == 0 else "not running"
-        print(f"    {name}: {status}")
-
-    # Unload PulseAudio modules
-    for mod in ["module-null-sink", "module-native-protocol-tcp"]:
-        rc, out = run_cmd(f"pactl unload-module {mod} 2>/dev/null")
-        print(f"    pulseaudio {mod}: {'unloaded' if rc == 0 else 'not loaded'}")
-
-    rc, out = run_cmd("pkill -9 -f pulseaudio 2>/dev/null")
-    print(f"    pulseaudio: {'killed' if rc == 0 else 'not running'}")
-
-    # Kill any leftover proot wrapper processes
-    rc, out = run_cmd("pkill -9 -f 'proot.*arinanolabs' 2>/dev/null")
-    print(f"    proot wrapper: {'killed' if rc == 0 else 'not running'}")
-
-    # Kill orphaned dbus-daemon processes
-    rc, out = run_cmd("pkill -9 -f dbus-daemon 2>/dev/null")
-    print(f"    dbus-daemon: {'killed' if rc == 0 else 'not running'}")
-
-    # Wait for processes to actually die
-    time.sleep(1)
-
-    # Cleanup X11 lock files and socket (keep the directory itself)
-    tmpdir = os.environ.get("TMPDIR", "/data/data/com.termux/files/usr/tmp")
-    run_cmd(f"rm -f {tmpdir}/.X*-lock {tmpdir}/.X11-unix/X* 2>/dev/null")
-    print(f"    rm X11 locks+socket: ok")
-
-    # Cleanup stale dbus sockets in Termux TMPDIR
-    rc, _ = run_cmd(f"rm -f {tmpdir}/dbus-* 2>/dev/null")
-    print(f"    rm dbus sockets (termux): {'ok' if rc == 0 else 'failed'}")
-
-    # Cleanup stale runtime dirs in Termux TMPDIR
-    rc, _ = run_cmd(f"rm -rf {tmpdir}/runtime-* 2>/dev/null")
-    print(f"    rm runtime dirs (termux): {'ok' if rc == 0 else 'failed'}")
-
-    # Cleanup inside proot container's /tmp (dbus sockets + runtime dirs)
-    proot_tmp = os.path.join(PROOT_DIR, "rootfs/tmp")
-    rc, _ = run_cmd(f"rm -f {proot_tmp}/dbus-* 2>/dev/null")
-    print(f"    rm dbus sockets (proot): {'ok' if rc == 0 else 'failed'}")
-    rc, _ = run_cmd(f"rm -rf {proot_tmp}/runtime-* 2>/dev/null")
-    print(f"    rm runtime dirs (proot): {'ok' if rc == 0 else 'failed'}")
-
-    # Verify all processes are dead
-    rc, out = run_cmd("pgrep -f 'xfce4-session|xfwm4|pulseaudio|termux-x11|proot.*arinanolabs'")
-    if rc == 0:
-        print(f"\n  ⚠ Processes still alive: {out.strip()}")
-        run_cmd("pkill -9 -f xfce4-session 2>/dev/null")
-        run_cmd("pkill -9 -f pulseaudio 2>/dev/null")
-        run_cmd("pkill -9 -f termux-x11 2>/dev/null")
-        run_cmd("pkill -9 -f 'proot.*arinanolabs' 2>/dev/null")
-        time.sleep(0.5)
-    else:
-        print("\n  ✓ All processes stopped.")
-
-    return True
-
-
-def is_running() -> bool:
-    """Check if Xfce4 session is running."""
-    rc, _ = run_cmd("pgrep -f 'xfce4-session|startxfce4'")
-    return rc == 0
+    return is_running()
 
 
 # ── Internal Functions ─────────────────────────────────────
