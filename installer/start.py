@@ -1,11 +1,10 @@
-"""Start desktop (PulseAudio → virgl → X11 → MATE)."""
+"""Start desktop (PulseAudio → virgl → X11 → Xfce4)."""
 
 import os
 import subprocess
 import time
 
 from .ui import console, run_cmd, run_cmd_stream, PROOT_DIR
-from .gpu import detect_gpu, GPU_CONFIGS
 
 
 def start_desktop() -> bool:
@@ -223,16 +222,11 @@ def wait_for_x11() -> bool:
 
 def start_xfce4() -> bool:
     """Start Xfce4 session in proot."""
-    gpu = detect_gpu()
     env_vars = {
         "DISPLAY": ":0",
         "PULSE_SERVER": "tcp:127.0.0.1:4713",
         "NO_AT_BRIDGE": "1",
-        "LIBGL_ALWAYS_SOFTWARE": "0",
     }
-
-    # Add GPU-specific env vars
-    env_vars.update(gpu.mesa_config)
 
     exports = " ".join(f"{k}={v}" for k, v in env_vars.items())
 

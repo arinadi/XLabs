@@ -273,21 +273,17 @@ def handle_tools():
 # ── Status ─────────────────────────────────────────────────
 
 def handle_status():
-    from .gpu import detect_gpu, get_gpu_summary
-
     clear()
     console.print("[bold cyan]📊  System Status[/bold cyan]\n")
 
     container = is_installed()
     running = is_running()
-    gpu = detect_gpu()
 
     table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
     table.add_column("label", style="bold", width=12)
     table.add_column("value")
     table.add_row("Container", "[green]✓ Installed[/green]" if container else "[red]✗ Not found[/red]")
     table.add_row("Desktop", "[green]● Running[/green]" if running else "[dim]○ Not running[/dim]")
-    table.add_row("GPU", get_gpu_summary(gpu))
     table.add_row("Version", get_version())
     console.print(table)
 

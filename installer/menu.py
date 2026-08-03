@@ -16,7 +16,6 @@ from .welcome import (
 )
 from .install import install
 from .start import start_desktop, stop_desktop, is_running
-from .gpu import detect_gpu, get_gpu_summary
 
 
 # ── Mouse Support ──────────────────────────────────────────
@@ -287,14 +286,12 @@ def handle_status():
     # Check container
     container_exists = os.path.exists(PROOT_DIR)
     running = is_running()
-    gpu = detect_gpu()
 
     console.print()
     console.print("  [bold]System Status[/bold]")
     console.print()
     console.print(f"  Container:  {'✓ Installed' if container_exists else '✗ Not found'}")
     console.print(f"  Desktop:    {'● Running' if running else '○ Not running'}")
-    console.print(f"  GPU:        {get_gpu_summary(gpu)}")
     console.print(f"  Version:    {get_version()}")
     console.print()
     press_any_key()

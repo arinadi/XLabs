@@ -11,7 +11,6 @@ from .ui import (
     show_panel, show_progress_download, show_error, show_success, show_warning
 )
 from .mirror import ensure_mirror
-from .gpu import detect_gpu, write_gpu_config, get_gpu_summary
 from .welcome import show_post_install_info
 
 
@@ -39,7 +38,6 @@ def install():
         ("Installing audio (PulseAudio)", step_install_audio),
         ("Installing GPU drivers", step_install_gpu),
         ("Pulling arinanoLabs image", step_pull_image),
-        ("Configuring GPU", step_configure_gpu),
         ("Setting up user", step_setup_user),
     ]
 
@@ -146,16 +144,6 @@ def step_pull_image() -> bool:
         console.print("  Run manually: proot-distro install ghcr.io/arinadi/arinanolabs:latest --name arinanolabs")
         return False
 
-    return True
-
-
-def step_configure_gpu() -> bool:
-    """Configure GPU based on detection."""
-    gpu = detect_gpu()
-    console.print(f"  Detected: {get_gpu_summary(gpu)}")
-
-    config_path = write_gpu_config(gpu)
-    console.print(f"  Config written to: {config_path}")
     return True
 
 
