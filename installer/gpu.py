@@ -42,14 +42,17 @@ GPU_CONFIGS = {
 
 def detect_gpu() -> GPUInfo:
     """Auto-detect GPU via Android system properties."""
-    # Try multiple detection methods
     egl = _get_prop("ro.hardware.egl")
     board = _get_prop("ro.product.board")
     chipname = _get_prop("ro.hardware.chipname")
     brand = _get_prop("ro.product.brand")
+    hw = _get_prop("ro.hardware")
+    soc = _get_prop("ro.soc.model")
+    platform = _get_prop("ro.board.platform")
+    props = (egl + board + chipname + brand + hw + soc + platform).lower()
 
     # Qualcomm Adreno detection
-    if any(x in (egl + board + chipname + brand).lower() for x in ["qualcomm", "adreno", "qcom"]):
+    if any(x in props for x in ["qualcomm", "adreno", "qcom"]):
         return GPUInfo(
             vendor="Qualcomm",
             model=_get_gpu_model("Adreno"),
@@ -57,8 +60,17 @@ def detect_gpu() -> GPUInfo:
             mesa_config=GPU_CONFIGS["turnip"],
         )
 
+    # Samsung Exynos (AMD RDNA / Xclipse) detection
+    if any(x in props for x in ["exynos"]) or ("samsung" in props and any(x in props for x in ["s5e9", "erd9"])):
+        return GPUInfo(
+            vendor="Samsung",
+            model=_get_gpu_model("Exynos"),
+            driver="virpipe",
+            mesa_config=GPU_CONFIGS["virpipe"],
+        )
+
     # ARM Mali detection
-    if any(x in (egl + board + chipname + brand).lower() for x in ["mali", "arm"]):
+    if any(x in props for x in ["mali", "arm"]):
         return GPUInfo(
             vendor="ARM",
             model=_get_gpu_model("Mali"),

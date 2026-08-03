@@ -38,7 +38,9 @@ RUN apt-get update && \
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         pulseaudio-utils x11-xserver-utils \
-        xdotool yad gnupg && \
+        xdotool yad gnupg \
+        libgl1-mesa-dri libegl1-mesa libgles2-mesa \
+        mesa-utils libglx-mesa0 && \
     apt-get clean && rm -rf /var/lib/apt/lists/* \
     /usr/share/doc/* /usr/share/man/* /usr/share/info/* \
     /usr/share/locale/* /var/cache/apt/archives/*
