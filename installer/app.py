@@ -15,7 +15,7 @@ import tempfile
 from rich.text import Text
 from textual import on, work
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal, VerticalScroll
+from textual.containers import Grid, Horizontal, VerticalScroll
 from textual.screen import ModalScreen, Screen
 from textual.widgets import (
     Button,
@@ -380,17 +380,39 @@ def run_clean_cache(log) -> None:
 class MainScreen(Screen):
     BINDINGS = [("q", "app.quit", "Quit")]
 
+    # Short labels keep three to a row; the full meaning lives in the tooltip.
+    TOOLTIPS = {
+        "update": "Pull the latest arinanoLabs",
+        "tools": "Extra tools (not implemented yet)",
+        "status": "Environment checks and versions",
+        "doctor": "Diagnose and repair the environment",
+        "reset": "Delete the container and reinstall it",
+        "cache": "Delete downloaded image layers",
+    }
+
+    def on_mount(self) -> None:
+        for button_id, text in self.TOOLTIPS.items():
+            self.query_one(f"#{button_id}", Button).tooltip = text
+
     def compose(self) -> ComposeResult:
         yield Header()
+        # Grid rather than Horizontal: a row of 1fr children in a Horizontal
+        # gave every button the full remaining width instead of a share, so
+        # three-button rows ran off the side of the screen.
+        # The two actions that carry a full sentence get half the width each;
+        # the rest are one word and fit three to a row even on a narrow phone.
         with VerticalScroll(id="menu"):
-            yield Button("Start Desktop", id="start", variant="success")
-            yield Button("Stop Desktop", id="stop", variant="warning")
-            yield Button("Update", id="update")
-            yield Button("Extra Tools", id="tools")
-            yield Button("Status", id="status")
-            yield Button("Doctor", id="doctor")
-            yield Button("Reset (Clean Install)", id="reset", variant="error")
-            yield Button("Clean Image Cache", id="cache")
+            with Grid(classes="row2"):
+                yield Button("Start Desktop", id="start", variant="success")
+                yield Button("Stop Desktop", id="stop", variant="warning")
+            with Grid(classes="row3"):
+                yield Button("Update", id="update")
+                yield Button("Tools", id="tools")
+                yield Button("Status", id="status")
+            with Grid(classes="row3"):
+                yield Button("Doctor", id="doctor")
+                yield Button("Reset", id="reset", variant="error")
+                yield Button("Cache", id="cache")
         yield Footer()
 
     @on(Button.Pressed, "#start")

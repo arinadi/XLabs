@@ -10,10 +10,21 @@ Screen {
     align: center top;
 }
 
+#menu .row2,
+#menu .row3 {
+    width: 100%;
+    height: auto;
+    grid-rows: 3;
+    grid-gutter: 1;
+    margin-bottom: 1;
+}
+
+#menu .row2 { grid-size: 2; }
+#menu .row3 { grid-size: 3; }
+
 #menu Button {
     width: 100%;
     height: 3;
-    margin-bottom: 1;
 }
 
 .screen-title {

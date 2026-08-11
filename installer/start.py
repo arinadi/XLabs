@@ -272,8 +272,12 @@ export XDG_RUNTIME_DIR=/tmp/runtime-probe
 mkdir -p $XDG_RUNTIME_DIR
 chmod 0700 $XDG_RUNTIME_DIR
 timeout 8 xfce4-session
-' 2>&1 | head -25 | sed 's/^/  /'
-echo "--- exit: $? ---"
+' >/tmp/arinanolabs-session.out 2>&1
+# Capture the session's own status, not sed's: piping straight into head
+# reported the pipeline's exit code and always said 0.
+status=$?
+head -25 /tmp/arinanolabs-session.out | sed 's/^/  /'
+echo "--- exit: $status (124 = still alive when the 8s timeout fired) ---"
 """
 
 
@@ -293,8 +297,12 @@ def _run_container_probe() -> tuple[int, str]:
     except OSError as e:
         return 1, f"could not write the probe script: {e}"
 
+    # --shared-x11 must match how the desktop is actually started. Without it
+    # the probe sees an empty /tmp/.X11-unix and reports "unable to open
+    # display", which looks exactly like the failure it is meant to diagnose.
     return run_cmd(
-        f"proot-distro login {CONTAINER_NAME} -- bash /tmp/arinanolabs-probe.sh",
+        f"proot-distro login {CONTAINER_NAME} --shared-x11 "
+        "-- bash /tmp/arinanolabs-probe.sh",
         timeout=120,
     )
 

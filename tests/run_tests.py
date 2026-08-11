@@ -254,32 +254,42 @@ async def test_copy_buttons_export_output() -> None:
 
 
 async def test_narrow_terminal_layout() -> None:
-    """Every control must stay reachable on a phone-width terminal.
+    """Every control must stay on screen at phone widths.
 
-    Regression: adding a fifth button to Doctor pushed Back off screen, which
-    only showed up as an OutOfBounds click at 80 columns — a real phone is
-    narrower still.
+    Regression: a fifth button on Doctor pushed Back off screen, and it only
+    surfaced as an OutOfBounds click at 80 columns — a real phone is narrower.
     """
-    app = ArinanoLabsApp()
-    async with app.run_test(size=(45, 30)) as pilot:
-        await pilot.pause()
+    for width in (40, 45, 60):
+        app = ArinanoLabsApp()
+        async with app.run_test(size=(width, 30)) as pilot:
+            await pilot.pause()
 
-        for entry, table in (("#status", "#status-table"), ("#doctor", "#doctor-table")):
-            await pilot.click(entry)
-            await pilot.pause()
-            await _wait_for_rows(pilot, app, table)
-            # Raises OutOfBounds if the control is not on screen.
-            await pilot.click("#copy")
-            await pilot.pause()
-            await pilot.click("#back")
-            await pilot.pause()
-            check(isinstance(app.screen, MainScreen), f"{entry} did not return at 45 cols")
+            screen = app.screen
+            for button in screen.query(Button):
+                check(
+                    screen.region.contains_region(button.region),
+                    f"{button.id} is off screen at {width} columns: "
+                    f"{button.region} outside {screen.region}",
+                )
+                check(
+                    button.region.width >= len(str(button.label)),
+                    f"{button.id} label '{button.label}' is wider than its "
+                    f"{button.region.width}-column button at {width} columns",
+                )
 
-        await pilot.click("#tools")
-        await pilot.pause()
-        await pilot.click("#back")
-        await pilot.pause()
-        check(isinstance(app.screen, MainScreen), "tools did not return at 45 cols")
+            for entry, table in (("#status", "#status-table"), ("#doctor", "#doctor-table")):
+                await pilot.click(entry)
+                await pilot.pause()
+                await _wait_for_rows(pilot, app, table)
+                # Raises OutOfBounds if the control is not on screen.
+                await pilot.click("#copy")
+                await pilot.pause()
+                await pilot.click("#back")
+                await pilot.pause()
+                check(
+                    isinstance(app.screen, MainScreen),
+                    f"{entry} did not return at {width} columns",
+                )
 
 
 def _expected_export_path() -> str:
