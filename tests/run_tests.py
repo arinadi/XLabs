@@ -216,6 +216,81 @@ def test_config_roundtrip(tmp_key: str = "ARINANOLABS_TEST_KEY") -> None:
         check(config.get(key) == value, f"the test disturbed {key}")
 
 
+def test_set_mirror_leaves_security_alone() -> None:
+    """Regression: switching the mirror broke apt update with exit 100.
+
+    Debian 13 writes two stanzas to debian.sources — main archive and
+    security — at different paths. Repointing both at a mirror sends
+    security requests to a path most mirrors do not carry, and apt fails.
+    """
+    import tempfile
+
+    from installer import packages
+
+    sample = (
+        "Types: deb\n"
+        "URIs: http://deb.debian.org/debian/\n"
+        "Suites: trixie trixie-updates\n"
+        "Components: main contrib non-free non-free-firmware\n"
+        "Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg\n"
+        "\n"
+        "Types: deb\n"
+        "URIs: http://security.debian.org/debian-security/\n"
+        "Suites: trixie-security\n"
+        "Components: main contrib non-free non-free-firmware\n"
+        "Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg\n"
+    )
+
+    fake_root = tempfile.mkdtemp()
+    target = os.path.join(fake_root, "etc", "apt", "sources.list.d", "debian.sources")
+    os.makedirs(os.path.dirname(target))
+    with open(target, "w", newline="\n") as f:
+        f.write(sample)
+
+    original_container_path = packages.container_path
+    original_update_lists = packages.update_lists
+    packages.container_path = lambda p: os.path.join(fake_root, p.lstrip("/"))
+
+    try:
+        # Success case: the security stanza must be untouched.
+        packages.update_lists = lambda log: True
+        check(
+            packages.set_mirror("http://kartolo.sby.datautama.net.id/debian/", lambda m: None),
+            "set_mirror reported failure on a working update",
+        )
+        result = open(target).read()
+        check(
+            "http://kartolo.sby.datautama.net.id/debian/" in result,
+            "the main archive was not repointed",
+        )
+        check(
+            "http://security.debian.org/debian-security/" in result,
+            "the security stanza was overwritten — this is the bug that shipped",
+        )
+
+        # Failure case: a mirror apt cannot use must roll back rather than
+        # leave the container stuck.
+        with open(target, "w", newline="\n") as f:
+            f.write(sample)
+        packages.update_lists = lambda log: False
+        check(
+            not packages.set_mirror("http://bad-mirror.invalid/debian/", lambda m: None),
+            "set_mirror reported success despite update_lists failing",
+        )
+        restored = open(target).read()
+        check(
+            "bad-mirror.invalid" not in restored,
+            "the bad mirror was left in place instead of rolling back",
+        )
+        check(
+            "http://deb.debian.org/debian/" in restored,
+            "the original mirror was not restored",
+        )
+    finally:
+        packages.container_path = original_container_path
+        packages.update_lists = original_update_lists
+
+
 def test_bench_presets_are_coherent() -> None:
     """Every preset must be runnable and its result storable."""
     from installer import bench
@@ -667,6 +742,7 @@ def main() -> int:
         test_doctor_scan_shape,
         test_firefox_prefs_are_defaults_not_locks,
         test_config_roundtrip,
+        test_set_mirror_leaves_security_alone,
         test_bench_presets_are_coherent,
         test_audio_test_tone_is_valid,
         test_doctor_reports_audio,

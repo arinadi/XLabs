@@ -294,11 +294,27 @@ def current_mirror() -> str | None:
     return None
 
 
+def _is_security(uri: str) -> bool:
+    """Whether a sources URI points at the security archive.
+
+    Debian 13 writes two stanzas: the main archive and security, and they
+    live at different paths. Repointing both at a mirror sends security to a
+    path the mirror does not carry, apt 404s, and `apt update` exits 100 —
+    which is precisely how this first went wrong. Security also comes from
+    Debian directly by design, so it is left alone.
+    """
+    return "-security" in uri or "security.debian.org" in uri
+
+
 def set_mirror(uri: str, log: Log) -> bool:
-    """Point the container's Debian sources at `uri`.
+    """Point the container's main Debian archive at `uri`.
 
     Rewritten from the host through the rootfs: no container login, and it
     works on a container that cannot currently reach any mirror at all.
+
+    The previous sources file is kept and restored if apt cannot use the new
+    one. A mirror that does not carry this release leaves apt unusable
+    otherwise, and the person who would have to fix it by hand is on a phone.
     """
     path = _sources_file()
     if path is None:
@@ -308,37 +324,58 @@ def set_mirror(uri: str, log: Log) -> bool:
     target = container_path(path)
     try:
         with open(target, encoding="utf-8") as f:
-            lines = f.read().splitlines()
+            original = f.read()
     except OSError as e:
         log(f"[red]Could not read {path}: {e}[/red]")
         return False
 
-    changed = []
+    lines = original.splitlines()
+    changed = 0
     for i, line in enumerate(lines):
         stripped = line.strip()
         if stripped.startswith("URIs:"):
+            if _is_security(stripped):
+                log(f"  leaving security alone: {stripped}")
+                continue
             lines[i] = f"URIs: {uri}"
-            changed.append(i)
+            changed += 1
         elif stripped.startswith(("deb ", "deb-src ")) and "://" in stripped:
             parts = stripped.split()
+            if _is_security(parts[1]):
+                log(f"  leaving security alone: {parts[1]}")
+                continue
             parts[1] = uri
             lines[i] = " ".join(parts)
-            changed.append(i)
+            changed += 1
 
     if not changed:
-        log(f"[red]No mirror line found in {path}.[/red]")
+        log(f"[red]No archive line found in {path}.[/red]")
         return False
 
-    try:
-        with open(target, "w", encoding="utf-8", newline="\n") as f:
-            f.write("\n".join(lines) + "\n")
-    except OSError as e:
-        log(f"[red]Could not write {path}: {e}[/red]")
+    def write(content: str) -> bool:
+        try:
+            with open(target, "w", encoding="utf-8", newline="\n") as f:
+                f.write(content)
+            return True
+        except OSError as e:
+            log(f"[red]Could not write {path}: {e}[/red]")
+            return False
+
+    if not write("\n".join(lines) + "\n"):
         return False
 
-    log(f"{path} now points at {uri}")
+    log(f"{path} now points at {uri} ({changed} line(s))")
     log("")
-    return update_lists(log)
+
+    if update_lists(log):
+        return True
+
+    log("")
+    log("[yellow]apt could not use that mirror, putting the old sources back.[/yellow]")
+    log("[dim]It may not carry this release, or not all of its components.[/dim]")
+    if write(original):
+        update_lists(log)
+    return False
 
 
 # ── Third-party repositories ───────────────────────────────

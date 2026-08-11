@@ -243,7 +243,12 @@ every search would match nothing and read as "no such package".
 An output pane below the results shows the command and its raw output, because
 a failed search and an empty one otherwise look identical.
 
-**Mirror** switches which Debian mirror the container fetches from. The list is
+**Mirror** switches which Debian mirror the container fetches from. It leaves
+the security stanza alone — Debian 13's `debian.sources` carries the main
+archive and security as two separate stanzas at different paths, and a mirror
+repointed for both sends security requests somewhere it likely does not carry,
+which is what `apt update` exiting 100 after a switch usually means. If the
+new mirror still fails, the previous sources are restored automatically. The list is
 not hardcoded: **Refresh** pulls Debian's own deb822 masterlist and keeps the
 nearby countries, and **Measure** times a real download from each and sorts by
 throughput. `netselect-apt` does something similar but ranks by latency and
