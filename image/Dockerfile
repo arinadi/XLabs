@@ -37,20 +37,29 @@ RUN apt-get update && \
 # dbus-x11 provides dbus-launch. Guides single it out as the package
 # whose absence causes strange, hard-to-attribute failures.
 #
-# `xorg-` excludes it. The xfce4 metapackage Recommends xorg — the whole
-# X.Org system, server and drivers included — which measured 400 MiB of a
-# 464 MiB layer. None of it can ever run here: the X server is Termux:X11
-# on the Android side. Recommends stay enabled otherwise, since that was
-# the point of the vanilla baseline; this drops the one that is
-# impossible to use.
+# The `pkg-` entries exclude recommends that cannot function here. Read
+# from the build log rather than guessed at — an earlier attempt excluded
+# `xorg`, which apt reported was never installed in the first place, and
+# saved 13 MiB of a 620 MiB image.
+#
+#   xserver-xorg + video/input drivers — the X server is Termux:X11 on the
+#     Android side. The drivers are for amdgpu, ati, nouveau and radeon:
+#     desktop GPUs that cannot exist on this device.
+#   initramfs-tools — there is no kernel here to build an initramfs for,
+#     and it drags in dracut, klibc, busybox, cpio and a C preprocessor.
+#
+# Recommends stay enabled otherwise, which was the point of the vanilla
+# baseline. Exclusions must be repeated per layer; apt does not remember.
 #
 # Split in two so a dropped connection retries a chunk rather than the
 # whole desktop. proot-distro pulls layer by layer with no resume inside
-# one, and this is a phone.
+# one, and this is a phone on mobile data.
 RUN apt-get update && \
     apt-get install -y \
         xfwm4 xfce4-session xfce4-settings xfconf \
-        xorg- && \
+        xorg- xserver-xorg- xserver-xorg-core- \
+        xserver-xorg-video-all- xserver-xorg-input-all- \
+        xserver-xorg-legacy- initramfs-tools- && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN apt-get update && \
@@ -58,7 +67,9 @@ RUN apt-get update && \
         xfce4 \
         xfce4-terminal \
         dbus-x11 \
-        xorg- && \
+        xorg- xserver-xorg- xserver-xorg-core- \
+        xserver-xorg-video-all- xserver-xorg-input-all- \
+        xserver-xorg-legacy- initramfs-tools- && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ── X11 client tools, GL userspace, audio client ───────────────
