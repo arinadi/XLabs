@@ -103,7 +103,19 @@ def test(log: Log) -> None:
     side and nothing in the container will help.
     """
     log("── Termux side ───────────────────────────────")
+
+    if not server_running():
+        log("PulseAudio is not running, starting it...")
+        start_server(log)
     log(f"server running: {server_running()}")
+
+    # Loaded here rather than only reported. Stop kills PulseAudio, which
+    # takes the module with it, so testing audio after stopping the desktop
+    # would otherwise always report a failure the test itself could fix. It
+    # is the same call Start makes, and loading twice is harmless.
+    if not tcp_module_loaded():
+        log("TCP module is not loaded, loading it now...")
+        load_tcp_module(log)
     log(f"TCP module:     {tcp_module_loaded()}")
 
     found = sinks()

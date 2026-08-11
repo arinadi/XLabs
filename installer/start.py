@@ -160,14 +160,19 @@ def load_audio_modules(log=_noop) -> bool:
     device with working Termux audio and three sinks still had no sound in the
     container because the module never loaded and nothing said so.
     """
-    _, out = run_cmd(
-        "pactl load-module module-native-protocol-tcp "
-        "auth-ip-acl=127.0.0.1 auth-anonymous=1 port=4713"
-    )
-
-    loaded, modules = run_cmd("pactl list modules short")
-    if loaded == 0 and "module-native-protocol-tcp" in modules:
-        return True
+    # Retried: a server that has only just been started may not be accepting
+    # connections yet, and a single failed pactl left the container silent.
+    out = ""
+    for attempt in range(3):
+        if attempt:
+            time.sleep(1)
+        _, out = run_cmd(
+            "pactl load-module module-native-protocol-tcp "
+            "auth-ip-acl=127.0.0.1 auth-anonymous=1 port=4713"
+        )
+        loaded, modules = run_cmd("pactl list modules short")
+        if loaded == 0 and "module-native-protocol-tcp" in modules:
+            return True
 
     log("  module-native-protocol-tcp did not load — the container will be silent")
     for line in out.strip().splitlines()[:3]:
