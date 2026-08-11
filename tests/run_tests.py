@@ -192,6 +192,51 @@ def test_firefox_prefs_are_defaults_not_locks() -> None:
         check(lines, "the repair explained nothing")
 
 
+def test_config_roundtrip(tmp_key: str = "ARINANOLABS_TEST_KEY") -> None:
+    """The .env holds per-device settings, so writing one key must not lose
+    the others."""
+    from installer import config
+
+    original = config.load()
+    try:
+        check(config.set_value(tmp_key, "one"), "could not write the config")
+        check(config.get(tmp_key) == "one", "value did not round-trip")
+
+        check(config.set_value("ARINANOLABS_TEST_OTHER", "two"), "second write failed")
+        check(config.get(tmp_key) == "one", "writing one key dropped another")
+
+        # Comments and blank lines must not become keys.
+        check("#" not in "".join(config.load()), "a comment was parsed as a key")
+    finally:
+        config.unset(tmp_key)
+        config.unset("ARINANOLABS_TEST_OTHER")
+
+    check(config.get(tmp_key) is None, "unset left the key behind")
+    for key, value in original.items():
+        check(config.get(key) == value, f"the test disturbed {key}")
+
+
+def test_bench_presets_are_coherent() -> None:
+    """Every preset must be runnable and its result storable."""
+    from installer import bench
+
+    names = [p.name for p in bench.PRESETS]
+    check(len(names) == len(set(names)), f"duplicate preset names: {names}")
+    check("software" in names, "the software baseline is missing")
+
+    for preset in bench.PRESETS:
+        check(bench.preset_by_name(preset.name) is preset, f"{preset.name} not findable")
+        exports = bench.client_exports(preset)
+        check(exports, f"{preset.name} exports nothing")
+        for line in exports.splitlines():
+            check(line.startswith("export "), f"{preset.name}: bad export line {line!r}")
+
+    check(
+        bench.preset_by_name("nonexistent") is None,
+        "an unknown preset name resolved to something",
+    )
+
+
 def test_audio_test_tone_is_valid() -> None:
     """The tone is generated rather than shipped, so it must be a real WAV."""
     import wave
@@ -600,6 +645,8 @@ def main() -> int:
         test_preflight_shape,
         test_doctor_scan_shape,
         test_firefox_prefs_are_defaults_not_locks,
+        test_config_roundtrip,
+        test_bench_presets_are_coherent,
         test_audio_test_tone_is_valid,
         test_doctor_reports_audio,
         test_tui_navigation,

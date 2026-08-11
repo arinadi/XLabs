@@ -9,7 +9,7 @@ import socket as sock
 import subprocess
 import time
 
-from . import audio
+from . import audio, bench
 from .const import ADMIN_USER, CONTAINER_NAME, PROOT_DIR, REPO_DIR, TMPDIR
 from .system import run_cmd, write_container_script
 
@@ -186,6 +186,19 @@ def start_virgl(log=_noop) -> bool:
         log("  already running")
         return True
 
+    # A benchmarked profile beats detection order: what is fastest here was
+    # measured on this device, not inferred from what usually wins.
+    profile = bench.load_profile()
+    if profile is not None:
+        if profile.server is None:
+            log(f"  benchmark chose {profile.name}; no renderer to start")
+            return True
+        log(f"  using the benchmarked profile: {profile.name}")
+        if _launch_virgl(profile.server, log):
+            log(f"  {profile.name} renderer is up")
+            return True
+        log("  it did not stay up, falling back to detection")
+
     if run_cmd("command -v virgl_test_server_android")[0] == 0:
         if _launch_virgl("virgl_test_server_android", log):
             log("  virgl_test_server_android is up")
@@ -331,7 +344,11 @@ def start_xfce4(log=_noop) -> bool:
     # --shared-tmp rather than --shared-x11: every reference setup uses it, and
     # it exposes the whole Termux tmp, which is where the X socket, the D-Bus
     # socket and XDG_RUNTIME_DIR all live.
-    if virgl_running():
+    profile = bench.load_profile()
+    if profile is not None:
+        gpu = bench.client_exports(profile)
+        log(f"  GPU profile from the benchmark: {profile.name}")
+    elif virgl_running():
         gpu = GPU_EXPORTS
         log("  virgl server found, enabling GPU rendering in the session")
     else:

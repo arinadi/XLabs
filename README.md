@@ -284,6 +284,16 @@ check now connects rather than reads a list.
 container. Heard from Termux only means the socket is not reaching in; heard
 from neither means Android has no working sink.
 
+**Bench** answers a question this project could not answer from the outside.
+The published guidance is written for Qualcomm hardware — zink is reported to
+work only there, Turnip is Adreno-only — so on an Exynos or Mali device the
+right configuration is genuinely unknown.
+
+So it measures. glmark2 runs under each configuration in turn — software
+rendering as a baseline, `virgl_test_server_android`, and the zink server —
+and the winner is written to `.env` and used by every later start. It needs
+termux-x11 running, but not the desktop.
+
 **Recording is not possible**, and no amount of configuration changes that. The
 Termux app does not declare `android.permission.RECORD_AUDIO`, so PulseAudio
 has no microphone source — `module-sles-source` fails to initialise, and
@@ -297,6 +307,7 @@ Termux:API works, but it is a separate app and cannot feed the container.
 | **Diagnose** | The same full report Start prints when it fails |
 | **Dupes** | Tools installed in both Termux and the container |
 | **Audio** | Play a test tone from Termux, then from the container |
+| **Bench** | Measure each GPU configuration and keep the fastest |
 
 Only genuinely fixable problems are counted in **Fix**. Anything needing you —
 a missing APK, no checkout — says so instead of offering a button that cannot
@@ -403,6 +414,8 @@ arinanoLabs/
 │   ├── system.py       ←   Subprocess helpers
 │   └── const.py        ←   Paths and names
 │   └── doctor.py       ←   Diagnosis and repair
+│   ├── bench.py        ←   GPU benchmark and profile
+│   ├── config.py       ←   .env, per-device settings
 ├── image/              ← System definition (Dockerfile + configs)
 ├── tests/              ← Headless TUI tests, run by CI
 ├── docker/dev/         ← Local TUI test harness

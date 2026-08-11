@@ -30,7 +30,7 @@ from textual.widgets import (
     Static,
 )
 
-from . import audio, doctor, packages
+from . import audio, bench, doctor, packages
 from . import start as desktop
 from .const import CACHE_DIR, CONTAINER_NAME, IMAGE_REF, REPO_DIR
 from .preflight import run_all_checks
@@ -561,8 +561,10 @@ class DoctorScreen(CopyableScreen):
         with Grid(classes="row3"):
             yield Button("Dupes", id="dupes")
             yield Button("Audio", id="audio")
+            yield Button("Bench", id="bench")
+        with Grid(classes="row2"):
             yield Button("C", id="copy")
-        yield Button("Back", id="back", variant="primary")
+            yield Button("Back", id="back", variant="primary")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -628,6 +630,10 @@ class DoctorScreen(CopyableScreen):
     @on(Button.Pressed, "#audio")
     def _audio(self) -> None:
         self.app.push_screen(ActionScreen("Audio Test", audio.test))
+
+    @on(Button.Pressed, "#bench")
+    def _bench(self) -> None:
+        self.app.push_screen(ActionScreen("GPU Benchmark", bench.run))
 
     @on(Button.Pressed, "#fix")
     def _fix(self) -> None:
