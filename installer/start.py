@@ -160,10 +160,7 @@ def acquire_wake_lock(log=_noop) -> bool:
 
 
 def start_pulseaudio(log=_noop) -> bool:
-    run_cmd("pulseaudio --kill 2>/dev/null")
-    time.sleep(0.5)
-    run_cmd(f"rm -rf {TMPDIR}/pulse* 2>/dev/null")
-
+    # No kill or socket cleanup here: stop_desktop has already run.
     rc, out = run_cmd("pulseaudio --start --exit-idle-time=-1 2>&1")
     if rc != 0 and "already running" not in out.lower():
         log(f"  {out.strip()}")
@@ -211,11 +208,8 @@ def start_virgl(log=_noop) -> bool:
 
 
 def start_x11(log=_noop) -> bool:
-    run_cmd("pkill -9 -f termux-x11 2>/dev/null")
-    time.sleep(0.5)
-    run_cmd(f"rm -f {TMPDIR}/.X*-lock {TMPDIR}/.X11-unix/X* 2>/dev/null")
-    time.sleep(0.5)
-
+    # No kill or lock-file cleanup here either: stop_desktop owns that, and
+    # it has already removed the socket directory and the .X0-lock.
     subprocess.Popen(
         "termux-x11 :0 -ac", shell=True,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -465,11 +459,18 @@ START_STEPS = [
 
 
 def start_desktop(log=_noop) -> bool:
-    """Run the full start sequence, stopping a stale session first."""
-    if is_running():
-        log("Desktop already running — stopping it first.\n")
-        stop_desktop(log)
-        log("")
+    """Run the full start sequence on a known-clean slate.
+
+    stop_desktop runs unconditionally rather than only when a session is
+    detected. Leftovers outlive the session that made them — a stale .X0-lock
+    or an orphaned proot is exactly what makes the next start fail — and
+    is_running() only ever knew about xfce4-session. It costs a few pgrep
+    calls when there is nothing to stop.
+    """
+    log("Clearing any previous session...")
+    if not stop_desktop(log):
+        log("[yellow]Some processes survived the stop; starting anyway.[/yellow]")
+    log("")
 
     for name, step in START_STEPS:
         log(f"{name}...")

@@ -31,7 +31,7 @@ from . import doctor
 from . import start as desktop
 from .const import CACHE_DIR, CONTAINER_NAME, IMAGE_REF, REPO_DIR
 from .preflight import run_all_checks
-from .system import get_version, human_size, is_installed, run_cmd, stream_cmd
+from .system import get_version, human_size, is_installed, stream_cmd
 
 
 # ── Copying output ─────────────────────────────────────────
@@ -323,15 +323,11 @@ def run_update(log) -> None:
 
 
 def run_reset(log) -> None:
-    if desktop.is_running():
-        log("Stopping desktop...")
-        desktop.stop_desktop(log)
-        log("")
-
-    # Scoped to this container: a bare 'proot' pattern also kills unrelated
-    # proot-distro sessions the user may have running.
-    log("Killing leftover proot processes for this container...")
-    run_cmd(f"pkill -9 -f 'proot.*{CONTAINER_NAME}' 2>/dev/null")
+    # One teardown path. stop_desktop already kills this container's proot
+    # tree and verifies, so there is nothing to repeat here.
+    log("Stopping the desktop...")
+    desktop.stop_desktop(log)
+    log("")
 
     log("Removing container...")
     rc = stream_cmd(f"proot-distro remove {CONTAINER_NAME}", log, timeout=300)
@@ -358,10 +354,9 @@ def run_clean_cache(log) -> None:
 
     log(f"Cache size: {human_size(CACHE_DIR)}")
 
-    if desktop.is_running():
-        log("Stopping desktop first...")
-        desktop.stop_desktop(log)
-        log("")
+    log("Stopping the desktop first...")
+    desktop.stop_desktop(log)
+    log("")
 
     log("Removing cached image layers...")
     try:

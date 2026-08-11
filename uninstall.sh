@@ -26,13 +26,23 @@ fi
 
 echo ""
 
-# 1. Stop any running sessions
+# 1. Stop any running sessions.
+# Reuse the TUI's teardown rather than keeping a second, subtly different
+# copy of it here — that copy killed every "proot-distro login" on the
+# device, not just this container's.
 echo ">>> Stopping running sessions..."
-pkill -f "xfce4-session|startxfce4" 2>/dev/null && echo "  [x] Xfce4 stopped" || true
-pkill -f "proot-distro login" 2>/dev/null && echo "  [x] proot login stopped" || true
-pkill -f "termux-x11" 2>/dev/null && echo "  [x] X11 stopped" || true
-pulseaudio --kill 2>/dev/null && echo "  [x] PulseAudio stopped" || true
-termux-wake-unlock 2>/dev/null && echo "  [x] Wake lock released" || true
+REPO_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+if [ -f "$REPO_DIR/installer/start.py" ] && command -v python3 >/dev/null 2>&1; then
+    PYTHONPATH="$REPO_DIR" python3 -c \
+        'from installer.start import stop_desktop; stop_desktop(print)' \
+        || echo "  [-] stop reported a problem, continuing"
+else
+    echo "  [-] repo or python3 missing, falling back to a scoped kill"
+    pkill -f "proot.*arinanolabs" 2>/dev/null && echo "  [x] container stopped" || true
+    pkill -f "termux-x11" 2>/dev/null && echo "  [x] X11 stopped" || true
+    pulseaudio --kill 2>/dev/null && echo "  [x] PulseAudio stopped" || true
+    termux-wake-unlock 2>/dev/null || true
+fi
 sleep 1
 
 # 2. Remove proot container
