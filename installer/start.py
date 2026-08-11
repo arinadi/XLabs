@@ -14,6 +14,14 @@ from .system import run_cmd
 
 ANGLE_DIR = "/data/data/com.termux/files/usr/opt/angle-android"
 XFCE_LOG = os.path.join(REPO_DIR, "xfce4.log")
+VIRGL_LOG = os.path.join(REPO_DIR, "virgl.log")
+
+# Set inside the container when a virgl server is actually up. Accelerating
+# GL needs both halves: the server in Termux and these on the client side.
+# Without them the session silently uses llvmpipe no matter what is running
+# outside. Values from the virglrenderer tutorial on ivonblog.com.
+GPU_EXPORTS = """export GALLIUM_DRIVER=virpipe
+export MESA_GL_VERSION_OVERRIDE=4.0"""
 
 # Leftovers worth sweeping only after the proot tree is gone. Deliberately
 # narrow: an earlier version matched "dbus-" and would kill any process on the
@@ -179,31 +187,67 @@ def load_audio_modules(log=_noop) -> bool:
     return True
 
 
-def start_virgl(log=_noop) -> bool:
-    """Start the first virgl renderer that exists. No GPU vendor detection."""
-    rc, _ = run_cmd("command -v virgl_test_server_android")
-    if rc == 0:
-        subprocess.Popen(
-            "virgl_test_server_android", shell=True,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
-        log("  using virgl_test_server_android")
+def virgl_running() -> bool:
+    rc, _ = run_cmd("pgrep -f virgl_test_server")
+    return rc == 0
+
+
+def _launch_virgl(command: str, log) -> bool:
+    """Start a virgl server and confirm it is still there a moment later.
+
+    Output goes to a log rather than /dev/null. The old version discarded it
+    and returned True unconditionally, so a server that died on startup was
+    reported as success and the desktop quietly fell back to software
+    rendering with nothing to say why.
+    """
+    os.makedirs(os.path.dirname(VIRGL_LOG), exist_ok=True)
+    with open(VIRGL_LOG, "w") as f:
+        subprocess.Popen(command, shell=True, stdout=f, stderr=f)
+
+    time.sleep(1.5)
+    if virgl_running():
         return True
 
-    for backend in ("vulkan-null", "vulkan"):
-        path = f"{ANGLE_DIR}/{backend}"
-        if os.path.exists(path):
-            env = os.environ.copy()
-            env["LD_LIBRARY_PATH"] = path
-            subprocess.Popen(
-                "virgl_test_server --use-egl-surfaceless --use-gles",
-                shell=True, env=env,
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            )
-            log(f"  using ANGLE {backend}")
-            return True
+    try:
+        with open(VIRGL_LOG) as f:
+            for line in f.read().strip().splitlines()[:3]:
+                log(f"    {line}")
+    except OSError:
+        pass
+    return False
 
-    log("  no virgl renderer found, falling back to software rendering")
+
+def start_virgl(log=_noop) -> bool:
+    """Start a virgl server, so the container can use the GPU for OpenGL.
+
+    virglrenderer-android first: it works on most devices. The zink server
+    can be faster but is reported to work only on Qualcomm hardware, so it
+    is the fallback rather than the default.
+    """
+    if virgl_running():
+        log("  already running")
+        return True
+
+    if run_cmd("command -v virgl_test_server_android")[0] == 0:
+        if _launch_virgl("virgl_test_server_android", log):
+            log("  virgl_test_server_android is up")
+            return True
+        log("  virgl_test_server_android did not stay up")
+
+    if run_cmd("command -v virgl_test_server")[0] == 0:
+        zink = (
+            "MESA_NO_ERROR=1 MESA_GL_VERSION_OVERRIDE=4.3COMPAT "
+            "MESA_GLES_VERSION_OVERRIDE=3.2 GALLIUM_DRIVER=zink "
+            "ZINK_DESCRIPTORS=lazy virgl_test_server "
+            "--use-egl-surfaceless --use-gles"
+        )
+        if _launch_virgl(zink, log):
+            log("  virgl_test_server with zink is up")
+            return True
+        log("  zink server did not stay up (expected off Qualcomm hardware)")
+
+    log("  no virgl server — the desktop will use software rendering")
+    log("  install it with: pkg install virglrenderer-android")
     return False
 
 
@@ -288,6 +332,8 @@ export XDG_RUNTIME_DIR="/tmp/runtime-$(id -u)"
 mkdir -p "$XDG_RUNTIME_DIR"
 chmod 0700 "$XDG_RUNTIME_DIR"
 
+@GPU@
+
 echo "starting as $(whoami), DISPLAY=$DISPLAY, XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR"
 echo "ICE dir: $(ls -ld /tmp/.ICE-unix 2>&1)"
 
@@ -327,7 +373,14 @@ def start_xfce4(log=_noop) -> bool:
     # --shared-tmp rather than --shared-x11: every reference setup uses it, and
     # it exposes the whole Termux tmp, which is where the X socket, the D-Bus
     # socket and XDG_RUNTIME_DIR all live.
-    if not write_container_script(SESSION_SCRIPT_NAME, SESSION_SCRIPT):
+    if virgl_running():
+        gpu = GPU_EXPORTS
+        log("  virgl server found, enabling GPU rendering in the session")
+    else:
+        gpu = "# no virgl server running, so software rendering"
+        log("  no virgl server, the session will use software rendering")
+
+    if not write_container_script(SESSION_SCRIPT_NAME, SESSION_SCRIPT.replace("@GPU@", gpu)):
         log("  could not write the session script")
         return False
 

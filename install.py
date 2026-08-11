@@ -150,9 +150,13 @@ def install_termux_packages() -> None:
         "audio": ["pulseaudio"],
         "networking": ["netcat-openbsd"],
         "Termux:X11": ["termux-x11-nightly", "xorg-xrandr"],
+        # virglrenderer-android is the one that matters: it works on most
+        # devices. The zink pair is the faster fallback where it works,
+        # reported to be Qualcomm only.
         "graphics": [
-            "mesa-zink", "vulkan-loader-android",
-            "virglrenderer-android", "angle-android",
+            "virglrenderer-android",
+            "mesa-zink", "virglrenderer-mesa-zink", "vulkan-loader-android",
+            "angle-android",
         ],
     }
     for label, packages in groups.items():
