@@ -100,7 +100,7 @@ RUN apt-get update && \
         xinput \
         fonts-noto-core \
         fonts-noto-color-emoji \
-        materia-gtk-theme \
+        arc-theme \
         papirus-icon-theme && \
     apt-get clean && rm -rf /var/lib/apt/lists/* \
     /usr/share/doc/* /usr/share/man/* /usr/share/info/* \

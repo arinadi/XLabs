@@ -10,11 +10,10 @@ echo "╠═══════════════════════�
 echo ""
 echo "This will remove:"
 echo "  • proot container (arinanolabs)"
-echo "  • ~/.local/bin/alabs"
+echo "  • ~/bin/alabs launcher"
 echo "  • ~/arinanoLabs (git repo)"
 echo ""
 echo "This will NOT remove:"
-echo "  • ~/arinanoLabs/ (git repo)"
 echo "  • ~/storage/ (Android storage)"
 echo "  • ~/.bashrc (Termux config)"
 echo ""
@@ -29,7 +28,7 @@ echo ""
 
 # 1. Stop any running sessions
 echo ">>> Stopping running sessions..."
-pkill -f "mate-session" 2>/dev/null && echo "  [x] MATE stopped" || true
+pkill -f "xfce4-session|startxfce4" 2>/dev/null && echo "  [x] Xfce4 stopped" || true
 pkill -f "proot-distro login" 2>/dev/null && echo "  [x] proot login stopped" || true
 pkill -f "termux-x11" 2>/dev/null && echo "  [x] X11 stopped" || true
 pulseaudio --kill 2>/dev/null && echo "  [x] PulseAudio stopped" || true
@@ -46,8 +45,8 @@ fi
 # 3. Remove alabs launcher
 echo ""
 echo ">>> Removing alabs launcher..."
-rm -f ~/.local/bin/alabs
-echo "  [x] ~/.local/bin/alabs removed"
+rm -f ~/bin/alabs
+echo "  [x] ~/bin/alabs removed"
 
 # 4. Remove git repo
 echo ""

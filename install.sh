@@ -81,9 +81,9 @@ check_pip() {
 # ── Install TUI libraries ────────────────────────────────
 install_libs() {
     info "Installing TUI libraries..."
-    $PIP install npyscreen requests --quiet --break-system-packages 2>/dev/null || \
-    $PIP install npyscreen requests --quiet 2>/dev/null || \
-    $PIP install npyscreen requests --quiet --user 2>/dev/null || true
+    $PIP install rich requests --quiet --break-system-packages 2>/dev/null || \
+    $PIP install rich requests --quiet 2>/dev/null || \
+    $PIP install rich requests --quiet --user 2>/dev/null || true
     ok "Libraries installed"
 }
 

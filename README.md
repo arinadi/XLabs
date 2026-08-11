@@ -4,7 +4,6 @@
   <p>
     <a href="https://github.com/arinadi/arinanoLabs/actions"><img src="https://img.shields.io/github/actions/workflow/status/arinadi/arinanoLabs/build-image.yml?label=build"></a>
     <a href="https://github.com/arinadi/arinanoLabs/blob/main/LICENSE"><img src="https://img.shields.io/github/license/arinadi/arinanoLabs"></a>
-    <a href="https://github.com/arinadi/arinanoLabs/releases"><img src="https://img.shields.io/github/v/release/arinadi/arinanoLabs"></a>
   </p>
 
   ```bash
@@ -13,8 +12,8 @@
 
   <img src="docs/arinanox-screenshot.jpg" alt="arinanoLabs desktop" width="360" style="border-radius:12px;">
   <p>
-    Debian 13 &nbsp;·&nbsp; MATE &nbsp;·&nbsp; Firefox ESR &nbsp;·&nbsp; Dev tools<br>
-    <small>TermuX → X11 → LinuX → Trixie → MATE</small>
+    Debian 13 &nbsp;·&nbsp; Xfce4 &nbsp;·&nbsp; Firefox ESR &nbsp;·&nbsp; Dev tools<br>
+    <small>TermuX → X11 → LinuX → Trixie → Xfce4</small>
   </p>
 </div>
 
@@ -29,9 +28,9 @@ Your Android phone is a pocket PC with 8GB+ RAM and an ARM64 CPU — it deserves
 | Chrome sleeps tabs | Firefox ESR desktop browser — stays alive |
 | No glibc apps | Debian 13 proot — standard glibc |
 | No dev tools | Node.js 22, Python 3, GCC, CMake built-in |
-| Background killed | Termux:WakeLock keeps sessions alive |
-| 30 min of apt + config | Python TUI installer, ~30s |
-| Manual GPU config | Auto-detect GPU (Turnip/Panfrost/Virgl) |
+| 30 min of apt + config | Pre-built OCI image, pulled in one step |
+| Fiddly X11 + audio + dbus startup | One menu entry, with cleanup on stop |
+| No touch keyboard | Onboard on-screen keyboard, autostarted |
 
 **What this can't do:** no Docker, no systemd services, no native x86, no root (proot emulates root-like behavior, not real root). Full details in [Limitations](#️-limitations).
 
@@ -45,10 +44,13 @@ Your Android phone is a pocket PC with 8GB+ RAM and an ARM64 CPU — it deserves
 curl -sL https://raw.githubusercontent.com/arinadi/arinanoLabs/main/install.sh | bash
 ```
 
-This bootstrapper will:
-1. Check/install Python
-2. Check/install `rich` library
-3. Launch TUI installer
+The bootstrapper checks for git, Python, and pip, installs the `rich` TUI
+library, clones this repo to `~/arinanoLabs`, and links the launcher to
+`~/bin/alabs`.
+
+Then open a new terminal session and run `alabs`. On a fresh device the Debian
+container is not present yet — provision it from the menu with **[6] Reset
+(Clean Install)**, which pulls `ghcr.io/arinadi/arinanolabs:latest`.
 
 ### Daily Use
 
@@ -56,46 +58,46 @@ This bootstrapper will:
 alabs                  # Launch TUI menu
 ```
 
-```
-╔═══════════════════════════════════════════════╗
-║          📱 arinanoLabs v2.0                  ║
-║     Debian 13 · MATE · Ready                 ║
-╠═══════════════════════════════════════════════╣
-║                                               ║
-║   [1] ▶️  Start Desktop                       ║
-║   [2] ⏹️  Stop Desktop                        ║
-║   [3] 🔄 Update                               ║
-║   [4] 🧰 Extra Tools                          ║
-║   [5] 📊 Status                                ║
-║   [6] 🗑️  Uninstall                            ║
-║                                               ║
-║   [0] 🚪 Exit                                  ║
-║                                               ║
-╚═══════════════════════════════════════════════╝
-```
+| Key | Action |
+|-----|--------|
+| `1` | Start Desktop |
+| `2` | Stop Desktop |
+| `3` | Update (git pull this repo) |
+| `4` | Extra Tools |
+| `5` | Status |
+| `6` | Reset (Clean Install) |
+| `7` | Clean Image Cache |
+| `0` | Exit |
 
 ---
 
 ## 🏗️ How It Works
 
+Two layers. The **core** is declarative — defined by `image/Dockerfile`, built in
+CI, published to `ghcr.io/arinadi/arinanolabs`. The **user layer** is whatever
+you install inside the running container; it survives across desktop restarts,
+but a Reset wipes it.
+
+Starting the desktop is a chain, and each link is cleaned up in reverse on stop:
+
+```mermaid
+flowchart LR
+    A[PulseAudio] --> B[Audio modules<br/>TCP :4713]
+    B --> C[virgl renderer]
+    C --> D[termux-x11 :0]
+    D --> E{X11 socket<br/>ready?}
+    E -->|yes| F[proot-distro login<br/>--shared-x11]
+    E -->|timeout 5s| F
+    F --> G[startxfce4 as admin]
 ```
-┌─────────────────────────────────────┐
-│  USER LAYER (mutable)               │  ← Your packages, configs, data
-│  VS Code, Chromium, etc.            │     Preserved across updates
-├─────────────────────────────────────┤
-│  CORE LAYER (declarative)           │  ← Built from Dockerfile in CI
-│  Debian 13 + MATE + Firefox + dev   │     ghcr.io/arinadi/arinanolabs
-└─────────────────────────────────────┘
-```
 
-### Python TUI Installer
+### Python TUI
 
-Built with [Rich](https://github.com/Textualize/rich) for professional UX:
+Built with [Rich](https://github.com/Textualize/rich):
 
-- **Pre-flight checks** — internet, storage, GPU, dependencies
-- **GPU auto-detection** — Qualcomm Adreno → Turnip, ARM Mali → Panfrost
-- **Self-healing mirrors** — auto-fallback if Termux repo is down
-- **Progress bars** — real-time download speed + ETA
+- **Streamed output** — image pulls and package installs render live
+- **Status view** — container present, desktop running, version
+- **Guarded destructive actions** — Reset and Clean Cache require typing `yes`
 
 ---
 
@@ -106,30 +108,35 @@ Built with [Rich](https://github.com/Textualize/rich) for professional UX:
 | Category | Tools |
 |----------|-------|
 | 🌐 Browser | Firefox ESR |
-| 🖥️ Desktop | MATE + Pluma + Caja |
-| 🔧 Dev | Git, Node.js 22, Python 3, GCC, CMake |
-| 📊 Sys | htop, tmux, OpenSSH |
+| 🖥️ Desktop | Xfce4 + goodies, Thunar, Mousepad, Ristretto, xfce4-terminal |
+| ⌨️ Touch | Onboard on-screen keyboard, HiDPI scaling, 48px cursors |
+| 🎨 Theme | Arc-Dark + Papirus icons, Noto fonts incl. color emoji |
+| 🔧 Dev | Git, Node.js 22, Python 3, GCC, CMake, pkg-config |
+| 💻 Shell | Zsh + Oh My Zsh, fzf, ripgrep, bat, lazygit |
+| 📊 Sys | htop, tmux, OpenSSH client |
 
-### Extra Tools (via TUI menu)
+### Extra Tools
 
-| Category | Packages |
-|----------|----------|
-| 🌐 Browser | Chromium |
-| 💻 IDE | VS Code (code-server), Neovim |
-| 🖥️ System | Zsh + Oh My Zsh, Docker |
-| 🔧 CLI | ripgrep, GitHub CLI |
+Menu entry `4` is a placeholder — Chromium, code-server, Neovim and GitHub CLI
+are listed but not yet wired up. Install them with `apt` inside the container in
+the meantime.
 
 ---
 
-## 🎮 GPU Acceleration
+## 🎮 Graphics
 
-Auto-detected during install:
+There is no GPU vendor detection. The start sequence probes for a virgl
+renderer and takes the first one that exists:
 
-| GPU | Driver | Config |
-|-----|--------|--------|
-| Qualcomm Adreno | Turnip + Zink | Vulkan → OpenGL 4.6 |
-| ARM Mali | Panfrost | OpenGL direct |
-| Unknown | llvmpipe | Software fallback |
+| Probe | Used when |
+|-------|-----------|
+| `virgl_test_server_android` | present on `PATH` (Termux `virglrenderer-android`) |
+| ANGLE `vulkan-null` backend | `$PREFIX/opt/angle-android/vulkan-null` exists |
+| ANGLE `vulkan` backend | `$PREFIX/opt/angle-android/vulkan` exists |
+| none | falls back to software rendering |
+
+The container ships Mesa userspace (`libgl1-mesa-dri`, `libglx-mesa0`,
+`mesa-utils`) so OpenGL works either way.
 
 ---
 
@@ -138,18 +145,17 @@ Auto-detected during install:
 ```
 arinanoLabs/
 ├── install.sh          ← Bootstrap entry point
-├── install.py          ← Python TUI entry
+├── install.py          ← Python entry
 ├── alabs               ← Post-install TUI launcher
 ├── installer/          ← Python TUI modules
-│   ├── menu.py         ←   Main menu
-│   ├── install.py      ←   Install logic
+│   ├── npyscreen_app.py ←  Menu + handlers
 │   ├── start.py        ←   Start/stop desktop
-│   ├── gpu.py          ←   GPU detection
-│   └── ...
-├── image/              ← System definition (Dockerfile)
-├── scripts/            ← CLI wrappers
-├── launchers/          ← start/stop shortcuts
-└── docs/               ← documentation
+│   ├── install.py      ←   Termux-side dependency install
+│   ├── preflight.py    ←   Environment checks
+│   └── ui.py           ←   Shared Rich helpers
+├── image/              ← System definition (Dockerfile + configs)
+├── docker/dev/         ← Local TUI test harness
+└── docs/               ← Debugging notes and references
 ```
 
 ---
@@ -160,7 +166,7 @@ arinanoLabs/
 |-----------|------------|
 | No root | proot provides root-like environment |
 | No systemd | Start services manually |
-| No GPU passthrough | virglrenderer auto-detected |
+| No GPU passthrough | virgl renderer, software fallback |
 | ARM64 only | QEMU for cross-arch (slow) |
 | No native X11 | Termux:X11 app required |
 | No Docker | proot lacks kernel features |
