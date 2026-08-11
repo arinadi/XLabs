@@ -9,7 +9,7 @@ import socket as sock
 import subprocess
 import time
 
-from .const import CONTAINER_NAME, PROOT_DIR, REPO_DIR, TMPDIR
+from .const import ADMIN_USER, CONTAINER_NAME, PROOT_DIR, REPO_DIR, TMPDIR
 from .system import run_cmd
 
 ANGLE_DIR = "/data/data/com.termux/files/usr/opt/angle-android"
@@ -209,20 +209,51 @@ def wait_for_x11(log=_noop) -> bool:
     return True
 
 
-def start_xfce4(log=_noop) -> bool:
-    exports = "DISPLAY=:0 PULSE_SERVER=tcp:127.0.0.1:4713 NO_AT_BRIDGE=1"
+# Run inside the container as the admin user. Written to the rootfs and
+# executed by path so no quoting has to survive the trip through proot-distro.
+#
+# The D-Bus wrapper matters: startxfce4 only starts a bus on its Wayland
+# branch. With DISPLAY already set it prints "X server already running",
+# sets prog=/bin/sh and hands off to xinitrc — so if nothing brings a session
+# bus, xfce4-session has none. Every reference setup wraps the session in
+# dbus-launch --exit-with-session for exactly this reason.
+SESSION_SCRIPT = r"""#!/bin/bash
+export DISPLAY=:0
+export PULSE_SERVER=tcp:127.0.0.1:4713
+export NO_AT_BRIDGE=1
 
-    # 'su admin' without '-' so .bashrc cannot clobber XDG_RUNTIME_DIR, which
-    # dbus needs to be mode 0700.
-    inner = (
-        f"export {exports} && "
-        "XDG=/tmp/runtime-$$ && mkdir -p $XDG && chmod 0700 $XDG && "
-        "export XDG_RUNTIME_DIR=$XDG && "
-        "exec startxfce4"
-    )
+export XDG_RUNTIME_DIR="/tmp/runtime-$(id -u)"
+mkdir -p "$XDG_RUNTIME_DIR"
+chmod 0700 "$XDG_RUNTIME_DIR"
+
+echo "starting as $(whoami), DISPLAY=$DISPLAY, XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR"
+
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ] && command -v dbus-launch >/dev/null 2>&1; then
+    echo "wrapping the session in dbus-launch"
+    exec dbus-launch --exit-with-session startxfce4
+fi
+
+echo "using the existing session bus: ${DBUS_SESSION_BUS_ADDRESS:-none}"
+exec startxfce4
+"""
+
+SESSION_SCRIPT_NAME = "arinanolabs-session.sh"
+
+
+def start_xfce4(log=_noop) -> bool:
+    # --user admin rather than `su admin -c`: proot-distro sets HOME, USER and
+    # the working directory itself, and su inside proot's faked root is where
+    # this has repeatedly gone wrong.
+    # --shared-tmp rather than --shared-x11: every reference setup uses it, and
+    # it exposes the whole Termux tmp, which is where the X socket, the D-Bus
+    # socket and XDG_RUNTIME_DIR all live.
+    if not _write_container_script(SESSION_SCRIPT_NAME, SESSION_SCRIPT):
+        log("  could not write the session script")
+        return False
+
     cmd = (
-        f"proot-distro login {CONTAINER_NAME} --shared-x11 -- "
-        f"su admin -c '{inner}'"
+        f"proot-distro login {CONTAINER_NAME} --user {ADMIN_USER} --shared-tmp "
+        f"-- bash /tmp/{SESSION_SCRIPT_NAME}"
     )
 
     log(f"  {cmd}")
@@ -281,27 +312,37 @@ echo "--- exit: $status (124 = still alive when the 8s timeout fired) ---"
 """
 
 
+def _write_container_script(name: str, content: str) -> bool:
+    """Place a script where the container will see it at /tmp/<name>.
+
+    Written to the Termux tmp, not the container rootfs: --shared-tmp binds
+    the Termux tmp over /tmp, so anything left in rootfs/tmp is hidden the
+    moment the session starts.
+    """
+    try:
+        os.makedirs(TMPDIR, exist_ok=True)
+        path = os.path.join(TMPDIR, name)
+        with open(path, "w", newline="\n") as f:
+            f.write(content)
+        os.chmod(path, 0o755)
+        return True
+    except OSError:
+        return False
+
+
 def _run_container_probe() -> tuple[int, str]:
     """Run the probe script inside the container.
 
-    The script is written through the container's rootfs on the host side, so
-    nothing has to survive a round of shell quoting.
+    The flags must match how the desktop is actually started, or the probe
+    diagnoses its own environment instead. An earlier version logged in
+    without sharing the X socket at all and duly reported "unable to open
+    display" — indistinguishable from the failure it exists to explain.
     """
-    rootfs_tmp = os.path.join(PROOT_DIR, "rootfs/tmp")
-    host_path = os.path.join(rootfs_tmp, "arinanolabs-probe.sh")
-    try:
-        os.makedirs(rootfs_tmp, exist_ok=True)
-        with open(host_path, "w", newline="\n") as f:
-            f.write(CONTAINER_PROBE)
-        os.chmod(host_path, 0o755)
-    except OSError as e:
-        return 1, f"could not write the probe script: {e}"
+    if not _write_container_script("arinanolabs-probe.sh", CONTAINER_PROBE):
+        return 1, "could not write the probe script"
 
-    # --shared-x11 must match how the desktop is actually started. Without it
-    # the probe sees an empty /tmp/.X11-unix and reports "unable to open
-    # display", which looks exactly like the failure it is meant to diagnose.
     return run_cmd(
-        f"proot-distro login {CONTAINER_NAME} --shared-x11 "
+        f"proot-distro login {CONTAINER_NAME} --shared-tmp "
         "-- bash /tmp/arinanolabs-probe.sh",
         timeout=120,
     )

@@ -102,9 +102,9 @@ flowchart LR
     B --> C[virgl renderer]
     C --> D[termux-x11 :0]
     D --> E{X11 socket<br/>ready?}
-    E -->|yes| F[proot-distro login<br/>--shared-x11]
+    E -->|yes| F["proot-distro login<br/>--user admin --shared-tmp"]
     E -->|timeout 5s| F
-    F --> G[startxfce4 as admin]
+    F --> G["dbus-launch --exit-with-session<br/>startxfce4"]
 ```
 
 ### Python TUI
