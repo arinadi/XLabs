@@ -169,3 +169,291 @@ def install(names: list[str], log: Log) -> bool:
         timeout=1800,
     )
     return rc == 0
+
+
+# ── Mirrors ────────────────────────────────────────────────
+
+# Debian 13 writes deb822 to this file; the older single-line format is kept
+# as a fallback because a restored or hand-edited container may still use it.
+SOURCES_DEB822 = "/etc/apt/sources.list.d/debian.sources"
+SOURCES_LEGACY = "/etc/apt/sources.list"
+
+DEFAULT_MIRROR = "http://deb.debian.org/debian/"
+
+# Debian publishes a deb822 mirror masterlist, and netselect-apt exists to
+# pick from it. Neither is used directly here: netselect-apt writes the old
+# sources.list format and ranks by ICMP latency, which says little about
+# throughput on mobile data. The list is fetched instead, and candidates are
+# measured by downloading from them.
+#
+# Note the masterlist, not www.debian.org/mirror/mirrors_full: that page is
+# HTML meant for people, which netselect-apt scrapes. This one is deb822.
+#
+# The seed below is the fallback for when the list cannot be fetched — on a
+# container whose current mirror is unreachable, which is exactly when someone
+# opens this screen. Verified against debian.org/mirror/list.
+MIRROR_LIST_URL = "http://mirror-master.debian.org/status/Mirrors.masterlist"
+
+# Only these countries are offered. The full list is hundreds of entries and
+# a mirror three continents away is not a useful suggestion.
+NEARBY_COUNTRIES = ("Indonesia", "Singapore", "Malaysia", "Australia")
+
+SEED_MIRRORS = (
+    ("deb.debian.org", "Global CDN (default)", DEFAULT_MIRROR),
+    ("kartolo", "Indonesia — Surabaya", "http://kartolo.sby.datautama.net.id/debian/"),
+    ("unair", "Indonesia — Universitas Airlangga", "http://mirror.unair.ac.id/debian/"),
+    ("heru", "Indonesia", "http://mr.heru.id/debian/"),
+    ("djvg", "Singapore", "http://mirror.djvg.sg/debian/"),
+    ("ossmirror", "Singapore", "http://ossmirror.mycloud.services/debian/"),
+)
+
+MIRRORS = SEED_MIRRORS
+
+
+def fetch_mirrors(log: Log = _noop) -> list[tuple[str, str, str]]:
+    """Debian's own mirror list, filtered to nearby countries.
+
+    Falls back to the seed list rather than failing: this screen is often
+    opened precisely because the current mirror is unreachable.
+    """
+    log(f"Fetching {MIRROR_LIST_URL}")
+    rc, body = run_cmd(f'curl -fsSL --max-time 20 "{MIRROR_LIST_URL}"', timeout=40)
+    if rc != 0 or not body.strip():
+        log("Could not fetch the list, using the built-in one.")
+        return list(SEED_MIRRORS)
+
+    found: list[tuple[str, str, str]] = [SEED_MIRRORS[0]]
+    country = ""
+    site = ""
+    for raw in body.splitlines():
+        line = raw.strip()
+        if line.startswith("Country:"):
+            country = line.split(":", 1)[1].strip()
+        elif line.startswith("Site:"):
+            site = line.split(":", 1)[1].strip()
+        elif line.startswith("Archive-http:") and site:
+            if any(c in country for c in NEARBY_COUNTRIES):
+                path = line.split(":", 1)[1].strip()
+                where = country.split(None, 1)[-1] if country else "unknown"
+                found.append((site, where, f"http://{site}{path}"))
+            site = ""
+
+    if len(found) == 1:
+        log("The list had no nearby mirrors, using the built-in one.")
+        return list(SEED_MIRRORS)
+
+    log(f"{len(found)} nearby mirrors")
+    return found
+
+
+def measure_mirror(uri: str, seconds: int = 8) -> float | None:
+    """Throughput in KB/s, or None if the mirror did not answer.
+
+    Measured by fetching a real index file rather than pinging: latency is a
+    poor proxy for how fast apt will actually pull packages over mobile data.
+    """
+    url = uri.rstrip("/") + "/dists/trixie/Release"
+    rc, out = run_cmd(
+        f'curl -fsS --max-time {seconds} -o /dev/null '
+        f'-w "%{{speed_download}}" "{url}"',
+        timeout=seconds + 5,
+    )
+    if rc != 0:
+        return None
+    try:
+        return float(out.strip().replace(",", ".")) / 1024
+    except ValueError:
+        return None
+
+
+def _sources_file() -> str | None:
+    """Whichever sources file this container actually uses."""
+    for path in (SOURCES_DEB822, SOURCES_LEGACY):
+        if os.path.exists(container_path(path)):
+            return path
+    return None
+
+
+def current_mirror() -> str | None:
+    """The URI the container fetches Debian from."""
+    path = _sources_file()
+    if path is None:
+        return None
+    try:
+        with open(container_path(path), encoding="utf-8") as f:
+            content = f.read()
+    except OSError:
+        return None
+
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("URIs:"):
+            return stripped.split(":", 1)[1].strip().split()[0]
+        if stripped.startswith("deb ") and "://" in stripped:
+            return stripped.split()[1]
+    return None
+
+
+def set_mirror(uri: str, log: Log) -> bool:
+    """Point the container's Debian sources at `uri`.
+
+    Rewritten from the host through the rootfs: no container login, and it
+    works on a container that cannot currently reach any mirror at all.
+    """
+    path = _sources_file()
+    if path is None:
+        log("[red]No Debian sources file in the container.[/red]")
+        return False
+
+    target = container_path(path)
+    try:
+        with open(target, encoding="utf-8") as f:
+            lines = f.read().splitlines()
+    except OSError as e:
+        log(f"[red]Could not read {path}: {e}[/red]")
+        return False
+
+    changed = []
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("URIs:"):
+            lines[i] = f"URIs: {uri}"
+            changed.append(i)
+        elif stripped.startswith(("deb ", "deb-src ")) and "://" in stripped:
+            parts = stripped.split()
+            parts[1] = uri
+            lines[i] = " ".join(parts)
+            changed.append(i)
+
+    if not changed:
+        log(f"[red]No mirror line found in {path}.[/red]")
+        return False
+
+    try:
+        with open(target, "w", encoding="utf-8", newline="\n") as f:
+            f.write("\n".join(lines) + "\n")
+    except OSError as e:
+        log(f"[red]Could not write {path}: {e}[/red]")
+        return False
+
+    log(f"{path} now points at {uri}")
+    log("")
+    return update_lists(log)
+
+
+# ── Third-party repositories ───────────────────────────────
+
+KEYRING_DIR = "/etc/apt/keyrings"
+
+
+class Repo(NamedTuple):
+    name: str
+    description: str
+    # deb822 stanza, written to /etc/apt/sources.list.d/<name>.sources
+    stanza: str
+    # Signing key to fetch, or None when the Debian keyring already covers it.
+    key_url: str | None = None
+
+
+def _repo_file(repo: Repo) -> str:
+    return f"/etc/apt/sources.list.d/arinanolabs-{repo.name}.sources"
+
+
+def _key_file(repo: Repo) -> str:
+    return f"{KEYRING_DIR}/arinanolabs-{repo.name}.asc"
+
+
+REPOS = (
+    Repo(
+        "backports",
+        "Debian backports — newer packages, same archive and key",
+        "Types: deb\n"
+        "URIs: @MIRROR@\n"
+        "Suites: trixie-backports\n"
+        "Components: main contrib non-free-firmware\n"
+        "Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg\n",
+    ),
+    Repo(
+        "mozilla",
+        "Mozilla — Firefox, tracking release rather than ESR",
+        "Types: deb\n"
+        "URIs: https://packages.mozilla.org/apt\n"
+        "Suites: mozilla\n"
+        "Components: main\n"
+        f"Signed-By: {KEYRING_DIR}/arinanolabs-mozilla.asc\n",
+        "https://packages.mozilla.org/apt/repo-signing-key.gpg",
+    ),
+    Repo(
+        "vscode",
+        "Microsoft — Visual Studio Code",
+        "Types: deb\n"
+        "URIs: https://packages.microsoft.com/repos/code\n"
+        "Suites: stable\n"
+        "Components: main\n"
+        f"Signed-By: {KEYRING_DIR}/arinanolabs-vscode.asc\n",
+        "https://packages.microsoft.com/keys/microsoft.asc",
+    ),
+)
+
+
+def repo_by_name(name: str) -> Repo | None:
+    return next((r for r in REPOS if r.name == name), None)
+
+
+def repo_enabled(repo: Repo) -> bool:
+    return os.path.exists(container_path(_repo_file(repo)))
+
+
+def add_repo(repo: Repo, log: Log) -> bool:
+    """Write the repository and its key into the container.
+
+    The key is fetched from Termux, which has curl; the vanilla image does
+    not, and installing one to install another is a poor trade. deb822
+    accepts an ASCII-armoured key directly, so nothing has to be dearmoured.
+    """
+    if repo.key_url:
+        key_target = container_path(_key_file(repo))
+        try:
+            os.makedirs(os.path.dirname(key_target), exist_ok=True)
+        except OSError as e:
+            log(f"[red]Could not create {KEYRING_DIR}: {e}[/red]")
+            return False
+
+        log(f"Fetching the signing key from {repo.key_url}")
+        rc = stream_cmd(f'curl -fsSL "{repo.key_url}" -o "{key_target}"', log, timeout=120)
+        if rc != 0 or not os.path.exists(key_target):
+            log("[red]Could not fetch the key — the repository was not added.[/red]")
+            return False
+
+    stanza = repo.stanza.replace("@MIRROR@", current_mirror() or DEFAULT_MIRROR)
+    target = container_path(_repo_file(repo))
+    try:
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with open(target, "w", encoding="utf-8", newline="\n") as f:
+            f.write(stanza)
+    except OSError as e:
+        log(f"[red]Could not write {_repo_file(repo)}: {e}[/red]")
+        return False
+
+    log(f"Added {_repo_file(repo)}")
+    log("")
+    return update_lists(log)
+
+
+def remove_repo(repo: Repo, log: Log) -> bool:
+    removed = False
+    for path in (_repo_file(repo), _key_file(repo)):
+        target = container_path(path)
+        if os.path.exists(target):
+            try:
+                os.remove(target)
+                log(f"Removed {path}")
+                removed = True
+            except OSError as e:
+                log(f"[red]Could not remove {path}: {e}[/red]")
+                return False
+    if not removed:
+        log("Nothing to remove.")
+        return True
+    log("")
+    return update_lists(log)

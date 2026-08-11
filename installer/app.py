@@ -772,9 +772,12 @@ class ToolsScreen(CopyableScreen):
         # The command and its raw output. A search that finds nothing and one
         # that failed look identical without this.
         yield RichLog(id="tools-log", markup=True, wrap=True, auto_scroll=True)
-        with Horizontal(id="action-buttons"):
-            yield Button("C", id="copy")
+        with Grid(classes="row3"):
+            yield Button("Mirror", id="mirror")
+            yield Button("Repos", id="repos")
             yield Button("Install", id="install", variant="success", disabled=True)
+        with Grid(classes="row2"):
+            yield Button("C", id="copy")
             yield Button("Back", id="back", variant="primary")
         yield Footer()
 
@@ -877,6 +880,266 @@ class ToolsScreen(CopyableScreen):
             for p in self._results
         ]
         return "\n".join(lines)
+
+    @on(Button.Pressed, "#mirror")
+    def _mirror(self) -> None:
+        self.app.push_screen(MirrorScreen())
+
+    @on(Button.Pressed, "#repos")
+    def _repos(self) -> None:
+        self.app.push_screen(ReposScreen())
+
+    @on(Button.Pressed, "#back")
+    def action_back(self) -> None:
+        self.app.pop_screen()
+
+
+class MirrorScreen(CopyableScreen):
+    """Pick which Debian mirror the container fetches from.
+
+    The list comes from Debian's own deb822 masterlist rather than being
+    hardcoded, and candidates are measured by downloading from them. Latency
+    ranking, which is what netselect-apt does, says little about throughput
+    on mobile data.
+    """
+
+    BINDINGS = [("escape", "back", "Back")]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._mirrors: list[tuple[str, str, str]] = list(packages.SEED_MIRRORS)
+        self._speeds: dict[str, float | None] = {}
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Label("Debian mirror", classes="screen-title")
+        yield Static("", id="mirror-current")
+        yield DataTable(id="mirror-table", cursor_type="row", zebra_stripes=True)
+        with Grid(classes="row3"):
+            yield Button("Refresh", id="refresh")
+            yield Button("Measure", id="measure")
+            yield Button("Use", id="use", variant="success")
+        with Grid(classes="row2"):
+            yield Button("C", id="copy")
+            yield Button("Back", id="back", variant="primary")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one("#mirror-table", DataTable).add_columns(
+            "Mirror", "Where", "KB/s", "URI"
+        )
+        self._fill()
+        self._refresh_current()
+
+    def on_screen_resume(self) -> None:
+        self._refresh_current()
+
+    def _refresh_current(self) -> None:
+        current = packages.current_mirror()
+        self.query_one("#mirror-current", Static).update(
+            f"Currently: {current}" if current else "No sources file in the container"
+        )
+
+    def _fill(self) -> None:
+        table = self.query_one("#mirror-table", DataTable)
+        table.clear()
+        for name, where, uri in self._mirrors:
+            speed = self._speeds.get(uri)
+            if speed is None:
+                shown = "-" if uri not in self._speeds else "failed"
+            else:
+                shown = f"{speed:,.0f}"
+            table.add_row(name, where, shown, uri)
+
+    @on(Button.Pressed, "#refresh")
+    def _refresh(self) -> None:
+        self.query_one("#mirror-current", Static).update("Fetching Debian's mirror list...")
+        self.fetch()
+
+    @work(thread=True)
+    def fetch(self) -> None:
+        mirrors = packages.fetch_mirrors()
+        self.app.call_from_thread(self._took_list, mirrors)
+
+    def _took_list(self, mirrors: list[tuple[str, str, str]]) -> None:
+        self._mirrors = mirrors
+        self._speeds = {}
+        self._fill()
+        self._refresh_current()
+
+    @on(Button.Pressed, "#measure")
+    def _measure(self) -> None:
+        self.query_one("#mirror-current", Static).update(
+            f"Measuring {len(self._mirrors)} mirrors, this takes a moment..."
+        )
+        self.measure_all()
+
+    @work(thread=True)
+    def measure_all(self) -> None:
+        for _name, _where, uri in list(self._mirrors):
+            speed = packages.measure_mirror(uri)
+            self.app.call_from_thread(self._took_speed, uri, speed)
+        self.app.call_from_thread(self._sort_by_speed)
+
+    def _took_speed(self, uri: str, speed: float | None) -> None:
+        self._speeds[uri] = speed
+        self._fill()
+
+    def _sort_by_speed(self) -> None:
+        self._mirrors.sort(key=lambda m: -(self._speeds.get(m[2]) or -1))
+        self._fill()
+        fastest = next(
+            ((n, self._speeds[u]) for n, _, u in self._mirrors if self._speeds.get(u)),
+            None,
+        )
+        self.query_one("#mirror-current", Static).update(
+            f"Fastest: {fastest[0]} at {fastest[1]:,.0f} KB/s — highlight it and press Use"
+            if fastest
+            else "No mirror answered."
+        )
+
+    def copy_payload(self) -> str:
+        lines = [f"arinanoLabs mirrors - {get_version()}", ""]
+        lines.append(f"current: {packages.current_mirror()}")
+        lines.append("")
+        for name, where, uri in self._mirrors:
+            speed = self._speeds.get(uri)
+            rate = f"{speed:,.0f} KB/s" if speed else ("failed" if uri in self._speeds else "-")
+            lines.append(f"  {rate:>12}  {name:<34} {where}")
+        return "\n".join(lines)
+
+    @on(Button.Pressed, "#use")
+    def _use(self) -> None:
+        row = self.query_one("#mirror-table", DataTable).cursor_row
+        if row is None or not (0 <= row < len(self._mirrors)):
+            self.notify("Highlight a mirror first.", severity="warning")
+            return
+        name, where, uri = self._mirrors[row]
+
+        def run(log) -> None:
+            packages.set_mirror(uri, log)
+
+        self.app.push_screen(
+            ConfirmScreen(
+                f"Use {name}",
+                f"{where}\n\n{uri}\n\n"
+                "The container's sources are rewritten and the package lists "
+                "refetched. Termux keeps its own mirror.",
+                confirm_label="Switch",
+            ),
+            when_confirmed(self.app, lambda: ActionScreen(f"Mirror: {name}", run)),
+        )
+
+    @on(Button.Pressed, "#back")
+    def action_back(self) -> None:
+        self.app.pop_screen()
+
+
+class ReposScreen(CopyableScreen):
+    """Third-party apt repositories, added with their signing keys."""
+
+    BINDINGS = [("escape", "back", "Back")]
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Label("Extra repositories", classes="screen-title")
+        yield Static(
+            "Each is written with its own signing key under /etc/apt/keyrings, "
+            "so apt verifies it the same way it verifies Debian.",
+            id="repos-note",
+        )
+        yield DataTable(id="repos-table", cursor_type="row", zebra_stripes=True)
+        with Grid(classes="row3"):
+            yield Button("Enable", id="enable", variant="success")
+            yield Button("Remove", id="remove", variant="error")
+            yield Button("Re-scan", id="rescan")
+        with Grid(classes="row2"):
+            yield Button("C", id="copy")
+            yield Button("Back", id="back", variant="primary")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one("#repos-table", DataTable).add_columns(
+            "", "Repository", "What it gives you"
+        )
+        self._fill()
+
+    def on_screen_resume(self) -> None:
+        self._fill()
+
+    def _fill(self) -> None:
+        table = self.query_one("#repos-table", DataTable)
+        table.clear()
+        for repo in packages.REPOS:
+            mark = "[green]on[/green]" if packages.repo_enabled(repo) else ""
+            table.add_row(mark, repo.name, repo.description)
+
+    def _selected(self):
+        row = self.query_one("#repos-table", DataTable).cursor_row
+        if row is None or not (0 <= row < len(packages.REPOS)):
+            return None
+        return packages.REPOS[row]
+
+    def copy_payload(self) -> str:
+        lines = [f"arinanoLabs repositories - {get_version()}", ""]
+        lines += [
+            f"{'on ' if packages.repo_enabled(r) else '   '} {r.name:<12} {r.description}"
+            for r in packages.REPOS
+        ]
+        return "\n".join(lines)
+
+    @on(Button.Pressed, "#rescan")
+    def _rescan(self) -> None:
+        self._fill()
+
+    @on(Button.Pressed, "#enable")
+    def _enable(self) -> None:
+        repo = self._selected()
+        if repo is None:
+            self.notify("Highlight a repository first.", severity="warning")
+            return
+        if packages.repo_enabled(repo):
+            self.notify(f"{repo.name} is already enabled.", severity="warning")
+            return
+
+        def run(log) -> None:
+            packages.add_repo(repo, log)
+
+        if repo.key_url:
+            provenance = f"\n\nIts signing key comes from:\n{repo.key_url}"
+        else:
+            provenance = "\n\nNo new key: this is the Debian archive you already trust."
+
+        self.app.push_screen(
+            ConfirmScreen(
+                f"Enable {repo.name}",
+                repo.description
+                + provenance
+                + "\n\nA repository you enable can install software on this system.",
+                confirm_label="Enable",
+            ),
+            when_confirmed(self.app, lambda: ActionScreen(f"Enable {repo.name}", run)),
+        )
+
+    @on(Button.Pressed, "#remove")
+    def _remove(self) -> None:
+        repo = self._selected()
+        if repo is None:
+            self.notify("Highlight a repository first.", severity="warning")
+            return
+
+        def run(log) -> None:
+            packages.remove_repo(repo, log)
+
+        self.app.push_screen(
+            ConfirmScreen(
+                f"Remove {repo.name}",
+                "The repository and its key are deleted. Packages already "
+                "installed from it stay, but stop receiving updates.",
+                confirm_label="Remove",
+            ),
+            when_confirmed(self.app, lambda: ActionScreen(f"Remove {repo.name}", run)),
+        )
 
     @on(Button.Pressed, "#back")
     def action_back(self) -> None:

@@ -243,6 +243,21 @@ every search would match nothing and read as "no such package".
 An output pane below the results shows the command and its raw output, because
 a failed search and an empty one otherwise look identical.
 
+**Mirror** switches which Debian mirror the container fetches from. The list is
+not hardcoded: **Refresh** pulls Debian's own deb822 masterlist and keeps the
+nearby countries, and **Measure** times a real download from each and sorts by
+throughput. `netselect-apt` does something similar but ranks by latency and
+writes the old sources format, neither of which suits a phone on mobile data.
+
+**Repos** adds third-party apt repositories, each with its own signing key
+under `/etc/apt/keyrings` so apt verifies it the way it verifies Debian:
+
+| Repo | What it gives you |
+|------|-------------------|
+| `backports` | Newer packages from Debian itself — no new key |
+| `mozilla` | Firefox tracking release rather than ESR |
+| `vscode` | Visual Studio Code |
+
 Search terms and package names are validated against the Debian package-name
 shape and rejected rather than escaped — they end up in a shell command.
 

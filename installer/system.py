@@ -25,10 +25,21 @@ from .const import (
 
 
 def run_cmd(cmd: str, timeout: int = 60) -> tuple[int, str]:
-    """Run a shell command, returning (returncode, combined output)."""
+    """Run a shell command, returning (returncode, combined output).
+
+    Decoded as UTF-8 with replacement rather than the system locale: apt and
+    pactl emit UTF-8, and a locale that cannot represent it turned readable
+    output into an exception rather than text.
+    """
     try:
         result = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True, timeout=timeout
+            cmd,
+            shell=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
         )
         return result.returncode, result.stdout + result.stderr
     except subprocess.TimeoutExpired:
