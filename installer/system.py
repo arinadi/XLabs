@@ -9,6 +9,7 @@ import shutil
 import signal
 import subprocess
 import threading
+import time
 from datetime import datetime, timezone
 
 from .const import HOME_BIN, LAUNCHER_SRC, PREFIX_BIN, PROOT_DIR, REPO_DIR
@@ -48,24 +49,38 @@ def _kill_tree(proc: subprocess.Popen) -> None:
         proc.kill()
 
 
+PROGRESS_INTERVAL = 1.0
+
+
 def stream_cmd(cmd: str, log, timeout: int = 900) -> int:
-    """Run a shell command, sending each output line to `log`.
+    """Run a shell command, sending its output to `log`.
 
     Returns the exit code, or 1 if the command outran `timeout`.
 
+    Output is split on carriage returns as well as newlines. Downloaders
+    redraw a single progress line with \\r and never emit a newline until
+    they finish, so a line-based reader shows nothing at all for the whole
+    transfer — which is why pulling the image looked frozen.
+
+    If `log` provides a `.progress()` method, carriage-return segments go
+    there to be shown in place. Without one they are written to the log at
+    most once every PROGRESS_INTERVAL seconds, so a long download reports
+    movement instead of thousands of near-identical lines.
+
     The deadline is enforced by a watchdog timer rather than checked while
-    reading output. A stalled download produces no lines at all, so a
-    per-line check never fires — which left every long operation here with
-    no working timeout.
+    reading. A stalled download produces no output at all, so a check that
+    only runs per line never fires.
     """
+    progress = getattr(log, "progress", None)
+
+    # Binary pipe: os.read returns whatever has arrived rather than waiting
+    # for a full buffer, which is what makes live progress possible.
     proc = subprocess.Popen(
         cmd,
         shell=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-        errors="replace",
+        bufsize=0,
         # Own process group, so the whole tree can be killed at once.
         start_new_session=os.name != "nt",
     )
@@ -78,10 +93,54 @@ def stream_cmd(cmd: str, log, timeout: int = 900) -> int:
 
     watchdog = threading.Timer(timeout, _expire)
     watchdog.start()
+
+    last_progress = 0.0
+
+    def emit(text: str, is_progress: bool) -> None:
+        nonlocal last_progress
+        text = text.rstrip()
+        if not text:
+            return
+        if not is_progress:
+            log(text)
+            return
+        if progress is not None:
+            progress(text)
+            return
+        now = time.monotonic()
+        if now - last_progress >= PROGRESS_INTERVAL:
+            last_progress = now
+            log(text)
+
     try:
         assert proc.stdout is not None
-        for line in proc.stdout:
-            log(line.rstrip())
+        fd = proc.stdout.fileno()
+        buffer = b""
+        while True:
+            try:
+                chunk = os.read(fd, 4096)
+            except OSError:
+                break
+            if not chunk:
+                break
+            buffer += chunk
+            while True:
+                position = min(
+                    (i for i in (buffer.find(b"\n"), buffer.find(b"\r")) if i >= 0),
+                    default=-1,
+                )
+                if position < 0:
+                    break
+                segment, terminator = buffer[:position], buffer[position : position + 1]
+                buffer = buffer[position + 1 :]
+                # \r\n is one break, not two.
+                if terminator == b"\r" and buffer[:1] == b"\n":
+                    buffer = buffer[1:]
+                    terminator = b"\n"
+                emit(segment.decode(errors="replace"), terminator == b"\r")
+
+        if buffer:
+            emit(buffer.decode(errors="replace"), False)
         rc = proc.wait()
     finally:
         watchdog.cancel()

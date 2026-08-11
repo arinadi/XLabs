@@ -155,6 +155,25 @@ class ConfirmScreen(ModalScreen[bool]):
 # ── Generic action runner ──────────────────────────────────
 
 
+class _Logger:
+    """A callable log that also carries an in-place progress line.
+
+    stream_cmd looks for a `.progress()` method to route carriage-return
+    redraws to. Without it a download either shows nothing at all or fills
+    the pane with thousands of near-identical lines.
+    """
+
+    def __init__(self, write, progress) -> None:
+        self._write = write
+        self._progress = progress
+
+    def __call__(self, message: str = "") -> None:
+        self._write(message)
+
+    def progress(self, message: str) -> None:
+        self._progress(message)
+
+
 class ActionScreen(CopyableScreen):
     """Runs `runner(log)` in a thread and streams its output."""
 
@@ -177,6 +196,7 @@ class ActionScreen(CopyableScreen):
         yield Header()
         yield Label(self._title, classes="screen-title")
         yield RichLog(id="log", markup=True, wrap=True, auto_scroll=True)
+        yield Static("", id="progress")
         with Horizontal(id="action-buttons"):
             yield Button("C", id="copy")
             if self._offer_restart:
@@ -194,13 +214,21 @@ class ActionScreen(CopyableScreen):
     def copy_payload(self) -> str:
         return "\n".join(self._lines)
 
+    def _set_progress(self, message: str) -> None:
+        self.query_one("#progress", Static).update(message)
+
     @work(thread=True)
     def run_task(self) -> None:
-        def log(message: str = "") -> None:
+        def write(message: str = "") -> None:
             assert self._log is not None
             # Markup is for the pane; the copy should be readable as text.
             self._lines.append(Text.from_markup(message).plain)
             self.app.call_from_thread(self._log.write, message)
+
+        def progress(message: str) -> None:
+            self.app.call_from_thread(self._set_progress, message)
+
+        log = _Logger(write, progress)
 
         try:
             self._runner(log)
@@ -210,6 +238,7 @@ class ActionScreen(CopyableScreen):
 
     def _finish(self) -> None:
         self._busy = False
+        self._set_progress("")
         button = self.query_one("#back", Button)
         button.disabled = False
         if self._offer_restart:

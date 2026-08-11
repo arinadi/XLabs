@@ -78,6 +78,57 @@ def test_stream_cmd_returns_output_and_code() -> None:
     check("hello" in lines, f"output not captured: {lines}")
 
 
+def test_stream_cmd_shows_carriage_return_progress() -> None:
+    """Regression: downloaders redraw one line with CR and emit no newline.
+
+    A line-based reader showed nothing for the whole transfer, so pulling the
+    image looked frozen.
+    """
+    # chr(13)/chr(10) rather than escapes: this source is written to a file
+    # and read back, and backslashes do not survive that round trip cleanly.
+    probe = "\n".join([
+        "import sys, time",
+        "for i in range(0, 101, 25):",
+        "    sys.stdout.write(chr(13) + 'Downloading %d%%' % i)",
+        "    sys.stdout.flush()",
+        "    time.sleep(0.05)",
+        "sys.stdout.write(chr(10) + 'Done' + chr(10))",
+    ])
+    script = os.path.join(tempfile.gettempdir(), "arinanolabs-progress-probe.py")
+    with open(script, "w", encoding="utf-8") as f:
+        f.write(probe)
+
+    command = '"%s" "%s"' % (sys.executable, script)
+
+    class Logger(list):
+        def __call__(self, message=""):
+            self.append(("log", message))
+
+        def progress(self, message):
+            self.append(("progress", message))
+
+    logger = Logger()
+    rc = stream_cmd(command, logger, timeout=30)
+    check(rc == 0, f"expected rc=0, got {rc}: {list(logger)}")
+
+    progress = [m for kind, m in logger if kind == "progress"]
+    check(len(progress) >= 3, f"progress was not reported live: {list(logger)}")
+    check(
+        any("Done" in m for kind, m in logger if kind == "log"),
+        f"the final line never arrived: {list(logger)}",
+    )
+
+    # Without .progress() the redraws are throttled into the log rather than
+    # flooding it.
+    plain: list[str] = []
+    rc = stream_cmd(command, plain.append, timeout=30)
+    check(rc == 0, f"expected rc=0, got {rc}: {plain}")
+    check(plain, "the throttled path produced nothing at all")
+    check(len(plain) < 6, f"the throttled path flooded the log: {plain}")
+
+    os.remove(script)
+
+
 def test_preflight_shape() -> None:
     checks = run_all_checks()
     names = {c.name for c in checks}
@@ -494,6 +545,7 @@ def main() -> int:
     tests = [
         test_stream_cmd_timeout_kills_silent_process,
         test_stream_cmd_returns_output_and_code,
+        test_stream_cmd_shows_carriage_return_progress,
         test_preflight_shape,
         test_doctor_scan_shape,
         test_tui_navigation,

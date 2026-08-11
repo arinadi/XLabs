@@ -159,3 +159,11 @@ ConfirmScreen {
     height: 1fr;
     margin: 1 2;
 }
+
+/* Live progress from a downloader, redrawn in place above the buttons. */
+#progress {
+    height: auto;
+    margin: 0 2;
+    padding: 0 1;
+    color: $success;
+}
