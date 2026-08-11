@@ -34,6 +34,7 @@ from installer.app import (  # noqa: E402
     ArinanoLabsApp,
     ConfirmScreen,
     DoctorScreen,
+    DupesScreen,
     MainScreen,
     StatusScreen,
     ToolsScreen,
@@ -284,6 +285,18 @@ async def test_narrow_terminal_layout() -> None:
                 # Raises OutOfBounds if the control is not on screen.
                 await pilot.click("#copy")
                 await pilot.pause()
+
+                if entry == "#doctor":
+                    # Reached through Doctor, so it needs checking at width too.
+                    await pilot.click("#dupes")
+                    await pilot.pause()
+                    check(isinstance(app.screen, DupesScreen), f"got {app.screen!r}")
+                    await pilot.click("#copy")
+                    await pilot.pause()
+                    await pilot.click("#back")
+                    await pilot.pause()
+                    check(isinstance(app.screen, DoctorScreen), "dupes did not return")
+
                 await pilot.click("#back")
                 await pilot.pause()
                 check(
@@ -299,6 +312,38 @@ def _expected_export_path() -> str:
         else tempfile.gettempdir()
     )
     return os.path.join(directory, app_module.EXPORT_NAME)
+
+
+def test_termux_duplicates_are_safe() -> None:
+    """Never offer to remove anything outside the candidate list."""
+    dupes = doctor.termux_duplicates()
+    check(isinstance(dupes, list), f"expected a list, got {type(dupes)}")
+    for dupe in dupes:
+        check(
+            dupe.package in doctor.TERMUX_DUPLICATES,
+            f"{dupe.package} is not a removal candidate",
+        )
+
+    # Everything the project itself runs on must be unreachable by this path.
+    for essential in (
+        "python", "python-pip", "git", "proot-distro", "termux-x11-nightly",
+        "pulseaudio", "termux-tools", "bash", "coreutils", "apt", "dpkg",
+        "mesa-zink", "virglrenderer-android", "angle-android",
+    ):
+        check(
+            essential not in doctor.TERMUX_DUPLICATES,
+            f"{essential} must never be a removal candidate",
+        )
+
+    lines: list[str] = []
+    check(
+        not doctor.remove_termux_packages(["coreutils"], lines.append),
+        "removing a non-candidate package was not refused",
+    )
+    check(
+        any("Refusing" in line for line in lines),
+        f"refusal was not explained: {lines}",
+    )
 
 
 def test_export_never_creates_a_repo_directory() -> None:
@@ -336,6 +381,7 @@ def main() -> int:
         test_escape_cannot_leave_running_action,
         test_copy_buttons_export_output,
         test_narrow_terminal_layout,
+        test_termux_duplicates_are_safe,
         test_export_never_creates_a_repo_directory,
     ]
 

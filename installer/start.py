@@ -74,7 +74,7 @@ def stop_desktop(log=_noop) -> bool:
     #    no D-Bus to carry the request, this simply does nothing.
     if is_running():
         log("Asking the session to log out...")
-        if _write_container_script("arinanolabs-logout.sh", LOGOUT_SCRIPT):
+        if write_container_script("arinanolabs-logout.sh", LOGOUT_SCRIPT):
             run_cmd(
                 f"proot-distro login {CONTAINER_NAME} --user {ADMIN_USER} "
                 "--shared-tmp -- bash /tmp/arinanolabs-logout.sh",
@@ -285,7 +285,7 @@ def start_xfce4(log=_noop) -> bool:
     # --shared-tmp rather than --shared-x11: every reference setup uses it, and
     # it exposes the whole Termux tmp, which is where the X socket, the D-Bus
     # socket and XDG_RUNTIME_DIR all live.
-    if not _write_container_script(SESSION_SCRIPT_NAME, SESSION_SCRIPT):
+    if not write_container_script(SESSION_SCRIPT_NAME, SESSION_SCRIPT):
         log("  could not write the session script")
         return False
 
@@ -350,7 +350,7 @@ echo "--- exit: $status (124 = still alive when the 8s timeout fired) ---"
 """
 
 
-def _write_container_script(name: str, content: str) -> bool:
+def write_container_script(name: str, content: str) -> bool:
     """Place a script where the container will see it at /tmp/<name>.
 
     Written to the Termux tmp, not the container rootfs: --shared-tmp binds
@@ -376,7 +376,7 @@ def _run_container_probe() -> tuple[int, str]:
     without sharing the X socket at all and duly reported "unable to open
     display" — indistinguishable from the failure it exists to explain.
     """
-    if not _write_container_script("arinanolabs-probe.sh", CONTAINER_PROBE):
+    if not write_container_script("arinanolabs-probe.sh", CONTAINER_PROBE):
         return 1, "could not write the probe script"
 
     return run_cmd(

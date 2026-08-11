@@ -78,6 +78,7 @@ alabs                  # Launch the TUI
 | Extra Tools | Planned, not implemented yet |
 | Status | Environment checks, cache size, version |
 | Doctor | Diagnoses the environment and repairs what it can, in one press |
+| Doctor → Dupes | Tools installed in both Termux and the container |
 | Reset | Deletes the container and pulls a fresh image |
 | Clean Image Cache | Drops downloaded OCI layers, keeps the container |
 
@@ -235,6 +236,26 @@ arinanoLabs/
 ├── docker/dev/         ← Local TUI test harness
 └── docs/               ← Debugging notes and references
 ```
+
+---
+
+## 🔁 Termux and the container overlap
+
+This is by design, and worth knowing before it confuses you. proot-distro binds
+the Termux `$PREFIX` into the container at its original path and **appends**
+`$PREFIX/bin` to the guest's `PATH`, so Termux's own binaries are reachable
+from inside Debian.
+
+Because the append puts Termux last, a tool present in both resolves to the
+Debian copy. The Termux one only runs when Debian lacks the tool — which is
+precisely when you would not expect it. `--shared-tmp` extends the same overlap
+to `/tmp`: the container's `/tmp` *is* the Termux temp directory.
+
+`Doctor → Dupes` lists tools installed on both sides and can uninstall the
+Termux copies, on the assumption that the container is where you work. It only
+offers packages the container is confirmed to provide, and it will not touch
+anything arinanoLabs itself needs — Python, git, proot-distro, Termux:X11,
+PulseAudio or the graphics packages are not candidates.
 
 ---
 
