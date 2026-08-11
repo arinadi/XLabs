@@ -36,11 +36,29 @@ RUN apt-get update && \
 # ── Desktop ────────────────────────────────────────────────────
 # dbus-x11 provides dbus-launch. Guides single it out as the package
 # whose absence causes strange, hard-to-attribute failures.
+#
+# `xorg-` excludes it. The xfce4 metapackage Recommends xorg — the whole
+# X.Org system, server and drivers included — which measured 400 MiB of a
+# 464 MiB layer. None of it can ever run here: the X server is Termux:X11
+# on the Android side. Recommends stay enabled otherwise, since that was
+# the point of the vanilla baseline; this drops the one that is
+# impossible to use.
+#
+# Split in two so a dropped connection retries a chunk rather than the
+# whole desktop. proot-distro pulls layer by layer with no resume inside
+# one, and this is a phone.
+RUN apt-get update && \
+    apt-get install -y \
+        xfwm4 xfce4-session xfce4-settings xfconf \
+        xorg- && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
 RUN apt-get update && \
     apt-get install -y \
         xfce4 \
         xfce4-terminal \
-        dbus-x11 && \
+        dbus-x11 \
+        xorg- && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ── X11 client tools, GL userspace, audio client ───────────────
