@@ -246,6 +246,59 @@ def start_xfce4(log=_noop) -> bool:
     return False
 
 
+# Written into the container's filesystem and run by path. Passing this as a
+# quoted -c argument through proot-distro does not survive: an earlier version
+# used `tr '\n' ' '` inside an already single-quoted host string and the probe
+# died with "unexpected EOF", taking the most useful half of the report with it.
+CONTAINER_PROBE = r"""#!/bin/bash
+echo "whoami:        $(whoami)"
+echo "admin user:    $(id admin 2>&1)"
+echo "startxfce4:    $(command -v startxfce4 || echo MISSING)"
+echo "xfce4-session: $(command -v xfce4-session || echo MISSING)"
+echo "dbus-launch:   $(command -v dbus-launch || echo MISSING)"
+echo "xset:          $(command -v xset || echo MISSING)"
+echo "DBUS address:  ${DBUS_SESSION_BUS_ADDRESS:-(unset)}"
+echo "socket dir:"
+ls -la /tmp/.X11-unix 2>&1 | sed 's/^/  /'
+
+export DISPLAY=:0
+echo "xset q:"
+xset q 2>&1 | head -3 | sed 's/^/  /'
+
+echo "--- xfce4-session foreground run, 8s ---"
+su admin -c '
+export DISPLAY=:0
+export XDG_RUNTIME_DIR=/tmp/runtime-probe
+mkdir -p $XDG_RUNTIME_DIR
+chmod 0700 $XDG_RUNTIME_DIR
+timeout 8 xfce4-session
+' 2>&1 | head -25 | sed 's/^/  /'
+echo "--- exit: $? ---"
+"""
+
+
+def _run_container_probe() -> tuple[int, str]:
+    """Run the probe script inside the container.
+
+    The script is written through the container's rootfs on the host side, so
+    nothing has to survive a round of shell quoting.
+    """
+    rootfs_tmp = os.path.join(PROOT_DIR, "rootfs/tmp")
+    host_path = os.path.join(rootfs_tmp, "arinanolabs-probe.sh")
+    try:
+        os.makedirs(rootfs_tmp, exist_ok=True)
+        with open(host_path, "w", newline="\n") as f:
+            f.write(CONTAINER_PROBE)
+        os.chmod(host_path, 0o755)
+    except OSError as e:
+        return 1, f"could not write the probe script: {e}"
+
+    return run_cmd(
+        f"proot-distro login {CONTAINER_NAME} -- bash /tmp/arinanolabs-probe.sh",
+        timeout=120,
+    )
+
+
 def collect_diagnostics(log=_noop) -> None:
     """Gather everything needed to explain why the desktop never appeared.
 
@@ -277,22 +330,11 @@ def collect_diagnostics(log=_noop) -> None:
 
     log("")
     log("── Container ─────────────────────────────────")
-    probe = (
-        'echo "admin user: $(id admin 2>&1)"; '
-        'echo "startxfce4:  $(command -v startxfce4 || echo MISSING)"; '
-        'echo "xfce4-session: $(command -v xfce4-session || echo MISSING)"; '
-        'echo "dbus-launch: $(command -v dbus-launch || echo MISSING)"; '
-        'echo "xset:        $(command -v xset || echo MISSING)"; '
-        'echo "socket dir:  $(ls /tmp/.X11-unix 2>&1)"; '
-        'echo "x server:    $(DISPLAY=:0 xset q 2>&1 | head -2 | tr \'\\n\' \' \')"'
-    )
-    rc, out = run_cmd(
-        f"proot-distro login {CONTAINER_NAME} -- bash -lc '{probe}'", timeout=90
-    )
+    rc, out = _run_container_probe()
     text = out.strip()
     if not text:
         log(f"  could not enter the container (exit {rc})")
-    for line in text.splitlines()[:20]:
+    for line in text.splitlines()[:40]:
         log(f"  {line}")
 
     log("")
@@ -308,10 +350,14 @@ def collect_diagnostics(log=_noop) -> None:
         log(f"  {line}")
 
     log("")
-    log("[dim]Reading this: if 'x server' answers with keyboard/pointer info,[/dim]")
-    log("[dim]the display path works and the fault is inside the session.[/dim]")
-    log("[dim]If it says 'unable to open display', the socket is not reaching[/dim]")
-    log("[dim]the container and --shared-x11 or the socket cleanup is at fault.[/dim]")
+    log("[dim]Reading this:[/dim]")
+    log("[dim]  xset q answers        -> the display path works; the fault is[/dim]")
+    log("[dim]                           in the session, see the foreground run[/dim]")
+    log("[dim]  unable to open display -> the socket is not reaching the[/dim]")
+    log("[dim]                           container; --shared-x11 or cleanup[/dim]")
+    log("[dim]  'Killed' and nothing else -> Android killed the process; see[/dim]")
+    log("[dim]                           the phantom process killer note in[/dim]")
+    log("[dim]                           the README[/dim]")
 
 
 START_STEPS = [
