@@ -921,6 +921,16 @@ class ToolsScreen(CopyableScreen):
             return None
         return self._results[row]
 
+    @on(DataTable.RowHighlighted, "#tools-table")
+    def _row_highlighted(self) -> None:
+        # A table row is a thin touch target; naming the pick here — not
+        # only inside the confirm dialog — catches a mistap before Install
+        # is even pressed, not only before it runs.
+        pkg = self._selected()
+        if pkg is not None:
+            state = "installed" if pkg.installed else "not installed"
+            self._status(f"Selected: {pkg.name} ({state})")
+
     @on(Button.Pressed, "#install")
     def _install(self) -> None:
         pkg = self._selected()
@@ -991,6 +1001,8 @@ class MirrorScreen(CopyableScreen):
         super().__init__()
         self._mirrors: list[tuple[str, str, str]] = list(packages.SEED_MIRRORS)
         self._speeds: dict[str, float | None] = {}
+        # Kept alongside the widget: Static does not expose its text back.
+        self.status_text = ""
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -1016,9 +1028,13 @@ class MirrorScreen(CopyableScreen):
     def on_screen_resume(self) -> None:
         self._refresh_current()
 
+    def _set_current(self, message: str) -> None:
+        self.status_text = message
+        self.query_one("#mirror-current", Static).update(message)
+
     def _refresh_current(self) -> None:
         current = packages.current_mirror()
-        self.query_one("#mirror-current", Static).update(
+        self._set_current(
             f"Currently: {current}" if current else "No sources file in the container"
         )
 
@@ -1033,9 +1049,28 @@ class MirrorScreen(CopyableScreen):
                 shown = f"{speed:,.0f}"
             table.add_row(name, where, shown, uri)
 
+    def _selected_mirror(self) -> tuple[str, str, str] | None:
+        row = self.query_one("#mirror-table", DataTable).cursor_row
+        if row is None or not (0 <= row < len(self._mirrors)):
+            return None
+        return self._mirrors[row]
+
+    @on(DataTable.RowHighlighted, "#mirror-table")
+    def _row_highlighted(self) -> None:
+        # Reuses the "Currently" line rather than adding a row for this: on
+        # a phone-height screen there is no free row to spare, and a table
+        # row is thin enough to mistap, so naming the pick here — not only
+        # inside the confirm dialog — catches that before Use is pressed.
+        # on_screen_resume and every fetch/measure already restore this
+        # line afterward, so nothing is permanently lost.
+        mirror = self._selected_mirror()
+        if mirror is not None:
+            name, where, _uri = mirror
+            self._set_current(f"Selected: {name} — {where}")
+
     @on(Button.Pressed, "#refresh")
     def _refresh(self) -> None:
-        self.query_one("#mirror-current", Static).update("Fetching Debian's mirror list...")
+        self._set_current("Fetching Debian's mirror list...")
         self.fetch()
 
     @work(thread=True)
@@ -1051,9 +1086,7 @@ class MirrorScreen(CopyableScreen):
 
     @on(Button.Pressed, "#measure")
     def _measure(self) -> None:
-        self.query_one("#mirror-current", Static).update(
-            f"Measuring {len(self._mirrors)} mirrors, this takes a moment..."
-        )
+        self._set_current(f"Measuring {len(self._mirrors)} mirrors, this takes a moment...")
         self.measure_all()
 
     @work(thread=True)
@@ -1074,7 +1107,7 @@ class MirrorScreen(CopyableScreen):
             ((n, self._speeds[u]) for n, _, u in self._mirrors if self._speeds.get(u)),
             None,
         )
-        self.query_one("#mirror-current", Static).update(
+        self._set_current(
             f"Fastest: {fastest[0]} at {fastest[1]:,.0f} KB/s — highlight it and press Use"
             if fastest
             else "No mirror answered."
@@ -1092,11 +1125,11 @@ class MirrorScreen(CopyableScreen):
 
     @on(Button.Pressed, "#use")
     def _use(self) -> None:
-        row = self.query_one("#mirror-table", DataTable).cursor_row
-        if row is None or not (0 <= row < len(self._mirrors)):
+        mirror = self._selected_mirror()
+        if mirror is None:
             self.notify("Highlight a mirror first.", severity="warning")
             return
-        name, where, uri = self._mirrors[row]
+        name, where, uri = mirror
 
         def run(log) -> None:
             packages.set_mirror(uri, log)
@@ -1122,14 +1155,15 @@ class ReposScreen(CopyableScreen):
 
     BINDINGS = [("escape", "back", "Back")]
 
+    NOTE = (
+        "Each is written with its own signing key under /etc/apt/keyrings, "
+        "so apt verifies it the same way it verifies Debian."
+    )
+
     def compose(self) -> ComposeResult:
         yield Header()
         yield Label("Extra repositories", classes="screen-title")
-        yield Static(
-            "Each is written with its own signing key under /etc/apt/keyrings, "
-            "so apt verifies it the same way it verifies Debian.",
-            id="repos-note",
-        )
+        yield Static(self.NOTE, id="repos-note")
         yield DataTable(id="repos-table", cursor_type="row", zebra_stripes=True)
         with Grid(classes="row3"):
             yield Button("Add", id="add", variant="success")
@@ -1144,6 +1178,12 @@ class ReposScreen(CopyableScreen):
     def __init__(self) -> None:
         super().__init__()
         self._repos: list[packages.Repo] = []
+        # Kept alongside the widget: Static does not expose its text back.
+        self.status_text = self.NOTE
+
+    def _note(self, message: str) -> None:
+        self.status_text = message
+        self.query_one("#repos-note", Static).update(message)
 
     def on_mount(self) -> None:
         self.query_one("#repos-table", DataTable).add_columns(
@@ -1163,12 +1203,27 @@ class ReposScreen(CopyableScreen):
         for repo in self._repos:
             mark = "[green]on[/green]" if packages.repo_enabled(repo) else ""
             table.add_row(mark, repo.name, repo.description)
+        # The list just changed shape, so any earlier highlight no longer
+        # points at what it used to.
+        self._note(self.NOTE)
 
     def _selected(self):
         row = self.query_one("#repos-table", DataTable).cursor_row
         if row is None or not (0 <= row < len(self._repos)):
             return None
         return self._repos[row]
+
+    @on(DataTable.RowHighlighted, "#repos-table")
+    def _row_highlighted(self) -> None:
+        # Reuses the note line rather than adding a row for this: on a
+        # phone-height screen there is no free row to spare, and a table
+        # row is thin enough to mistap, so naming the pick here — not only
+        # inside the confirm dialog — catches that before Enable/Remove is
+        # even pressed.
+        repo = self._selected()
+        if repo is not None:
+            state = "enabled" if packages.repo_enabled(repo) else "not enabled"
+            self._note(f"Selected: {repo.name} ({state})")
 
     def copy_payload(self) -> str:
         lines = [f"arinanoLabs repositories - {get_version()}", ""]

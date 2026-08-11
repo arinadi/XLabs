@@ -173,6 +173,18 @@ sequenceDiagram
 
 <!-- screenshot: main menu -->
 
+Built for a thumb, not a mouse: full-width buttons, generous spacing between
+them, and every Back sits at the bottom of its screen — reachable one-handed,
+in the same place every time.
+
+One thing no TUI can control from inside itself: a button's *physical* touch
+size depends on Termux's terminal font size, since height is measured in
+character cells, not pixels. At Termux's default font size a 3-row button
+comfortably clears the 44-48dp minimum most mobile guidelines recommend; below
+roughly **10sp** it starts getting tight. If buttons feel small enough to
+mistap, that is what to raise — pinch-to-zoom in the terminal, or Termux's
+Style menu — not something arinanoLabs can fix from the Python side.
+
 ### Start Desktop
 
 Brings the whole stack up in order, streaming each step:

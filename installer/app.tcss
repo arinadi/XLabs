@@ -10,13 +10,16 @@ Screen {
     align: center top;
 }
 
-/* Button rows, used by the menu and by screens with several actions. */
+/* Button rows, used by the menu and by screens with several actions.
+   grid-gutter is 2, not 1: a destructive button (Remove, Reset) often sits
+   right next to a safe one, and a single-cell gap is thin enough on a
+   touch screen that a mistap lands on the neighbour instead. */
 .row2,
 .row3 {
     width: 100%;
     height: auto;
     grid-rows: 3;
-    grid-gutter: 1;
+    grid-gutter: 2;
     margin-bottom: 1;
 }
 

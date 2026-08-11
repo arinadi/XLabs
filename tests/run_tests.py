@@ -37,6 +37,7 @@ from installer.app import (
     DoctorScreen,
     DupesScreen,
     MainScreen,
+    MirrorScreen,
     ReposScreen,
     StatusScreen,
     SwapScreen,
@@ -1044,6 +1045,57 @@ async def test_tools_screen_searches() -> None:
         check(isinstance(app.screen, MainScreen), f"got {app.screen!r}")
 
 
+async def test_row_selection_shows_before_confirm() -> None:
+    """A DataTable row is a thin touch target — one line tall, no gutter
+    between rows — so a mistap is easy on a phone screen. Repos and Mirror
+    both have real data without a container, so highlighting a row there
+    must update the status line before any button is pressed, not only
+    inside the confirm dialog that follows it."""
+    app = ArinanoLabsApp()
+    async with app.run_test(size=(80, 40)) as pilot:
+        await pilot.pause()
+        await pilot.click("#tools")
+        await pilot.pause()
+
+        await pilot.click("#repos")
+        await pilot.pause()
+        check(isinstance(app.screen, ReposScreen), f"got {app.screen!r}")
+        # DataTable highlights row 0 by default the moment rows exist, so
+        # the note already names a pick before any tap of its own.
+        check(
+            app.screen.status_text.startswith("Selected:"),
+            f"the default row highlight did not update the note: {app.screen.status_text!r}",
+        )
+        table = app.screen.query_one("#repos-table", DataTable)
+        if table.row_count > 1:
+            table.move_cursor(row=1)
+            await pilot.pause()
+            check(
+                app.screen.status_text.startswith("Selected:"),
+                f"highlighting a different repo row lost the note: {app.screen.status_text!r}",
+            )
+        await pilot.click("#back")
+        await pilot.pause()
+        check(isinstance(app.screen, ToolsScreen), "back from Repos did not return")
+
+        await pilot.click("#mirror")
+        await pilot.pause()
+        check(isinstance(app.screen, MirrorScreen), f"got {app.screen!r}")
+        # DataTable highlights row 0 by default the moment rows exist, so
+        # the status line already names a pick before any tap of its own.
+        check(
+            app.screen.status_text.startswith("Selected:"),
+            f"the default row highlight did not update the status: {app.screen.status_text!r}",
+        )
+        # The regular refresh must still restore it afterward — this is a
+        # shared line, not a dedicated one, so nothing may be lost for good.
+        app.screen._refresh_current()
+        check(
+            not app.screen.status_text.startswith("Selected:"),
+            "the highlight text survived a refresh instead of being replaced",
+        )
+
+
 def _expected_export_path() -> str:
     directory = (
         app_module.REPO_DIR
@@ -1140,6 +1192,7 @@ def main() -> int:
         test_validate_custom_repo,
         test_add_repo_screen,
         test_tools_screen_searches,
+        test_row_selection_shows_before_confirm,
         test_other_actions_do_not_offer_restart,
         test_export_never_creates_a_repo_directory,
     ]
