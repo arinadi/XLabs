@@ -32,12 +32,45 @@ PULSE_SERVER = "tcp:127.0.0.1"
 TEST_TONE_NAME = "arinanolabs-test-tone.wav"
 
 PLAY_SCRIPT = f"""#!/bin/bash
-export PULSE_SERVER={PULSE_SERVER}
-echo "server: $PULSE_SERVER"
-pactl info 2>&1 | grep -E "Server (Name|Version)|Default Sink" | sed 's/^/  /'
+# Connecting and playing are different failures, and the old script could not
+# tell them apart: it exported one address, ran paplay, and printed an exit
+# code. If nothing was heard there was no way to know whether the container
+# had reached the server at all.
+
+echo "paplay: $(command -v paplay || echo MISSING)"
+echo "tone:   $(ls -l /tmp/{TEST_TONE_NAME} 2>&1)"
+echo
+
+WORKING=""
+for candidate in "tcp:127.0.0.1" "127.0.0.1" "tcp:127.0.0.1:4713"; do
+    if PULSE_SERVER="$candidate" pactl info >/dev/null 2>&1; then
+        echo "connects: $candidate"
+        [ -z "$WORKING" ] && WORKING="$candidate"
+    else
+        echo "refused:  $candidate"
+    fi
+done
+echo
+
+if [ -z "$WORKING" ]; then
+    echo "No address reached the server. One attempt in full:"
+    PULSE_SERVER="tcp:127.0.0.1" pactl info 2>&1 | sed 's/^/    /'
+    exit 1
+fi
+
+export PULSE_SERVER="$WORKING"
+echo "using $PULSE_SERVER"
+pactl info 2>&1 | grep -E "Server String|Server Name|Default Sink" | sed 's/^/    /'
+echo
+echo "sinks visible from in here:"
+pactl list sinks short 2>&1 | sed 's/^/    /'
+echo
+echo "sink volume and mute state:"
+pactl list sinks 2>&1 | grep -E "^\s+(Volume|Mute)" | head -4 | sed 's/^/    /'
+echo
 echo "playing..."
-paplay /tmp/{TEST_TONE_NAME} 2>&1
-echo "exit: $?"
+paplay --verbose /tmp/{TEST_TONE_NAME} 2>&1 | sed 's/^/    /'
+echo "exit: ${{PIPESTATUS[0]}}"
 """
 
 
@@ -178,10 +211,13 @@ def test(log: Log) -> None:
     )
 
     log("")
-    log("[dim]Heard both     -> audio works; check the app's own volume.[/dim]")
-    log("[dim]Termux only    -> the container cannot reach the server; check[/dim]")
-    log("[dim]                  the TCP module and PULSE_SERVER.[/dim]")
-    log("[dim]Heard neither  -> the Android side has no working sink.[/dim]")
+    log("[dim]Reading the container half:[/dim]")
+    log("[dim]  every address refused  -> the module is listening but the[/dim]")
+    log("[dim]     container cannot reach it; check that PulseAudio really[/dim]")
+    log("[dim]     bound the TCP port.[/dim]")
+    log("[dim]  connects, exit 0, silent -> the path works and the sound is[/dim]")
+    log("[dim]     going somewhere else. Check the mute and volume lines.[/dim]")
+    log("[dim]  connects, non-zero exit  -> the error above says why.[/dim]")
     log("")
     log("[dim]Recording is not possible on this stack: the Termux app does[/dim]")
     log("[dim]not declare RECORD_AUDIO, so there is no microphone source.[/dim]")
