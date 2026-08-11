@@ -530,9 +530,29 @@ def swap_status() -> tuple[int | None, bool]:
     return _ram_total_mb(), _swap_active()
 
 
+def _ensure_swap_tools(log: Log) -> bool:
+    """mkswap/swapon come from util-linux, which is not part of Termux's
+    default bootstrap — a fresh install genuinely does not have them yet,
+    which is exactly what "mkswap not found" from a real device turned out
+    to mean, not a broken PATH."""
+    if shutil.which("mkswap") and shutil.which("swapon"):
+        return True
+    log("  mkswap/swapon not found — installing util-linux")
+    if stream_cmd("pkg install -y util-linux", log, timeout=300) != 0:
+        log("  could not install util-linux")
+        return False
+    if not (shutil.which("mkswap") and shutil.which("swapon")):
+        log("  util-linux installed but mkswap/swapon are still missing")
+        return False
+    return True
+
+
 def create_swap(log: Log) -> bool:
     """Create (if needed) and enable SWAP_FILE. Only call this after the
     user has explicitly confirmed — see the module docstring above."""
+    if not _ensure_swap_tools(log):
+        return False
+
     if os.path.exists(SWAP_FILE):
         log(f"  {SWAP_FILE} already exists")
     else:
