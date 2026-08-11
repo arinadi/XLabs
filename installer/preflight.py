@@ -21,6 +21,9 @@ class CheckResult(NamedTuple):
     name: str
     ok: bool
     message: str
+    # True when the check could not be performed at all. Distinct from ok=False,
+    # which asserts the thing is genuinely absent.
+    unknown: bool = False
 
 
 def check_internet() -> CheckResult:
@@ -66,24 +69,56 @@ def check_x11_app() -> CheckResult:
 
     Without it the desktop starts but has nowhere to render, so this is worth
     reporting on its own rather than folding into the package check.
+
+    Querying it from Termux is fiddly. `--user 0` is required on devices with
+    a work profile or Samsung Secure Folder, where a bare query fails with
+    "Shell does not have permission to access user <n>". pm also needs stdin
+    off the terminal and stderr folded in, or it trips over the character
+    device. When the query itself fails the result is `unknown`, not
+    "missing" — those are different answers and only one of them is
+    actionable.
     """
     pm = shutil.which("pm")
     if pm is None and os.path.exists("/system/bin/pm"):
         pm = "/system/bin/pm"
     if pm is None:
-        return CheckResult("X11 app", False, "Cannot query installed apps")
+        return CheckResult("X11 app", False, "Cannot query installed apps", unknown=True)
 
-    try:
-        result = subprocess.run(
-            [pm, "list", "packages", X11_PACKAGE],
-            capture_output=True, text=True, timeout=15,
+    attempts = (
+        [pm, "list", "packages", "--user", "0", X11_PACKAGE],
+        [pm, "list", "packages", X11_PACKAGE],
+    )
+    for argv in attempts:
+        try:
+            result = subprocess.run(
+                argv,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=20,
+            )
+        except (OSError, subprocess.SubprocessError):
+            continue
+
+        out = result.stdout or ""
+        if f"package:{X11_PACKAGE}" in out:
+            return CheckResult("X11 app", True, "Installed")
+
+        # An empty, successful query is a real answer: the app is not there.
+        lowered = out.lower()
+        refused = (
+            result.returncode != 0
+            or "exception" in lowered
+            or "denial" in lowered
+            or "does not have permission" in lowered
         )
-    except (OSError, subprocess.SubprocessError):
-        return CheckResult("X11 app", False, "Cannot query installed apps")
+        if not refused:
+            return CheckResult("X11 app", False, f"Missing — sideload from {X11_APK_URL}")
 
-    if X11_PACKAGE in result.stdout:
-        return CheckResult("X11 app", True, "Installed")
-    return CheckResult("X11 app", False, f"Missing — sideload from {X11_APK_URL}")
+    return CheckResult(
+        "X11 app", False, "pm refused the query — check manually", unknown=True
+    )
 
 
 def check_container() -> CheckResult:

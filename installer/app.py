@@ -130,7 +130,11 @@ class StatusScreen(Screen):
     @work(thread=True)
     def load_status(self) -> None:
         rows = [
-            (check.name, "ok" if check.ok else "no", check.message)
+            (
+                check.name,
+                "unknown" if check.unknown else ("ok" if check.ok else "no"),
+                check.message,
+            )
             for check in run_all_checks()
         ]
         rows.append(
@@ -144,7 +148,11 @@ class StatusScreen(Screen):
     def _fill(self, rows: list[tuple[str, str, str]]) -> None:
         table = self.query_one("#status-table", DataTable)
         for name, state, detail in rows:
-            mark = {"ok": "[green]●[/green]", "no": "[red]○[/red]"}.get(state, "[dim]·[/dim]")
+            mark = {
+                "ok": "[green]●[/green]",
+                "no": "[red]○[/red]",
+                "unknown": "[yellow]?[/yellow]",
+            }.get(state, "[dim]·[/dim]")
             table.add_row(name, mark, detail)
 
     @on(Button.Pressed, "#back")
@@ -356,6 +364,8 @@ class DoctorScreen(Screen):
         for issue in issues:
             if issue.ok:
                 mark = "[green]●[/green]"
+            elif issue.unknown:
+                mark = "[yellow]?[/yellow]"
             elif issue.fix is not None:
                 mark = "[yellow]○[/yellow]"
             else:

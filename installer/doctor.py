@@ -36,6 +36,8 @@ class Issue(NamedTuple):
     ok: bool
     detail: str
     fix: Callable[[Log], bool] | None = None
+    # The check could not be performed — not the same as "the thing is absent".
+    unknown: bool = False
 
 
 # ── Fixes ──────────────────────────────────────────────────
@@ -169,13 +171,13 @@ def diagnose() -> list[Issue]:
 
     # The Android app cannot be installed from here.
     app = check_x11_app()
-    issues.append(
-        Issue(
-            "X11 app",
-            app.ok,
-            app.message if app.ok else f"Missing — sideload from {X11_APK_URL}",
-        )
-    )
+    if app.ok:
+        detail = app.message
+    elif app.unknown:
+        detail = f"{app.message} — if the desktop shows, it is installed"
+    else:
+        detail = f"Missing — sideload from {X11_APK_URL}"
+    issues.append(Issue("X11 app", app.ok, detail, unknown=app.unknown))
 
     # Container.
     container = is_installed()

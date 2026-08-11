@@ -177,6 +177,11 @@ def check_x11_app() -> None:
         ok("Termux:X11 app installed")
         return
 
+    if result.unknown:
+        warn(f"could not determine whether the app is installed ({result.message})")
+        print(f"    If the desktop does not appear, install it from {X11_APK_URL}")
+        return
+
     warn("Termux:X11 app is NOT installed — the desktop has nowhere to display")
     print(f"    Install the APK from {X11_APK_URL}")
     _manual.append(f"Install the Termux:X11 app: {X11_APK_URL}")
