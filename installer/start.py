@@ -123,7 +123,7 @@ def stop_desktop(log=_noop) -> bool:
     log("Cleaning sockets...")
     run_cmd(f"rm -rf {TMPDIR}/.X11-unix 2>/dev/null")
     run_cmd(f"rm -f {TMPDIR}/.X*-lock 2>/dev/null")
-    run_cmd(f"rm -rf {TMPDIR}/dbus-* {TMPDIR}/.xfsm-ICE-* 2>/dev/null")
+    run_cmd(f"rm -rf {TMPDIR}/dbus-* {TMPDIR}/.xfsm-ICE-* {TMPDIR}/.ICE-unix 2>/dev/null")
     run_cmd(f"rm -rf {TMPDIR}/runtime-* {TMPDIR}/pulse* 2>/dev/null")
 
     proot_tmp = os.path.join(PROOT_DIR, "rootfs/tmp")
@@ -207,6 +207,30 @@ def start_virgl(log=_noop) -> bool:
     return False
 
 
+def prepare_ice_dir(log=_noop) -> bool:
+    """Create /tmp/.ICE-unix, which nothing else on this stack does.
+
+    xfce4-session listens for its children on an ICE socket in that
+    directory. On a normal system systemd-tmpfiles creates it as root with
+    mode 1777; with --shared-tmp the container's /tmp is the Termux temp
+    directory, where it simply does not exist. Without it the session manager
+    starts, accepts no registrations, and never launches xfwm4 or xfdesktop —
+    which looks exactly like a desktop that failed to appear.
+
+    Made on the host on purpose: proot reports Termux-owned files as root
+    inside the container, which is the ownership ICE insists on and which
+    could not be set from a --user admin session.
+    """
+    path = os.path.join(TMPDIR, ".ICE-unix")
+    try:
+        os.makedirs(path, exist_ok=True)
+        os.chmod(path, 0o1777)
+    except OSError as e:
+        log(f"  could not prepare {path}: {e}")
+        return False
+    return True
+
+
 def start_x11(log=_noop) -> bool:
     # No kill or lock-file cleanup here either: stop_desktop owns that, and
     # it has already removed the socket directory and the .X0-lock.
@@ -265,6 +289,7 @@ mkdir -p "$XDG_RUNTIME_DIR"
 chmod 0700 "$XDG_RUNTIME_DIR"
 
 echo "starting as $(whoami), DISPLAY=$DISPLAY, XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR"
+echo "ICE dir: $(ls -ld /tmp/.ICE-unix 2>&1)"
 
 # xfce4-session directly, not startxfce4. With DISPLAY already set,
 # startxfce4 only prints "X server already running", sets prog=/bin/sh and
@@ -346,6 +371,8 @@ echo "xset:          $(command -v xset || echo MISSING)"
 echo "DBUS address:  ${DBUS_SESSION_BUS_ADDRESS:-(unset)}"
 echo "socket dir:"
 ls -la /tmp/.X11-unix 2>&1 | sed 's/^/  /'
+echo "ICE dir:"
+ls -ld /tmp/.ICE-unix 2>&1 | sed 's/^/  /'
 
 export DISPLAY=:0
 echo "xset q:"
@@ -474,6 +501,7 @@ START_STEPS = [
     ("Starting PulseAudio", start_pulseaudio),
     ("Loading audio modules", load_audio_modules),
     ("Starting virgl renderer", start_virgl),
+    ("Preparing ICE socket directory", prepare_ice_dir),
     ("Starting X11 server", start_x11),
     ("Waiting for X11 socket", wait_for_x11),
     ("Launching Xfce4 desktop", start_xfce4),
