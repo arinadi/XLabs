@@ -52,6 +52,11 @@ graphics), the Debian container, and the `~/bin/alabs` launcher.
 It runs unattended and is safe to re-run — each step skips work already done,
 so a partial install can be resumed by running it again.
 
+**One thing it cannot do for you:** the desktop renders inside the
+[Termux:X11 Android app](https://github.com/termux/termux-x11/releases/tag/nightly),
+which has to be sideloaded — `pkg` only provides the Termux half. The installer
+checks for it and says so at the end if it is missing, and Status reports it too.
+
 Then open a new terminal session:
 
 ### Daily Use

@@ -23,7 +23,12 @@ try:
         PROOT_DIR,
         REPO_DIR,
     )
-    from installer.preflight import blocking_failure, run_all_checks
+    from installer.preflight import (
+        X11_APK_URL,
+        blocking_failure,
+        check_x11_app as preflight_check_x11_app,
+        run_all_checks,
+    )
 except ImportError:
     sys.exit(
         "install.py must be run from inside the repository.\n"
@@ -39,6 +44,7 @@ CYAN, GREEN, YELLOW, RED, DIM, NC = (
 )
 
 _failures: list[str] = []
+_manual: list[str] = []
 
 
 def say(msg: str) -> None:
@@ -111,34 +117,69 @@ def install_libs() -> None:
 
 
 def install_termux_packages() -> None:
+    """Install every Termux-side dependency, in dependency order.
+
+    x11-repo and tur-repo are not enabled by default, and the X11 and
+    graphics packages live in them — so the repos must be installed and the
+    package lists refreshed before anything from them can resolve.
+    """
     if not have("pkg"):
         warn("not a Termux environment, skipping Termux packages")
         return
 
+    say("Refreshing package lists")
+    if run("pkg update -y") != 0:
+        warn("pkg update reported an error, continuing")
+
+    # 1. Repositories first — these come from the default repo.
+    say("Enabling x11-repo and tur-repo")
+    if run("pkg install -y x11-repo tur-repo") == 0:
+        ok("repositories enabled")
+    else:
+        fail("repos", "could not enable x11-repo/tur-repo")
+
+    # 2. Re-index so the newly enabled repos are usable.
+    say("Re-indexing after enabling repositories")
+    if run("pkg update -y") != 0:
+        warn("pkg update reported an error, continuing")
+
+    # 3. Everything else, grouped so a failure names the culprit.
+    #    termux-wake-lock is part of core Termux, so nothing to install for it.
     groups = {
         "proot-distro": ["proot-distro"],
-        "Termux:X11": [
-            "termux-x11-nightly", "x11-repo", "tur-repo",
-            "xorg-xrandr", "netcat-openbsd",
-        ],
         "audio": ["pulseaudio"],
+        "networking": ["netcat-openbsd"],
+        "Termux:X11": ["termux-x11-nightly", "xorg-xrandr"],
         "graphics": [
             "mesa-zink", "vulkan-loader-android",
             "virglrenderer-android", "angle-android",
         ],
-        "wake lock": ["termux-api"],
     }
-
-    say("Updating Termux packages")
-    if run("pkg update -y") != 0:
-        warn("pkg update reported an error, continuing")
-
     for label, packages in groups.items():
         say(f"Installing {label}")
         if run(f"pkg install -y {' '.join(packages)}") == 0:
             ok(label)
         else:
             fail(label, f"pkg install failed for {label}")
+
+    check_x11_app()
+
+
+def check_x11_app() -> None:
+    """The termux-x11-nightly package is only the Termux half.
+
+    The desktop renders inside the com.termux.x11 Android app, which cannot
+    be installed with pkg — it has to be sideloaded.
+    """
+    say("Checking Termux:X11 app")
+    result = preflight_check_x11_app()
+    if result.ok:
+        ok("Termux:X11 app installed")
+        return
+
+    warn("Termux:X11 app is NOT installed — the desktop has nowhere to display")
+    print(f"    Install the APK from {X11_APK_URL}")
+    _manual.append(f"Install the Termux:X11 app: {X11_APK_URL}")
 
 
 def container_exists() -> bool:
@@ -240,13 +281,25 @@ def main() -> int:
     if _failures:
         print(f"{YELLOW}Finished with problems in: {', '.join(sorted(set(_failures)))}{NC}")
         print("Fix those, then re-run the installer. It is safe to run again.")
+        _print_manual()
         return 1
 
     print(f"{GREEN}Installation complete.{NC}")
+    _print_manual()
     print()
     print("  Open a new terminal session, then run:  alabs")
     print()
     return 0
+
+
+def _print_manual() -> None:
+    """Steps the installer cannot perform — re-running will not clear these."""
+    if not _manual:
+        return
+    print()
+    print(f"{YELLOW}Still needs you:{NC}")
+    for item in _manual:
+        print(f"  - {item}")
 
 
 if __name__ == "__main__":
