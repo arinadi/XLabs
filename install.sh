@@ -3,13 +3,14 @@
 #  arinanoLabs — bootstrap entry point
 #  Usage: curl -sL https://raw.githubusercontent.com/arinadi/arinanoLabs/main/install.sh | bash
 #
-#  Guarantees git and Python, then hands over to install.py, which does
-#  the actual install. Keep this file boring: it is the one thing that
-#  cannot assume anything about the machine.
+#  Gets git and Python onto the machine and the repo onto disk, then
+#  hands over to install.py for the actual install. Keep this file
+#  boring: it is the one thing that cannot assume anything.
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
-INSTALLER_URL="https://raw.githubusercontent.com/arinadi/arinanoLabs/main/install.py"
+REPO_URL="https://github.com/arinadi/arinanoLabs.git"
+REPO_DIR="$HOME/arinanoLabs"
 
 CYAN='\033[0;36m'; GREEN='\033[0;32m'; RED='\033[0;31m'; NC='\033[0m'
 info() { echo -e "${CYAN}>>>${NC} $1"; }
@@ -55,23 +56,20 @@ ensure_python() {
     ok "Python $($PYTHON --version 2>&1 | awk '{print $2}') with pip"
 }
 
-# Prefer the copy next to this script when run from a checkout; otherwise
-# fetch it, since the usual entry point is curl | bash with no repo on disk.
-run_installer() {
-    local here
-    here="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
-
-    if [ -n "$here" ] && [ -f "$here/install.py" ]; then
-        info "Running installer from $here"
-        exec "$PYTHON" "$here/install.py"
+sync_repo() {
+    if [ -d "$REPO_DIR/.git" ]; then
+        info "Updating repository"
+        git -C "$REPO_DIR" pull --ff-only || {
+            info "Fast-forward failed, resetting to origin/main"
+            git -C "$REPO_DIR" fetch origin main
+            git -C "$REPO_DIR" reset --hard origin/main
+        } || die "could not update $REPO_DIR"
+    else
+        info "Cloning repository"
+        git clone --depth 1 "$REPO_URL" "$REPO_DIR" || die "clone failed"
     fi
-
-    info "Downloading installer"
-    local tmp
-    tmp="$(mktemp -t arinanolabs-install.XXXXXX.py)"
-    trap 'rm -f "$tmp"' EXIT
-    curl -fsSL "$INSTALLER_URL" -o "$tmp" || die "could not download install.py"
-    exec "$PYTHON" "$tmp"
+    [ -f "$REPO_DIR/install.py" ] || die "$REPO_DIR/install.py is missing"
+    ok "$REPO_DIR"
 }
 
 main() {
@@ -82,7 +80,8 @@ main() {
     echo
     ensure_git
     ensure_python
-    run_installer
+    sync_repo
+    exec "$PYTHON" "$REPO_DIR/install.py"
 }
 
 main "$@"

@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """arinanoLabs installer.
 
-install.sh guarantees exactly two things: git and Python. Everything else is
-here — Python libraries, the repo checkout, Termux packages, the Debian
-container, and the alabs launcher.
+install.sh gets git, Python, and this repo onto the machine; everything else
+happens here — Python libraries, Termux packages, the Debian container, and
+the alabs launcher.
 
-This file is fetched and run on its own, before the repo exists on disk, so
-it must not import from installer/ at module level. It runs unattended: it
-reports problems and keeps going rather than prompting, because the usual
-entry point is `curl ... | bash`, where stdin is not a terminal.
+Runs unattended: it reports problems and keeps going rather than prompting,
+because the usual entry point is `curl ... | bash`, where stdin is not a
+terminal. Safe to re-run — every step skips work already done.
 """
 
 import os
@@ -16,15 +15,24 @@ import shutil
 import subprocess
 import sys
 
-REPO_URL = "https://github.com/arinadi/arinanoLabs.git"
-REPO_DIR = os.path.expanduser("~/arinanoLabs")
+try:
+    from installer.const import (
+        ADMIN_USER,
+        CONTAINER_NAME,
+        IMAGE_REF,
+        PROOT_DIR,
+        REPO_DIR,
+    )
+    from installer.preflight import blocking_failure, run_all_checks
+except ImportError:
+    sys.exit(
+        "install.py must be run from inside the repository.\n"
+        "Use the bootstrapper instead:\n"
+        "  curl -sL https://raw.githubusercontent.com/arinadi/arinanoLabs/main/install.sh | bash"
+    )
+
 BIN_DIR = os.path.expanduser("~/bin")
 BASHRC = os.path.expanduser("~/.bashrc")
-
-CONTAINER_NAME = "arinanolabs"
-IMAGE_REF = "ghcr.io/arinadi/arinanolabs:latest"
-ADMIN_USER = "admin"
-PROOT_DIR = f"/data/data/com.termux/files/usr/var/lib/proot-distro/containers/{CONTAINER_NAME}"
 
 CYAN, GREEN, YELLOW, RED, DIM, NC = (
     "\033[0;36m", "\033[0;32m", "\033[1;33m", "\033[0;31m", "\033[2m", "\033[0m",
@@ -66,33 +74,9 @@ def have(binary: str) -> bool:
 # ── Steps ──────────────────────────────────────────────────
 
 
-def sync_repo() -> None:
-    say("Fetching repository")
-    if os.path.isdir(os.path.join(REPO_DIR, ".git")):
-        if run(f"git -C {REPO_DIR} pull --ff-only") != 0:
-            warn("fast-forward failed, resetting to origin/main")
-            run(f"git -C {REPO_DIR} fetch origin main")
-            if run(f"git -C {REPO_DIR} reset --hard origin/main") != 0:
-                fail("repo", "could not update the repository")
-                return
-        ok(f"updated {REPO_DIR}")
-    else:
-        if run(f"git clone --depth 1 {REPO_URL} {REPO_DIR}") != 0:
-            fail("repo", "clone failed")
-            return
-        ok(f"cloned to {REPO_DIR}")
-
-
 def preflight() -> bool:
     """Report environment state. Returns False only on a fatal problem."""
     say("Checking environment")
-    sys.path.insert(0, REPO_DIR)
-    try:
-        from installer.preflight import blocking_failure, run_all_checks
-    except ImportError:
-        warn("checks unavailable (repo not in place), continuing")
-        return True
-
     checks = run_all_checks()
     width = max(len(c.name) for c in checks)
     for check in checks:
@@ -183,8 +167,8 @@ def install_container() -> None:
 
 
 def setup_admin_user() -> None:
-    """The image already ships an admin user; this repairs a container that
-    was built or restored without one."""
+    """The image ships an admin user; this repairs a container that was built
+    or restored without one."""
     if not container_exists():
         return
 
@@ -212,8 +196,8 @@ def install_launcher() -> None:
     os.makedirs(BIN_DIR, exist_ok=True)
     link = os.path.join(BIN_DIR, "alabs")
 
-    # ~/bin is on Termux's default PATH; symlink so `git pull` updates the
-    # launcher too.
+    # ~/bin is on Termux's default PATH. Symlink rather than copy so a later
+    # git pull updates the launcher too.
     if os.path.islink(link) or os.path.exists(link):
         os.remove(link)
     try:
@@ -222,14 +206,13 @@ def install_launcher() -> None:
         shutil.copy2(source, link)
         os.chmod(link, 0o755)
 
-    path_line = 'export PATH="$HOME/bin:$PATH"'
     try:
         existing = open(BASHRC).read() if os.path.exists(BASHRC) else ""
     except OSError:
         existing = ""
     if "$HOME/bin" not in existing:
         with open(BASHRC, "a") as f:
-            f.write(f"\n# arinanoLabs\n{path_line}\n")
+            f.write('\n# arinanoLabs\nexport PATH="$HOME/bin:$PATH"\n')
 
     ok(f"{link} -> {source}")
 
@@ -240,11 +223,9 @@ def install_launcher() -> None:
 def main() -> int:
     print()
     print(f"{CYAN}===========================================")
-    print(f"  arinanoLabs Installer")
+    print("  arinanoLabs Installer")
     print(f"==========================================={NC}")
     print()
-
-    sync_repo()
 
     if not preflight():
         return 1

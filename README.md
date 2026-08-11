@@ -44,10 +44,10 @@ Your Android phone is a pocket PC with 8GB+ RAM and an ARM64 CPU — it deserves
 curl -sL https://raw.githubusercontent.com/arinadi/arinanoLabs/main/install.sh | bash
 ```
 
-`install.sh` is deliberately thin — it only guarantees git and Python, then
-hands over to `install.py`, which does the rest: Python libraries, the repo
-checkout at `~/arinanoLabs`, Termux packages (proot-distro, Termux:X11,
-PulseAudio, graphics), the Debian container, and the `~/bin/alabs` launcher.
+`install.sh` is deliberately thin — it gets git, Python, and this repo onto the
+machine, then hands over to `~/arinanoLabs/install.py`, which does the rest:
+Python libraries, Termux packages (proot-distro, Termux:X11, PulseAudio,
+graphics), the Debian container, and the `~/bin/alabs` launcher.
 
 It runs unattended and is safe to re-run — each step skips work already done,
 so a partial install can be resumed by running it again.
@@ -151,8 +151,8 @@ The container ships Mesa userspace (`libgl1-mesa-dri`, `libglx-mesa0`,
 
 ```
 arinanoLabs/
-├── install.sh          ← Bootstrap: git + Python only
-├── install.py          ← Full installer, runs standalone
+├── install.sh          ← Bootstrap: git, Python, repo checkout
+├── install.py          ← Full installer
 ├── alabs               ← TUI launcher
 ├── installer/          ← TUI package
 │   ├── app.py          ←   Textual app: screens, runners
