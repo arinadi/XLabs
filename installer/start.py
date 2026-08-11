@@ -15,11 +15,26 @@ from .system import run_cmd
 ANGLE_DIR = "/data/data/com.termux/files/usr/opt/angle-android"
 XFCE_LOG = os.path.join(REPO_DIR, "xfce4.log")
 
-# Matches every process the desktop stack can leave behind.
+# Leftovers worth sweeping only after the proot tree is gone. Deliberately
+# narrow: an earlier version matched "dbus-" and would kill any process on the
+# device with that in its command line, including another proot-distro's.
 SURVIVOR_PATTERN = (
-    "xfce4|xfwm4|xfdesktop|thunar|pulseaudio|"
-    "termux-x11|termux.x11|dbus-|startxfce4|proot.*arinanolabs"
+    f"proot.*{CONTAINER_NAME}|xfce4-session|startxfce4|xfwm4|xfdesktop|"
+    "termux-x11|virgl_test_server"
 )
+
+# Sent to the session before anything is killed. --fast skips saving state,
+# which is what we want: the point is to release the display, not to restore
+# this session later.
+LOGOUT_SCRIPT = r"""#!/bin/bash
+export DISPLAY=:0
+export XDG_RUNTIME_DIR="/tmp/runtime-$(id -u)"
+if command -v xfce4-session-logout >/dev/null 2>&1; then
+    timeout 8 xfce4-session-logout --logout --fast 2>&1
+else
+    echo "xfce4-session-logout not present"
+fi
+"""
 
 
 def _noop(_message: str) -> None:
@@ -35,70 +50,99 @@ def is_running() -> bool:
 # ── Stop ───────────────────────────────────────────────────
 
 
+def _wait_gone(pattern: str, seconds: float) -> bool:
+    """Poll until nothing matches `pattern`, or the time runs out."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        rc, _ = run_cmd(f"pgrep -f '{pattern}'")
+        if rc != 0:
+            return True
+        time.sleep(0.3)
+    rc, _ = run_cmd(f"pgrep -f '{pattern}'")
+    return rc != 0
+
+
 def stop_desktop(log=_noop) -> bool:
-    """Stop the desktop and clean up every socket and runtime dir it left."""
-    # Phase 1: kill the Android-side X server first, so clients lose their
-    # display before we start killing them.
-    log("Force-stopping Termux:X11 app...")
+    """Stop the desktop, innermost first, and report whether it worked.
+
+    Order matters and used to be inverted: the Android X server was killed
+    first, which pulls the display out from under the session and guarantees
+    an unclean teardown. The session gets asked to leave first now, and the
+    display goes last.
+    """
+    # 1. Ask the session to log out. Best effort — if there is no session, or
+    #    no D-Bus to carry the request, this simply does nothing.
+    if is_running():
+        log("Asking the session to log out...")
+        if _write_container_script("arinanolabs-logout.sh", LOGOUT_SCRIPT):
+            run_cmd(
+                f"proot-distro login {CONTAINER_NAME} --user {ADMIN_USER} "
+                "--shared-tmp -- bash /tmp/arinanolabs-logout.sh",
+                timeout=20,
+            )
+        if _wait_gone("xfce4-session|startxfce4", 8):
+            log("  session exited on request")
+        else:
+            log("  no response, killing instead")
+
+    # 2. Kill the container. proot runs with --kill-on-exit, so taking the
+    #    proot process takes every process inside with it — which is why the
+    #    long list of xfce4/thunar/dbus patterns this used to carry is neither
+    #    needed nor safe.
+    log("Stopping the container...")
+    run_cmd(f"pkill -TERM -f 'proot.*{CONTAINER_NAME}' 2>/dev/null")
+    if not _wait_gone(f"proot.*{CONTAINER_NAME}", 5):
+        run_cmd(f"pkill -9 -f 'proot.*{CONTAINER_NAME}' 2>/dev/null")
+        _wait_gone(f"proot.*{CONTAINER_NAME}", 3)
+
+    # 3. Now the display can go.
+    log("Stopping X11...")
+    run_cmd("pkill -TERM -f termux-x11 2>/dev/null")
+    _wait_gone("termux-x11", 3)
+    run_cmd("pkill -9 -f termux-x11 2>/dev/null")
     run_cmd("am force-stop com.termux.x11 2>/dev/null")
 
-    # Phase 2: let the well-behaved ones exit cleanly.
-    log("Signalling X11 and PulseAudio...")
-    for pat in ("termux-x11", "termux.x11", "pulseaudio"):
-        run_cmd(f"pkill -f '{pat}' 2>/dev/null")
+    # 4. Audio and the renderer. `pulseaudio --kill` is the supported way and
+    #    unloads its own modules; the old code unloaded module-null-sink,
+    #    which was never loaded, and left the aaudio/sles sinks behind.
+    log("Stopping audio and renderer...")
+    run_cmd("pulseaudio --kill 2>/dev/null")
+    run_cmd("pkill -TERM -f virgl_test_server 2>/dev/null")
 
-    # Phase 3: force-kill, leaf apps before the session that supervises them.
-    log("Killing desktop processes...")
-    force_kill = [
-        "termux-x11", "termux.x11",
-        "thunar", "xfdesktop4", "xfce4-panel", "xfce4-terminal",
-        "xfce4-appfinder", "xfce4-settingsd", "xfce4-power-manager",
-        "xfwm4", "xfce4-session",
-        "dbus-daemon", "dbus-launch",
-        "virgl_test_server", "pulseaudio", "startxfce4",
-        "proot.*arinanolabs",
-    ]
-    for pat in force_kill:
-        run_cmd(f"pkill -9 -f '{pat}' 2>/dev/null")
-
-    for mod in ("module-null-sink", "module-native-protocol-tcp"):
-        run_cmd(f"pactl unload-module {mod} 2>/dev/null")
-
-    # Phase 4: verify, and re-kill whatever outlived the first pass.
-    time.sleep(1)
+    # 5. Anything that outlived its parent.
     rc, _ = run_cmd(f"pgrep -f '{SURVIVOR_PATTERN}'")
     if rc == 0:
-        log("Survivors found, killing again...")
+        log("Sweeping survivors...")
         run_cmd(f"pkill -9 -f '{SURVIVOR_PATTERN}' 2>/dev/null")
         time.sleep(0.5)
 
-    # Phase 5: host-side files. Remove the whole socket dir, not its contents,
-    # or a stale .X11-unix keeps the next termux-x11 from binding.
-    log("Cleaning Termux sockets...")
+    # 6. Sockets and runtime dirs. With --shared-tmp the container's /tmp is
+    #    this directory, so this is where the session's residue actually is;
+    #    the rootfs paths below only matter for sessions started before that
+    #    change.
+    log("Cleaning sockets...")
     run_cmd(f"rm -rf {TMPDIR}/.X11-unix 2>/dev/null")
     run_cmd(f"rm -f {TMPDIR}/.X*-lock 2>/dev/null")
-    run_cmd(f"rm -f {TMPDIR}/dbus-* 2>/dev/null")
+    run_cmd(f"rm -rf {TMPDIR}/dbus-* {TMPDIR}/.xfsm-ICE-* 2>/dev/null")
     run_cmd(f"rm -rf {TMPDIR}/runtime-* {TMPDIR}/pulse* 2>/dev/null")
 
-    # Phase 6: proot-side residue, from inside the container and again from
-    # the host in case the container can no longer be entered.
-    log("Cleaning container session residue...")
-    run_cmd(
-        f"proot-distro login {CONTAINER_NAME} -- bash -c "
-        "'rm -rf /tmp/xdg-* /tmp/dbus-* /tmp/.xfsm-ICE-* "
-        "/tmp/.X11-unix/* /tmp/runtime-* "
-        "/home/admin/.cache/sessions/* "
-        "/home/admin/.ICEauthority /home/admin/.Xauthority 2>/dev/null'"
-    )
     proot_tmp = os.path.join(PROOT_DIR, "rootfs/tmp")
     run_cmd(f"rm -rf {proot_tmp}/.X11-unix {proot_tmp}/.X*-lock 2>/dev/null")
-    run_cmd(f"rm -f {proot_tmp}/dbus-* {proot_tmp}/.dbus* 2>/dev/null")
-    run_cmd(f"rm -rf {proot_tmp}/runtime-* {proot_tmp}/xdg-* {proot_tmp}/.xfsm-ICE-* 2>/dev/null")
+    run_cmd(f"rm -rf {proot_tmp}/dbus-* {proot_tmp}/runtime-* {proot_tmp}/.xfsm-ICE-* 2>/dev/null")
     proot_home = os.path.join(PROOT_DIR, "rootfs/home/admin")
     run_cmd(f"rm -f {proot_home}/.ICEauthority {proot_home}/.Xauthority 2>/dev/null")
     run_cmd(f"rm -rf {proot_home}/.cache/sessions 2>/dev/null")
 
     run_cmd("termux-wake-unlock 2>/dev/null")
+
+    # 7. Say what actually happened rather than always claiming success.
+    rc, out = run_cmd(f"pgrep -af '{SURVIVOR_PATTERN}'")
+    if rc == 0:
+        log("[yellow]Stopped, but these survived:[/yellow]")
+        for line in out.strip().splitlines()[:8]:
+            log(f"  {line}")
+        return False
+
     log("Stopped.")
     return True
 
