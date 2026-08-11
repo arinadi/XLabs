@@ -27,10 +27,9 @@ Your Android phone is a pocket PC with 8GB+ RAM and an ARM64 CPU — it deserves
 |---------|----------------------|
 | Chrome sleeps tabs | Firefox ESR desktop browser — stays alive |
 | No glibc apps | Debian 13 proot — standard glibc |
-| No dev tools | Node.js 22, Python 3, GCC, CMake built-in |
 | 30 min of apt + config | Pre-built OCI image, pulled in one step |
 | Fiddly X11 + audio + dbus startup | One menu entry, with cleanup on stop |
-| No touch keyboard | Onboard on-screen keyboard, autostarted |
+| Teardown that leaves stale locks | One teardown path, verified before it reports success |
 
 **What this can't do:** no Docker, no systemd services, no native x86, no root (proot emulates root-like behavior, not real root). Full details in [Limitations](#️-limitations).
 
@@ -179,23 +178,31 @@ sequenceDiagram
 
 ## 📦 What's Included
 
-### In the image (ready to use)
+### In the image
 
-| Category | Tools |
-|----------|-------|
-| 🌐 Browser | Firefox ESR |
-| 🖥️ Desktop | Xfce4 + goodies, Thunar, Mousepad, Ristretto, xfce4-terminal |
-| ⌨️ Touch | Onboard on-screen keyboard, HiDPI scaling, 48px cursors |
-| 🎨 Theme | Arc-Dark + Papirus icons, Noto fonts incl. color emoji |
-| 🔧 Dev | Git, Node.js 22, Python 3, GCC, CMake, pkg-config |
-| 💻 Shell | Zsh + Oh My Zsh, fzf, ripgrep, bat, lazygit |
-| 📊 Sys | htop, tmux, OpenSSH client |
+The image is currently a **vanilla baseline**, deliberately. It matches the
+established Termux + proot + XFCE recipe and adds nothing beyond a browser:
+
+| Category | Packages |
+|----------|----------|
+| 🖥️ Desktop | `xfce4`, `xfce4-terminal`, `dbus-x11` |
+| 🌐 Browser | `firefox-esr` |
+| 🎮 Graphics | Mesa userspace, `x11-xserver-utils`, `mesa-utils` |
+| 🔊 Audio | `pulseaudio-utils` (client; the server runs in Termux) |
+| 🧱 Base | `ca-certificates`, `locales`, `sudo` |
+
+Installed **with** recommends, as every published guide does. An earlier image
+used `--no-install-recommends` throughout and produced a container where
+`xfce4-session` started but never launched `xfwm4` or `xfdesktop`.
+
+The dev toolchain, Zsh, on-screen keyboard, theming and the pre-baked panel
+layout were removed to get back to a build of known-good shape. They are in git
+history and come back once the baseline is confirmed working.
 
 ### Extra Tools
 
-Menu entry `4` is a placeholder — Chromium, code-server, Neovim and GitHub CLI
-are listed but not yet wired up. Install them with `apt` inside the container in
-the meantime.
+Menu entry is a placeholder. Install what you need with `apt` inside the
+container in the meantime.
 
 ---
 
