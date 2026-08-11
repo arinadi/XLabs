@@ -66,7 +66,7 @@ echo "sinks visible from in here:"
 pactl list sinks short 2>&1 | sed 's/^/    /'
 echo
 echo "sink volume and mute state:"
-pactl list sinks 2>&1 | grep -E "^\s+(Volume|Mute)" | head -4 | sed 's/^/    /'
+pactl list sinks 2>&1 | grep -E "^[[:space:]]+(Volume|Mute)" | head -4 | sed 's/^/    /'
 echo
 echo "playing..."
 paplay --verbose /tmp/{TEST_TONE_NAME} 2>&1 | sed 's/^/    /'
