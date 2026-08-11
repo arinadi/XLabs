@@ -4,6 +4,7 @@ Everything here blocks. Call it from a Textual thread worker, never from the
 event loop.
 """
 
+import contextlib
 import os
 import shutil
 import signal
@@ -24,7 +25,7 @@ def run_cmd(cmd: str, timeout: int = 60) -> tuple[int, str]:
         return result.returncode, result.stdout + result.stderr
     except subprocess.TimeoutExpired:
         return 1, f"Command timed out after {timeout}s"
-    except Exception as e:  # noqa: BLE001 - surfaced to the user as log text
+    except Exception as e:
         return 1, str(e)
 
 
@@ -167,7 +168,7 @@ def get_version() -> str:
             timeout=5,
         )
         sha = result.stdout.strip() if result.returncode == 0 else "unknown"
-    except Exception:  # noqa: BLE001
+    except Exception:
         sha = "unknown"
     return f"{datetime.now(timezone.utc).strftime('%Y%m%d')}.{sha}"
 
@@ -182,10 +183,8 @@ def link_launcher() -> tuple[bool, str]:
     if not os.path.exists(LAUNCHER_SRC):
         return False, f"{LAUNCHER_SRC} not found"
 
-    try:
+    with contextlib.suppress(OSError):
         os.chmod(LAUNCHER_SRC, 0o755)
-    except OSError:
-        pass
 
     for directory in (PREFIX_BIN, HOME_BIN):
         # Only create ~/bin; a missing $PREFIX/bin means this is not Termux.

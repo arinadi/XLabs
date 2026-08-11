@@ -25,13 +25,15 @@ try:
         PROOT_DIR,
         REPO_DIR,
     )
-    from installer.system import ensure_home_bin_on_path, link_launcher
     from installer.preflight import (
         X11_APK_URL,
         blocking_failure,
-        check_x11_app as preflight_check_x11_app,
         run_all_checks,
     )
+    from installer.preflight import (
+        check_x11_app as preflight_check_x11_app,
+    )
+    from installer.system import ensure_home_bin_on_path, link_launcher
 except ImportError:
     sys.exit(
         "install.py must be run from inside the repository.\n"

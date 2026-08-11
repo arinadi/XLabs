@@ -160,7 +160,7 @@ def load_audio_modules(log=_noop) -> bool:
     device with working Termux audio and three sinks still had no sound in the
     container because the module never loaded and nothing said so.
     """
-    rc, out = run_cmd(
+    _, out = run_cmd(
         "pactl load-module module-native-protocol-tcp "
         "auth-ip-acl=127.0.0.1 auth-anonymous=1 port=4713"
     )
@@ -567,7 +567,7 @@ def start_desktop(log=_noop) -> bool:
         log(f"{name}...")
         try:
             ok = step(log)
-        except Exception as e:  # noqa: BLE001 - shown to the user as log text
+        except Exception as e:
             log(f"  failed: {e}")
             ok = False
         log("  ok" if ok else "  warning")

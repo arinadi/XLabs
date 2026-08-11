@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from typing import Callable
 
 from rich.text import Text
 from textual import on, work
@@ -29,14 +30,11 @@ from textual.widgets import (
     Static,
 )
 
-from . import audio
-from . import doctor
-from . import packages
+from . import audio, doctor, packages
 from . import start as desktop
 from .const import CACHE_DIR, CONTAINER_NAME, IMAGE_REF, REPO_DIR
 from .preflight import run_all_checks
 from .system import get_version, human_size, is_installed, stream_cmd
-
 
 # ── Copying output ─────────────────────────────────────────
 
@@ -66,7 +64,7 @@ def _to_clipboard(app, text: str) -> str | None:
     try:
         app.copy_to_clipboard(text)
         return "the terminal clipboard"
-    except Exception:  # noqa: BLE001 - clipboard support is best effort
+    except Exception:
         return None
 
 
@@ -123,6 +121,21 @@ class CopyableScreen(Screen):
 
 
 # ── Confirmation ───────────────────────────────────────────
+
+
+def when_confirmed(app: App, build_screen: Callable[[], Screen]) -> Callable[[bool | None], None]:
+    """push_screen callback that opens a screen only if the user confirmed.
+
+    Written out rather than inlined as a lambda: the conditional-expression
+    form discarded push_screen's return value, which mypy correctly objected
+    to, and this reads better at five call sites.
+    """
+
+    def handler(confirmed: bool | None) -> None:
+        if confirmed:
+            app.push_screen(build_screen())
+
+    return handler
 
 
 class ConfirmScreen(ModalScreen[bool]):
@@ -233,7 +246,7 @@ class ActionScreen(CopyableScreen):
 
         try:
             self._runner(log)
-        except Exception as e:  # noqa: BLE001 - the log pane is the error channel
+        except Exception as e:
             log(f"[bold red]Error:[/bold red] {e}")
         self.app.call_from_thread(self._finish)
 
@@ -254,7 +267,10 @@ class ActionScreen(CopyableScreen):
         if self._busy:
             self.notify("Still working — wait for it to finish.", severity="warning")
             return
-        self.app.request_restart()
+        # Narrowed rather than assumed: this screen is generic and only this
+        # app knows how to relaunch itself.
+        if isinstance(self.app, ArinanoLabsApp):
+            self.app.request_restart()
 
     @on(Button.Pressed, "#back")
     def action_back(self) -> None:
@@ -472,7 +488,7 @@ class MainScreen(Screen):
                     f"This downloads {IMAGE_REF} and takes a few minutes.",
                     confirm_label="Install",
                 ),
-                lambda ok: self.app.push_screen(ActionScreen("Install", run_reset)) if ok else None,
+                when_confirmed(self.app, lambda: ActionScreen("Install", run_reset)),
             )
             return
         self.app.push_screen(ActionScreen("Start Desktop", run_start))
@@ -507,7 +523,7 @@ class MainScreen(Screen):
                 "permanently. Your Termux home is untouched.",
                 confirm_label="Delete and reinstall",
             ),
-            lambda ok: self.app.push_screen(ActionScreen("Reset", run_reset)) if ok else None,
+            when_confirmed(self.app, lambda: ActionScreen("Reset", run_reset)),
         )
 
     @on(Button.Pressed, "#cache")
@@ -519,7 +535,7 @@ class MainScreen(Screen):
                 "kept; the next install re-downloads the image.",
                 confirm_label="Delete cache",
             ),
-            lambda ok: self.app.push_screen(ActionScreen("Clean Image Cache", run_clean_cache)) if ok else None,
+            when_confirmed(self.app, lambda: ActionScreen("Clean Image Cache", run_clean_cache)),
         )
 
 
@@ -722,7 +738,7 @@ class DupesScreen(CopyableScreen):
                 "Termux that needs these will stop working.",
                 confirm_label="Uninstall",
             ),
-            lambda ok: self.app.push_screen(ActionScreen("Remove duplicates", run)) if ok else None,
+            when_confirmed(self.app, lambda: ActionScreen("Remove duplicates", run)),
         )
 
     @on(Button.Pressed, "#back")
@@ -832,7 +848,7 @@ class ToolsScreen(CopyableScreen):
                 "Termux is not touched.",
                 confirm_label="Install",
             ),
-            lambda ok: self.app.push_screen(ActionScreen(f"Install {pkg.name}", run)) if ok else None,
+            when_confirmed(self.app, lambda: ActionScreen(f"Install {pkg.name}", run)),
         )
 
     def copy_payload(self) -> str:

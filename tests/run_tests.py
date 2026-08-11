@@ -25,13 +25,11 @@ import traceback
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from textual.widgets import Button, DataTable, Input, RichLog, Static  # noqa: E402
+from textual.widgets import Button, DataTable, Input, RichLog
 
-from installer import app as app_module  # noqa: E402
-from installer import audio  # noqa: E402
-from installer import doctor  # noqa: E402
-from installer import packages  # noqa: E402
-from installer.app import (  # noqa: E402
+from installer import app as app_module
+from installer import audio, doctor, packages
+from installer.app import (
     ActionScreen,
     ArinanoLabsApp,
     ConfirmScreen,
@@ -41,8 +39,8 @@ from installer.app import (  # noqa: E402
     StatusScreen,
     ToolsScreen,
 )
-from installer.preflight import run_all_checks  # noqa: E402
-from installer.system import stream_cmd  # noqa: E402
+from installer.preflight import run_all_checks
+from installer.system import stream_cmd
 
 _failures: list[str] = []
 
@@ -192,30 +190,6 @@ def test_firefox_prefs_are_defaults_not_locks() -> None:
             "the repair claimed success with no container",
         )
         check(lines, "the repair explained nothing")
-
-
-def test_cross_module_references_exist() -> None:
-    """Guard: calling a name that lives in a different module.
-
-    audio.py called desktop.is_installed(), which lives in system.py. Nothing
-    caught it until the feature ran on a device and died halfway through the
-    test it was meant to provide.
-    """
-    import inspect
-    import re
-
-    from installer import start as start_module
-    from installer import system as system_module
-
-    aliases = {"desktop": start_module, "system": system_module}
-    for module in (audio, doctor, app_module, packages):
-        source = inspect.getsource(module)
-        for alias, attribute in re.findall(r"\b(desktop|system)\.([a-zA-Z_]\w*)", source):
-            check(
-                hasattr(aliases[alias], attribute),
-                f"{module.__name__} calls {alias}.{attribute}, "
-                f"which {aliases[alias].__name__} does not define",
-            )
 
 
 def test_audio_test_tone_is_valid() -> None:
@@ -626,7 +600,6 @@ def main() -> int:
         test_preflight_shape,
         test_doctor_scan_shape,
         test_firefox_prefs_are_defaults_not_locks,
-        test_cross_module_references_exist,
         test_audio_test_tone_is_valid,
         test_doctor_reports_audio,
         test_tui_navigation,
@@ -649,7 +622,7 @@ def main() -> int:
                 asyncio.run(test())
             else:
                 test()
-        except Exception:  # noqa: BLE001 - every failure is reported, none stop the run
+        except Exception:
             _failures.append(name)
             print(f"FAIL  {name}")
             traceback.print_exc()

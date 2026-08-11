@@ -18,10 +18,18 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt ruff mypy
 
       - name: Python syntax
         run: python -m compileall -q install.py installer tests
+
+      - name: Lint
+        run: ruff check install.py installer tests
+
+      # Catches calling a name that lives in another module — the mistake a
+      # hand-written test here used to guard, badly.
+      - name: Types
+        run: mypy install.py installer
 
       - name: Shell syntax
         run: |

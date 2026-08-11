@@ -224,12 +224,13 @@ def diagnose() -> list[Issue]:
         )
     )
 
-    found = audio.sinks()
+    sink_names = audio.sinks()
     issues.append(
         Issue(
             "Audio output",
-            bool(found),
-            ", ".join(found) if found else "No sink — Android has nothing to play through",
+            bool(sink_names),
+            ", ".join(sink_names) if sink_names
+            else "No sink — Android has nothing to play through",
         )
     )
 
@@ -436,7 +437,7 @@ def run_fixes(issues: list[Issue], log: Log) -> tuple[int, int]:
                 repaired += 1
             else:
                 log("  [red]could not repair[/red]")
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             log(f"  [red]error: {e}[/red]")
         log("")
 
