@@ -294,16 +294,187 @@ def current_mirror() -> str | None:
     return None
 
 
-def _is_security(uri: str) -> bool:
-    """Whether a sources URI points at the security archive.
+# The only correct value. Regular mirrors are not required to carry
+# debian-security at all, so this is never repointed at a chosen mirror —
+# only ever restored to this.
+CANONICAL_SECURITY_URI = "https://security.debian.org/debian-security"
 
-    Debian 13 writes two stanzas: the main archive and security, and they
-    live at different paths. Repointing both at a mirror sends security to a
-    path the mirror does not carry, apt 404s, and `apt update` exits 100 —
-    which is precisely how this first went wrong. Security also comes from
-    Debian directly by design, so it is left alone.
+
+def _is_security_suite(suite: str) -> bool:
+    return suite == "security" or suite.endswith("-security")
+
+
+def _parse_deb822_stanzas(content: str) -> list[list[str]]:
+    """Split a deb822 sources file on its blank-line stanza boundaries."""
+    stanzas: list[list[str]] = []
+    current: list[str] = []
+    for line in content.splitlines():
+        if line.strip() == "":
+            if current:
+                stanzas.append(current)
+                current = []
+        else:
+            current.append(line)
+    if current:
+        stanzas.append(current)
+    return stanzas
+
+
+def _deb822_stanza_is_security(stanza: list[str]) -> bool:
+    for line in stanza:
+        stripped = line.strip()
+        if stripped.startswith("Suites:"):
+            return any(_is_security_suite(s) for s in stripped.split(":", 1)[1].split())
+    return False
+
+
+def _legacy_line_is_security(stripped: str) -> bool:
+    # deb URI SUITE [COMPONENTS...] — the suite is the third token.
+    parts = stripped.split()
+    return len(parts) >= 3 and _is_security_suite(parts[2])
+
+
+def security_uri() -> str | None:
+    """The URI the container's security stanza currently points at.
+
+    Identified by Suites, not by guessing from the URI's content: a URI that
+    has already been repointed at an unrelated mirror carries no hint that
+    it was meant to be the security archive, which is exactly the state a
+    corrupted container is in.
     """
-    return "-security" in uri or "security.debian.org" in uri
+    path = _sources_file()
+    if path is None:
+        return None
+    try:
+        with open(container_path(path), encoding="utf-8") as f:
+            content = f.read()
+    except OSError:
+        return None
+
+    if path == SOURCES_DEB822:
+        for stanza in _parse_deb822_stanzas(content):
+            if not _deb822_stanza_is_security(stanza):
+                continue
+            for line in stanza:
+                stripped = line.strip()
+                if stripped.startswith("URIs:"):
+                    return stripped.split(":", 1)[1].strip().split()[0]
+        return None
+
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(("deb ", "deb-src ")) and _legacy_line_is_security(stripped):
+            return stripped.split()[1]
+    return None
+
+
+def _repair_deb822(content: str) -> tuple[str, int]:
+    stanzas = _parse_deb822_stanzas(content)
+    changed = 0
+    for stanza in stanzas:
+        if not _deb822_stanza_is_security(stanza):
+            continue
+        for i, line in enumerate(stanza):
+            if line.strip().startswith("URIs:"):
+                repaired = f"URIs: {CANONICAL_SECURITY_URI}"
+                if line != repaired:
+                    stanza[i] = repaired
+                    changed += 1
+    return "\n\n".join("\n".join(s) for s in stanzas) + "\n", changed
+
+
+def _repair_legacy(content: str) -> tuple[str, int]:
+    lines = content.splitlines()
+    changed = 0
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith(("deb ", "deb-src ")) and _legacy_line_is_security(stripped):
+            parts = stripped.split()
+            if parts[1] != CANONICAL_SECURITY_URI:
+                parts[1] = CANONICAL_SECURITY_URI
+                lines[i] = " ".join(parts)
+                changed += 1
+    return "\n".join(lines) + "\n", changed
+
+
+def repair_security(log: Log) -> bool:
+    """Force the security stanza's URI back to CANONICAL_SECURITY_URI.
+
+    Exists on its own, not only inside set_mirror: a container can have a
+    broken security URI without anyone touching the mirror this session —
+    it could have shipped that way, or been broken by an older build of
+    this tool from before Suites-based detection existed, back when the
+    check merely inspected the URI and stopped working the moment the URI
+    was already wrong.
+    """
+    path = _sources_file()
+    if path is None:
+        log("[red]No Debian sources file in the container.[/red]")
+        return False
+
+    target = container_path(path)
+    try:
+        with open(target, encoding="utf-8") as f:
+            content = f.read()
+    except OSError as e:
+        log(f"[red]Could not read {path}: {e}[/red]")
+        return False
+
+    repair = _repair_deb822 if path == SOURCES_DEB822 else _repair_legacy
+    new_content, changed = repair(content)
+
+    if not changed:
+        log("Security already points at the canonical URI.")
+        return True
+
+    try:
+        with open(target, "w", encoding="utf-8", newline="\n") as f:
+            f.write(new_content)
+    except OSError as e:
+        log(f"[red]Could not write {path}: {e}[/red]")
+        return False
+
+    log(f"security now points at {CANONICAL_SECURITY_URI}")
+    return update_lists(log)
+
+
+def _repoint_deb822_main(content: str, uri: str) -> tuple[str, int]:
+    stanzas = _parse_deb822_stanzas(content)
+    changed = 0
+    for stanza in stanzas:
+        if _deb822_stanza_is_security(stanza):
+            for i, line in enumerate(stanza):
+                if line.strip().startswith("URIs:"):
+                    repaired = f"URIs: {CANONICAL_SECURITY_URI}"
+                    if line != repaired:
+                        stanza[i] = repaired
+                        changed += 1
+            continue
+        for i, line in enumerate(stanza):
+            if line.strip().startswith("URIs:"):
+                stanza[i] = f"URIs: {uri}"
+                changed += 1
+    return "\n\n".join("\n".join(s) for s in stanzas) + "\n", changed
+
+
+def _repoint_legacy_main(content: str, uri: str) -> tuple[str, int]:
+    lines = content.splitlines()
+    changed = 0
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not (stripped.startswith(("deb ", "deb-src ")) and "://" in stripped):
+            continue
+        parts = stripped.split()
+        if _legacy_line_is_security(stripped):
+            if parts[1] != CANONICAL_SECURITY_URI:
+                parts[1] = CANONICAL_SECURITY_URI
+                lines[i] = " ".join(parts)
+                changed += 1
+            continue
+        parts[1] = uri
+        lines[i] = " ".join(parts)
+        changed += 1
+    return "\n".join(lines) + "\n", changed
 
 
 def set_mirror(uri: str, log: Log) -> bool:
@@ -311,6 +482,16 @@ def set_mirror(uri: str, log: Log) -> bool:
 
     Rewritten from the host through the rootfs: no container login, and it
     works on a container that cannot currently reach any mirror at all.
+
+    The security stanza is identified by its Suites field and always forced
+    to CANONICAL_SECURITY_URI, never to the chosen mirror. An earlier version
+    repointed it at whatever mirror was chosen, which 404s on most mirrors —
+    regular mirrors are not required to carry debian-security. A version
+    after that left it "as found" when it looked unrelated to security, which
+    silently kept a once-corrupted container corrupted forever after, because
+    a URI that has already been repointed carries no hint that it was meant
+    to be the security archive. Suites does not change, so it is the only
+    signal used now.
 
     The previous sources file is kept and restored if apt cannot use the new
     one. A mirror that does not carry this release leaves apt unusable
@@ -329,24 +510,8 @@ def set_mirror(uri: str, log: Log) -> bool:
         log(f"[red]Could not read {path}: {e}[/red]")
         return False
 
-    lines = original.splitlines()
-    changed = 0
-    for i, line in enumerate(lines):
-        stripped = line.strip()
-        if stripped.startswith("URIs:"):
-            if _is_security(stripped):
-                log(f"  leaving security alone: {stripped}")
-                continue
-            lines[i] = f"URIs: {uri}"
-            changed += 1
-        elif stripped.startswith(("deb ", "deb-src ")) and "://" in stripped:
-            parts = stripped.split()
-            if _is_security(parts[1]):
-                log(f"  leaving security alone: {parts[1]}")
-                continue
-            parts[1] = uri
-            lines[i] = " ".join(parts)
-            changed += 1
+    repoint = _repoint_deb822_main if path == SOURCES_DEB822 else _repoint_legacy_main
+    new_content, changed = repoint(original, uri)
 
     if not changed:
         log(f"[red]No archive line found in {path}.[/red]")
@@ -361,10 +526,10 @@ def set_mirror(uri: str, log: Log) -> bool:
             log(f"[red]Could not write {path}: {e}[/red]")
             return False
 
-    if not write("\n".join(lines) + "\n"):
+    if not write(new_content):
         return False
 
-    log(f"{path} now points at {uri} ({changed} line(s))")
+    log(f"{path} now points at {uri} ({changed} line(s) changed)")
     log("")
 
     if update_lists(log):

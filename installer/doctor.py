@@ -12,7 +12,7 @@ import shutil
 import sys
 from typing import Callable, NamedTuple
 
-from . import audio
+from . import audio, packages
 from . import start as desktop
 from .const import (
     CONTAINER_NAME,
@@ -164,8 +164,11 @@ def diagnose() -> list[Issue]:
     except ImportError:
         issues.append(Issue("Textual", False, "Not installed", _fix_pip))
 
-    # Termux packages.
-    for name, binary, packages, x11 in (
+    # Termux packages. Loop variable deliberately not named `packages` — that
+    # shadowed the installer.packages module import for the rest of this
+    # function, and mypy caught the fallout: CANONICAL_SECURITY_URI and
+    # repair_security below resolved against a list, not the module.
+    for name, binary, pkg_names, x11 in (
         ("proot-distro", "proot-distro", ["proot-distro"], False),
         ("PulseAudio", "pulseaudio", ["pulseaudio"], False),
         ("Termux:X11", "termux-x11", ["termux-x11-nightly", "xorg-xrandr"], True),
@@ -179,7 +182,7 @@ def diagnose() -> list[Issue]:
                 name,
                 present,
                 "Installed" if present else "Missing",
-                None if present else _pkg_fix(name, packages, x11),
+                None if present else _pkg_fix(name, pkg_names, x11),
             )
         )
 
@@ -247,6 +250,21 @@ def diagnose() -> list[Issue]:
             else "No sink — Android has nothing to play through",
         )
     )
+
+    # Security archive. A mirror switch made before Suites-based detection
+    # existed could have left this pointing anywhere, and there is no reason
+    # to wait for another switch to notice.
+    if is_installed():
+        current_security = packages.security_uri()
+        security_ok = current_security == packages.CANONICAL_SECURITY_URI
+        issues.append(
+            Issue(
+                "Security archive",
+                security_ok,
+                current_security or "No security stanza found",
+                None if security_ok else packages.repair_security,
+            )
+        )
 
     # Firefox video defaults — only worth mentioning where Firefox exists.
     if os.path.exists(container_path(FIREFOX_BIN)):

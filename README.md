@@ -243,12 +243,23 @@ every search would match nothing and read as "no such package".
 An output pane below the results shows the command and its raw output, because
 a failed search and an empty one otherwise look identical.
 
-**Mirror** switches which Debian mirror the container fetches from. It leaves
-the security stanza alone — Debian 13's `debian.sources` carries the main
-archive and security as two separate stanzas at different paths, and a mirror
-repointed for both sends security requests somewhere it likely does not carry,
-which is what `apt update` exiting 100 after a switch usually means. If the
-new mirror still fails, the previous sources are restored automatically. The list is
+**Mirror** switches which Debian mirror the container fetches from. Debian
+13's `debian.sources` carries the main archive and security as two separate
+stanzas at different paths; repointing both at a mirror sends security
+requests somewhere it likely does not carry, and `apt update` exits 100 — the
+usual meaning of that error right after a switch. Security is identified by
+its `Suites:` field and always forced back to `security.debian.org`, never to
+the chosen mirror. If the new mirror still fails, the previous sources are
+restored automatically.
+
+Identifying the security stanza by its `Suites:` field rather than by
+inspecting its URI matters once a container has already been broken by an
+older switch: a URI that has been repointed at an unrelated mirror carries no
+hint that it was ever security, so the earlier fix repaired the file the first
+time and then quietly re-broke it on every switch after — restoring whatever
+value it found, which was the corrupted one. `Suites:` does not change, so it
+is the only signal used now, and Doctor reports the security archive on its
+own besides. The list is
 not hardcoded: **Refresh** pulls Debian's own deb822 masterlist and keeps the
 nearby countries, and **Measure** times a real download from each and sorts by
 throughput. `netselect-apt` does something similar but ranks by latency and

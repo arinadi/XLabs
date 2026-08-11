@@ -216,18 +216,8 @@ def test_config_roundtrip(tmp_key: str = "ARINANOLABS_TEST_KEY") -> None:
         check(config.get(key) == value, f"the test disturbed {key}")
 
 
-def test_set_mirror_leaves_security_alone() -> None:
-    """Regression: switching the mirror broke apt update with exit 100.
-
-    Debian 13 writes two stanzas to debian.sources — main archive and
-    security — at different paths. Repointing both at a mirror sends
-    security requests to a path most mirrors do not carry, and apt fails.
-    """
-    import tempfile
-
-    from installer import packages
-
-    sample = (
+def _sample_sources(security_uri: str = "https://security.debian.org/debian-security") -> str:
+    return (
         "Types: deb\n"
         "URIs: http://deb.debian.org/debian/\n"
         "Suites: trixie trixie-updates\n"
@@ -235,24 +225,47 @@ def test_set_mirror_leaves_security_alone() -> None:
         "Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg\n"
         "\n"
         "Types: deb\n"
-        "URIs: http://security.debian.org/debian-security/\n"
+        f"URIs: {security_uri}\n"
         "Suites: trixie-security\n"
         "Components: main contrib non-free non-free-firmware\n"
         "Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg\n"
     )
 
+
+def test_set_mirror_protects_security() -> None:
+    """Regression, two rounds.
+
+    Round 1 shipped: switching the mirror repointed security at it too,
+    which most mirrors do not carry, and apt exited 100. The fix repointed
+    security to the canonical URI whenever it recognised the stanza — by
+    guessing from the URI's own content.
+
+    Round 2 was reported from a device: guessing from the URI stopped
+    working the moment the URI was already wrong, which is exactly the
+    state a container corrupted by round 1 was in. A stanza is identified
+    by its Suites field now, which a bad URI cannot obscure, and every
+    switch repairs security regardless of what it currently says.
+    """
+    import tempfile
+
+    from installer import packages
+
     fake_root = tempfile.mkdtemp()
     target = os.path.join(fake_root, "etc", "apt", "sources.list.d", "debian.sources")
     os.makedirs(os.path.dirname(target))
-    with open(target, "w", newline="\n") as f:
-        f.write(sample)
 
     original_container_path = packages.container_path
     original_update_lists = packages.update_lists
     packages.container_path = lambda p: os.path.join(fake_root, p.lstrip("/"))
 
+    def write(content: str) -> None:
+        with open(target, "w", newline="\n") as f:
+            f.write(content)
+
     try:
-        # Success case: the security stanza must be untouched.
+        # Round 1: a healthy file, switching the mirror must not touch
+        # security's URI beyond normalising it to the canonical form.
+        write(_sample_sources())
         packages.update_lists = lambda log: True
         check(
             packages.set_mirror("http://kartolo.sby.datautama.net.id/debian/", lambda m: None),
@@ -264,14 +277,39 @@ def test_set_mirror_leaves_security_alone() -> None:
             "the main archive was not repointed",
         )
         check(
-            "http://security.debian.org/debian-security/" in result,
-            "the security stanza was overwritten — this is the bug that shipped",
+            packages.CANONICAL_SECURITY_URI in result,
+            "security did not end up at the canonical URI",
+        )
+
+        # Round 2: the exact shape reported from a device — security already
+        # corrupted to an unrelated mirror by an earlier, buggy switch, with
+        # nothing about its URI left to suggest it was ever security.
+        write(_sample_sources(security_uri="http://werog.interkoneksimedia.co.id/debian/"))
+        check(
+            packages.security_uri() == "http://werog.interkoneksimedia.co.id/debian/",
+            "test setup did not reproduce the corrupted state",
+        )
+        check(
+            packages.set_mirror("http://kartolo.sby.datautama.net.id/debian/", lambda m: None),
+            "set_mirror reported failure on a working update",
+        )
+        check(
+            packages.security_uri() == packages.CANONICAL_SECURITY_URI,
+            "pre-existing corruption survived the switch",
+        )
+
+        # repair_security() must also fix it standalone, since Doctor offers
+        # it independently of switching mirrors.
+        write(_sample_sources(security_uri="http://werog.interkoneksimedia.co.id/debian/"))
+        check(packages.repair_security(lambda m: None), "repair_security reported failure")
+        check(
+            packages.security_uri() == packages.CANONICAL_SECURITY_URI,
+            "repair_security did not fix a corrupted stanza",
         )
 
         # Failure case: a mirror apt cannot use must roll back rather than
         # leave the container stuck.
-        with open(target, "w", newline="\n") as f:
-            f.write(sample)
+        write(_sample_sources())
         packages.update_lists = lambda log: False
         check(
             not packages.set_mirror("http://bad-mirror.invalid/debian/", lambda m: None),
@@ -289,6 +327,24 @@ def test_set_mirror_leaves_security_alone() -> None:
     finally:
         packages.container_path = original_container_path
         packages.update_lists = original_update_lists
+
+
+def test_doctor_reports_security_archive() -> None:
+    """The shadowing bug mypy caught: a loop variable named `packages` hid
+    the module import for the rest of diagnose(), so this check silently
+    referenced a list instead of installer.packages and crashed at runtime
+    the moment a container existed."""
+    from installer import doctor
+
+    issues = doctor.diagnose()
+    names = {i.name for i in issues}
+    if doctor.is_installed():
+        check("Security archive" in names, "the check did not run with a container present")
+    else:
+        check(
+            "Security archive" not in names,
+            "the check ran with no container to check",
+        )
 
 
 def test_bench_presets_are_coherent() -> None:
@@ -742,7 +798,8 @@ def main() -> int:
         test_doctor_scan_shape,
         test_firefox_prefs_are_defaults_not_locks,
         test_config_roundtrip,
-        test_set_mirror_leaves_security_alone,
+        test_set_mirror_protects_security,
+        test_doctor_reports_security_archive,
         test_bench_presets_are_coherent,
         test_audio_test_tone_is_valid,
         test_doctor_reports_audio,
