@@ -225,23 +225,93 @@ def start_xfce4(log=_noop) -> bool:
         f"su admin -c '{inner}'"
     )
 
+    log(f"  {cmd}")
+
     os.makedirs(os.path.dirname(XFCE_LOG), exist_ok=True)
     with open(XFCE_LOG, "w") as f:
         subprocess.Popen(cmd, shell=True, stdout=f, stderr=f)
 
-    time.sleep(5)
+    # Poll rather than sleeping a fixed five seconds. A cold start on a slow
+    # phone routinely takes longer, and declaring failure early sends people
+    # debugging a desktop that was merely still coming up.
+    for waited in range(1, 31):
+        time.sleep(1)
+        if is_running():
+            log(f"  session up after {waited}s")
+            return True
+        if waited in (5, 10, 20):
+            log(f"  still waiting ({waited}s)...")
 
-    if is_running():
-        return True
+    log("  no xfce4-session after 30s")
+    return False
 
-    log("  session failed to start; first lines of xfce4.log:")
+
+def collect_diagnostics(log=_noop) -> None:
+    """Gather everything needed to explain why the desktop never appeared.
+
+    The usual symptom is an X cursor on an empty root window, which means the
+    server is up and nothing connected to it. That splits into host-side
+    causes (no server, no socket) and container-side ones (no session binary,
+    no admin user, or the display not reachable through the --shared-x11 bind
+    mount). The `xset q` probe below is the one that separates them: if it
+    answers from inside the container, the display path is fine and the fault
+    is in the session itself.
+    """
+    log("")
+    log("── Host ──────────────────────────────────────")
+    host_probes = (
+        ("termux-x11", "pgrep -af termux-x11"),
+        ("X11 socket", f"ls -la {TMPDIR}/.X11-unix 2>&1"),
+        ("X lock files", f"ls -la {TMPDIR}/.X*-lock 2>&1"),
+        ("PulseAudio", "pgrep -af pulseaudio"),
+        ("virgl", "pgrep -af virgl_test_server"),
+        ("proot sessions", f"pgrep -af 'proot.*{CONTAINER_NAME}'"),
+        ("DISPLAY", "echo \"${DISPLAY:-(unset)}\""),
+    )
+    for label, cmd in host_probes:
+        _, out = run_cmd(cmd)
+        text = out.strip() or "(nothing)"
+        log(f"{label}:")
+        for line in text.splitlines()[:8]:
+            log(f"  {line}")
+
+    log("")
+    log("── Container ─────────────────────────────────")
+    probe = (
+        'echo "admin user: $(id admin 2>&1)"; '
+        'echo "startxfce4:  $(command -v startxfce4 || echo MISSING)"; '
+        'echo "xfce4-session: $(command -v xfce4-session || echo MISSING)"; '
+        'echo "dbus-launch: $(command -v dbus-launch || echo MISSING)"; '
+        'echo "xset:        $(command -v xset || echo MISSING)"; '
+        'echo "socket dir:  $(ls /tmp/.X11-unix 2>&1)"; '
+        'echo "x server:    $(DISPLAY=:0 xset q 2>&1 | head -2 | tr \'\\n\' \' \')"'
+    )
+    rc, out = run_cmd(
+        f"proot-distro login {CONTAINER_NAME} -- bash -lc '{probe}'", timeout=90
+    )
+    text = out.strip()
+    if not text:
+        log(f"  could not enter the container (exit {rc})")
+    for line in text.splitlines()[:20]:
+        log(f"  {line}")
+
+    log("")
+    log("── xfce4.log ─────────────────────────────────")
     try:
         with open(XFCE_LOG) as f:
-            for line in f.read().strip().splitlines()[:5]:
-                log(f"    {line}")
-    except OSError:
-        log("    (log unreadable)")
-    return False
+            content = f.read().strip()
+    except OSError as e:
+        content = f"(unreadable: {e})"
+    if not content:
+        content = "(empty — the session wrote nothing at all)"
+    for line in content.splitlines()[-40:]:
+        log(f"  {line}")
+
+    log("")
+    log("[dim]Reading this: if 'x server' answers with keyboard/pointer info,[/dim]")
+    log("[dim]the display path works and the fault is inside the session.[/dim]")
+    log("[dim]If it says 'unable to open display', the socket is not reaching[/dim]")
+    log("[dim]the container and --shared-x11 or the socket cleanup is at fault.[/dim]")
 
 
 START_STEPS = [
@@ -271,4 +341,10 @@ def start_desktop(log=_noop) -> bool:
             ok = False
         log("  ok" if ok else "  warning")
 
-    return is_running()
+    if is_running():
+        return True
+
+    log("")
+    log("[bold]Desktop did not come up — collecting diagnostics[/bold]")
+    collect_diagnostics(log)
+    return False

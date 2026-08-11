@@ -117,6 +117,60 @@ Built with [Textual](https://github.com/Textualize/textual):
 - **Status view** — environment checks, cache size, version
 - **Guarded destructive actions** — Reset and Clean Cache go through a modal
 
+Every screen returns to the menu, and anything destructive is gated behind a
+confirmation first:
+
+```mermaid
+stateDiagram-v2
+    [*] --> MainScreen
+
+    MainScreen --> ActionScreen: Start · Stop · Update
+    MainScreen --> StatusScreen: Status
+    MainScreen --> DoctorScreen: Doctor
+    MainScreen --> ToolsScreen: Extra Tools
+    MainScreen --> ConfirmScreen: Reset · Clean Cache
+
+    ConfirmScreen --> MainScreen: Cancel
+    ConfirmScreen --> ActionScreen: Confirm
+
+    DoctorScreen --> ActionScreen: Fix · Diagnose
+
+    StatusScreen --> MainScreen: Back
+    ToolsScreen --> MainScreen: Back
+    DoctorScreen --> MainScreen: Back
+    ActionScreen --> MainScreen: Back, once idle
+```
+
+`ActionScreen` is where the long work happens. It hands the job to a thread so
+the terminal keeps redrawing, and refuses to be dismissed until that thread is
+done — leaving mid image pull would strand a half-installed container:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant Screen as ActionScreen
+    participant Worker as Thread worker
+    participant Proc as Subprocess
+
+    User->>Screen: choose an action
+    Screen->>Screen: mount · busy = true · Back disabled
+    Screen->>Worker: run_task()
+
+    Worker->>Proc: stream_cmd(cmd)
+    loop each output line
+        Proc-->>Worker: stdout
+        Worker-->>Screen: call_from_thread(write)
+    end
+    Note over Worker,Proc: a watchdog kills the whole<br/>process tree at the timeout
+
+    Proc-->>Worker: exit code
+    Worker->>Screen: finish · busy = false · Back enabled
+
+    User->>Screen: Back or Escape
+    Screen-->>User: return to the menu
+```
+
 ---
 
 ## 📦 What's Included
@@ -172,7 +226,9 @@ arinanoLabs/
 │   ├── preflight.py    ←   Environment checks (pure stdlib)
 │   ├── system.py       ←   Subprocess helpers
 │   └── const.py        ←   Paths and names
+│   └── doctor.py       ←   Diagnosis and repair
 ├── image/              ← System definition (Dockerfile + configs)
+├── tests/              ← Headless TUI tests, run by CI
 ├── docker/dev/         ← Local TUI test harness
 └── docs/               ← Debugging notes and references
 ```

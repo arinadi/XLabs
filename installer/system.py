@@ -6,7 +6,9 @@ event loop.
 
 import os
 import shutil
+import signal
 import subprocess
+import threading
 from datetime import datetime, timezone
 
 from .const import HOME_BIN, LAUNCHER_SRC, PREFIX_BIN, PROOT_DIR, REPO_DIR
@@ -25,10 +27,36 @@ def run_cmd(cmd: str, timeout: int = 60) -> tuple[int, str]:
         return 1, str(e)
 
 
+def _kill_tree(proc: subprocess.Popen) -> None:
+    """Kill the command and everything it spawned.
+
+    proc.kill() only reaches the shell started by shell=True. Its children
+    keep running and keep the stdout pipe open, so the reader never sees EOF
+    and a timeout has no effect — which is exactly how the watchdog here
+    failed the first time.
+    """
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+            capture_output=True,
+            check=False,
+        )
+        return
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except (OSError, ProcessLookupError):
+        proc.kill()
+
+
 def stream_cmd(cmd: str, log, timeout: int = 900) -> int:
     """Run a shell command, sending each output line to `log`.
 
     Returns the exit code, or 1 if the command outran `timeout`.
+
+    The deadline is enforced by a watchdog timer rather than checked while
+    reading output. A stalled download produces no lines at all, so a
+    per-line check never fires — which left every long operation here with
+    no working timeout.
     """
     proc = subprocess.Popen(
         cmd,
@@ -38,18 +66,30 @@ def stream_cmd(cmd: str, log, timeout: int = 900) -> int:
         text=True,
         bufsize=1,
         errors="replace",
+        # Own process group, so the whole tree can be killed at once.
+        start_new_session=os.name != "nt",
     )
 
-    deadline = datetime.now(timezone.utc).timestamp() + timeout
-    assert proc.stdout is not None
-    for line in proc.stdout:
-        log(line.rstrip())
-        if datetime.now(timezone.utc).timestamp() > deadline:
-            proc.kill()
-            log(f"[red]Timed out after {timeout}s[/red]")
-            return 1
+    timed_out = threading.Event()
 
-    return proc.wait()
+    def _expire() -> None:
+        timed_out.set()
+        _kill_tree(proc)
+
+    watchdog = threading.Timer(timeout, _expire)
+    watchdog.start()
+    try:
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            log(line.rstrip())
+        rc = proc.wait()
+    finally:
+        watchdog.cancel()
+
+    if timed_out.is_set():
+        log(f"[red]Timed out after {timeout}s[/red]")
+        return 1
+    return rc
 
 
 def is_installed() -> bool:

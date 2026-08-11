@@ -75,6 +75,9 @@ class ActionScreen(Screen):
         self._title = title
         self._runner = runner
         self._log: RichLog | None = None
+        # Not _running: MessagePump uses that name for its own loop state, and
+        # shadowing it stops the screen ever processing its mount.
+        self._busy = True
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -100,12 +103,20 @@ class ActionScreen(Screen):
         self.app.call_from_thread(self._finish)
 
     def _finish(self) -> None:
+        self._busy = False
         button = self.query_one("#back", Button)
         button.disabled = False
         button.focus()
 
     @on(Button.Pressed, "#back")
     def action_back(self) -> None:
+        # The Back button is disabled while the worker runs, but the escape
+        # binding calls this same action. Without the guard, escape walks out
+        # of a screen the UI says you cannot leave — mid image pull, that
+        # leaves a half-installed container with nothing on screen to say so.
+        if self._busy:
+            self.notify("Still working — this cannot be interrupted yet.", severity="warning")
+            return
         self.app.pop_screen()
 
 
@@ -137,9 +148,9 @@ class StatusScreen(Screen):
             )
             for check in run_all_checks()
         ]
+        running = desktop.is_running()
         rows.append(
-            ("Desktop", "ok" if desktop.is_running() else "no",
-             "Running" if desktop.is_running() else "Not running")
+            ("Desktop", "ok" if running else "no", "Running" if running else "Not running")
         )
         rows.append(("Image cache", "-", human_size(CACHE_DIR)))
         rows.append(("Version", "-", get_version()))
@@ -202,8 +213,10 @@ def run_reset(log) -> None:
         desktop.stop_desktop(log)
         log("")
 
-    log("Killing leftover proot processes...")
-    run_cmd("pkill -9 -f 'proot' 2>/dev/null")
+    # Scoped to this container: a bare 'proot' pattern also kills unrelated
+    # proot-distro sessions the user may have running.
+    log("Killing leftover proot processes for this container...")
+    run_cmd(f"pkill -9 -f 'proot.*{CONTAINER_NAME}' 2>/dev/null")
 
     log("Removing container...")
     rc = stream_cmd(f"proot-distro remove {CONTAINER_NAME}", log, timeout=300)
@@ -342,6 +355,7 @@ class DoctorScreen(Screen):
         with Horizontal(id="doctor-buttons"):
             yield Button("Re-scan", id="rescan")
             yield Button("Fix", id="fix", variant="success", disabled=True)
+            yield Button("Diagnose", id="diagnose")
             yield Button("Back", id="back", variant="primary")
         yield Footer()
 
@@ -380,6 +394,11 @@ class DoctorScreen(Screen):
     @on(Button.Pressed, "#rescan")
     def _rescan(self) -> None:
         self.scan()
+
+    @on(Button.Pressed, "#diagnose")
+    def _diagnose(self) -> None:
+        """Same report the start sequence prints on failure, on demand."""
+        self.app.push_screen(ActionScreen("Desktop Diagnostics", desktop.collect_diagnostics))
 
     @on(Button.Pressed, "#fix")
     def _fix(self) -> None:

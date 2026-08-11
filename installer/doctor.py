@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 from typing import Callable, NamedTuple
 
 from . import start as desktop
@@ -16,6 +17,7 @@ from .const import (
     CONTAINER_NAME,
     IMAGE_REF,
     LAUNCHER_SRC,
+    PREFIX_BIN,
     REPO_DIR,
     TMPDIR,
 )
@@ -49,7 +51,7 @@ def _fix_launcher(log: Log) -> bool:
         log(f"  {where}")
         return False
     log(f"  linked {where} -> {LAUNCHER_SRC}")
-    if not where.startswith("/data/data/com.termux/files/usr/bin"):
+    if not where.startswith(PREFIX_BIN):
         for rc in ensure_home_bin_on_path():
             log(f"  added ~/bin to PATH in {rc}")
         log("  open a new session for PATH to take effect")
@@ -59,8 +61,13 @@ def _fix_launcher(log: Log) -> bool:
 def _fix_pip(log: Log) -> bool:
     req = os.path.join(REPO_DIR, "requirements.txt")
     target = f"-r {req}" if os.path.exists(req) else "textual"
+    # sys.executable, not "python3": on a device with more than one Python the
+    # repair would otherwise install into an interpreter the TUI never uses
+    # and then report success.
     for flag in ("", " --break-system-packages", " --user"):
-        if stream_cmd(f"python3 -m pip install {target}{flag}", log, timeout=600) == 0:
+        if stream_cmd(
+            f'"{sys.executable}" -m pip install {target}{flag}', log, timeout=600
+        ) == 0:
             return True
     return False
 
