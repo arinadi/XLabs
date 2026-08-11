@@ -93,7 +93,7 @@ Starting the desktop is a chain, and each link is cleaned up in reverse on stop:
 
 ```mermaid
 flowchart LR
-    A[PulseAudio] --> B[Audio modules<br/>TCP :4713]
+    A[PulseAudio] --> B["Shared socket<br/>$PREFIX/tmp/pulse-socket"]
     B --> C[virgl renderer]
     C --> D[termux-x11 :0]
     D --> E{X11 socket<br/>ready?}
@@ -178,7 +178,8 @@ sequenceDiagram
 Brings the whole stack up in order, streaming each step:
 
 1. **Wake lock** — `termux-wake-lock`, so Android does not freeze the session
-2. **PulseAudio** — server plus the TCP module the container connects back to
+2. **Audio server** — PulseAudio plus a Unix socket in the shared tmp, which
+   is what the container opens
 3. **virgl renderer** — first one that exists, or software rendering
 4. **ICE socket directory** — `/tmp/.ICE-unix`, which `xfce4-session` needs to
    accept its own children and which nothing else on this stack creates
@@ -269,11 +270,19 @@ locks: `about:config` still wins.
 VirGL does not solve this. It accelerates OpenGL, and the cost of a video is in
 decoding it.
 
-**Audio** is three things at once: PulseAudio running in Termux, its TCP module
-loaded, and a sink on the Android side. Any one missing is silence, and they
-fail in different places — so **Audio** plays a test tone from Termux first and
-then from inside the container. Heard from Termux only means the container
-cannot reach the server; heard from neither means Android has no working sink.
+**Audio** reaches the container through a Unix socket, not TCP. The server runs
+in Termux and `--shared-tmp` puts its socket at `/tmp/pulse-socket` inside the
+container — a file it can simply open, with no port to bind and no loopback to
+traverse.
+
+That is not the documented approach, which is TCP. TCP was tried and failed on
+a device: the module loaded, `pactl list modules` listed it, and every address
+the container tried was refused. Listed is not the same as listening, so the
+check now connects rather than reads a list.
+
+**Audio** plays a test tone from Termux first and then from inside the
+container. Heard from Termux only means the socket is not reaching in; heard
+from neither means Android has no working sink.
 
 **Recording is not possible**, and no amount of configuration changes that. The
 Termux app does not declare `android.permission.RECORD_AUDIO`, so PulseAudio

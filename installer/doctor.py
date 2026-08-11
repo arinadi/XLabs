@@ -203,8 +203,8 @@ def diagnose() -> list[Issue]:
         )
     )
 
-    # Audio. The server lives in Termux and the container reaches it over
-    # TCP, so all three have to hold or there is simply no sound.
+    # Audio. The server lives in Termux and the container opens its socket
+    # through the shared tmp, so both have to hold or there is no sound.
     server = audio.server_running()
     issues.append(
         Issue(
@@ -215,13 +215,15 @@ def diagnose() -> list[Issue]:
         )
     )
 
-    tcp = audio.tcp_module_loaded()
+    # Checked by connecting, not by listing modules: a module can be loaded
+    # and accept nothing, which is how the old TCP path failed silently.
+    reachable = audio.socket_ready()
     issues.append(
         Issue(
-            "Audio over TCP",
-            tcp,
-            "Loaded" if tcp else "module-native-protocol-tcp not loaded",
-            None if tcp else audio.ensure_server,
+            "Audio socket",
+            reachable,
+            audio.PULSE_SOCKET if reachable else "Not accepting connections",
+            None if reachable else audio.ensure_server,
         )
     )
 
