@@ -39,6 +39,7 @@ from installer.app import (
     MainScreen,
     ReposScreen,
     StatusScreen,
+    SwapScreen,
     ToolsScreen,
 )
 from installer.preflight import run_all_checks
@@ -414,6 +415,117 @@ def test_electron_sandbox_detection_and_fix() -> None:
         doctor.container_path = original_container_path
 
 
+def test_resolv_conf_check_and_fix() -> None:
+    """DNS failure reads as a dead mirror ("Temporary failure in name
+    resolution") when the real cause is an empty or dangling resolv.conf
+    inside the container — this is the check and repair for that."""
+    fake_root = tempfile.mkdtemp()
+    etc_dir = os.path.join(fake_root, "etc")
+    os.makedirs(etc_dir)
+    target = os.path.join(etc_dir, "resolv.conf")
+
+    original_container_path = doctor.container_path
+    doctor.container_path = lambda p: os.path.join(fake_root, p.lstrip("/"))
+    try:
+        check(not doctor._resolv_conf_ok(), "a missing resolv.conf must not read as ok")
+
+        with open(target, "w", newline="\n") as f:
+            f.write("# empty, generated at container creation\n")
+        check(
+            not doctor._resolv_conf_ok(),
+            "a resolv.conf with no nameserver line must not read as ok",
+        )
+
+        lines: list[str] = []
+        check(doctor._fix_resolv_conf(lines.append), "the fix reported failure")
+        check(doctor._resolv_conf_ok(), "the fix did not leave a usable resolv.conf")
+        check("1.1.1.1" in open(target).read(), "the fix did not write a real nameserver")
+
+        with open(target, "w", newline="\n") as f:
+            f.write("nameserver 10.0.0.1\n")
+        check(doctor._resolv_conf_ok(), "an existing nameserver was not recognised")
+    finally:
+        doctor.container_path = original_container_path
+
+
+def test_timezone_check_and_fix() -> None:
+    """The image ships UTC; the repair points /etc/localtime at the
+    device's own zone once it can tell what that is, and refuses rather
+    than writing a dangling symlink for a zone with no zoneinfo file."""
+    fake_root = tempfile.mkdtemp()
+    os.makedirs(os.path.join(fake_root, "usr", "share", "zoneinfo", "Asia"))
+    open(os.path.join(fake_root, "usr", "share", "zoneinfo", "Asia", "Jakarta"), "w").close()
+    os.makedirs(os.path.join(fake_root, "etc"))
+
+    original_container_path = doctor.container_path
+    original_run_cmd = doctor.run_cmd
+    doctor.container_path = lambda p: os.path.join(fake_root, p.lstrip("/"))
+    doctor.run_cmd = lambda cmd, timeout=60: (0, "Asia/Jakarta\n")
+    try:
+        check(
+            doctor._android_timezone() == "Asia/Jakarta",
+            "did not read the fake getprop output",
+        )
+        check(
+            doctor._container_timezone() is None,
+            "a fresh container must not already report a timezone",
+        )
+
+        doctor.run_cmd = lambda cmd, timeout=60: (0, "Not/AZone\n")
+        lines: list[str] = []
+        check(
+            not doctor._fix_timezone(lines.append),
+            "claimed success for a zone with no zoneinfo file in the container",
+        )
+        doctor.run_cmd = lambda cmd, timeout=60: (0, "Asia/Jakarta\n")
+
+        if os.name != "nt":
+            # Symlink creation needs a privilege this test sandbox may not
+            # have on Windows; the logic above it is what matters there.
+            check(doctor._fix_timezone(lambda m: None), "the fix reported failure")
+            check(
+                doctor._container_timezone() == "Asia/Jakarta",
+                "/etc/timezone was not written",
+            )
+            link_target = os.readlink(os.path.join(fake_root, "etc", "localtime"))
+            check(
+                link_target == "/usr/share/zoneinfo/Asia/Jakarta",
+                f"localtime points at {link_target!r}, not the container-relative path",
+            )
+    finally:
+        doctor.container_path = original_container_path
+        doctor.run_cmd = original_run_cmd
+
+
+def test_storage_check_and_cleanup_guard() -> None:
+    """The only automatic storage repair is apt cache cleanup, and it must
+    refuse rather than pretend when there is no container to clean."""
+    if not doctor.is_installed():
+        lines: list[str] = []
+        check(not doctor._fix_storage(lines.append), "claimed success with no container")
+        check(lines, "the refusal was not explained")
+
+    issues = {i.name: i for i in doctor.diagnose()}
+    check("Storage" in issues, "Storage must always be reported")
+    storage = issues["Storage"]
+    if not storage.ok:
+        expected_fix = doctor._fix_storage if doctor.is_installed() else None
+        check(storage.fix is expected_fix, "Storage repair offered without a container to clean")
+
+
+def test_swap_never_auto_fixable() -> None:
+    """Enabling swap writes multiple GB and turns on kernel swap for the
+    rest of the session — it must never be something Fix All can trigger
+    unattended, so a Swap Issue must never carry a `fix`."""
+    ram_mb, active = doctor.swap_status()
+    check(ram_mb is None or isinstance(ram_mb, int), f"unexpected RAM reading: {ram_mb!r}")
+    check(isinstance(active, bool), f"unexpected swap-active reading: {active!r}")
+
+    for issue in doctor.diagnose():
+        if issue.name == "Swap":
+            check(issue.fix is None, "Swap must never carry an automatic fix")
+
+
 def test_bench_presets_are_coherent() -> None:
     """Every preset must be runnable and its result storable."""
     from installer import bench
@@ -642,6 +754,16 @@ async def test_narrow_terminal_layout() -> None:
                     await pilot.click("#back")
                     await pilot.pause()
                     check(isinstance(app.screen, DoctorScreen), "dupes did not return")
+
+                    # Raises OutOfBounds if Swap is not on screen — this is
+                    # the fourth button on that row, added after the fifth-
+                    # button regression above, so it needs the same guard.
+                    await pilot.click("#swap")
+                    await pilot.pause()
+                    check(isinstance(app.screen, SwapScreen), f"got {app.screen!r}")
+                    await pilot.click("#back")
+                    await pilot.pause()
+                    check(isinstance(app.screen, DoctorScreen), "swap did not return")
 
                 await pilot.click("#back")
                 await pilot.pause()
@@ -999,6 +1121,10 @@ def main() -> int:
         test_set_mirror_protects_security,
         test_doctor_reports_security_archive,
         test_electron_sandbox_detection_and_fix,
+        test_resolv_conf_check_and_fix,
+        test_timezone_check_and_fix,
+        test_storage_check_and_cleanup_guard,
+        test_swap_never_auto_fixable,
         test_bench_presets_are_coherent,
         test_audio_test_tone_is_valid,
         test_doctor_reports_audio,

@@ -32,7 +32,7 @@ from textual.widgets import (
 
 from . import audio, bench, doctor, packages
 from . import start as desktop
-from .const import CACHE_DIR, CONTAINER_NAME, IMAGE_REF, REPO_DIR
+from .const import CACHE_DIR, CONTAINER_NAME, IMAGE_REF, REPO_DIR, SWAP_FILE
 from .preflight import run_all_checks
 from .system import get_version, human_size, is_installed, stream_cmd
 
@@ -562,7 +562,8 @@ class DoctorScreen(CopyableScreen):
             yield Button("Dupes", id="dupes")
             yield Button("Audio", id="audio")
             yield Button("Bench", id="bench")
-        with Grid(classes="row2"):
+        with Grid(classes="row3"):
+            yield Button("Swap", id="swap")
             yield Button("C", id="copy")
             yield Button("Back", id="back", variant="primary")
         yield Footer()
@@ -635,6 +636,10 @@ class DoctorScreen(CopyableScreen):
     def _bench(self) -> None:
         self.app.push_screen(ActionScreen("GPU Benchmark", bench.run))
 
+    @on(Button.Pressed, "#swap")
+    def _swap(self) -> None:
+        self.app.push_screen(SwapScreen())
+
     @on(Button.Pressed, "#fix")
     def _fix(self) -> None:
         issues = self._issues
@@ -647,6 +652,83 @@ class DoctorScreen(CopyableScreen):
                     log("Remaining problems need you — see the detail column.")
 
         self.app.push_screen(ActionScreen("Doctor — Fix", runner))
+
+    @on(Button.Pressed, "#back")
+    def action_back(self) -> None:
+        self.app.pop_screen()
+
+
+class SwapScreen(Screen):
+    """A swap file for devices where RAM runs short under XFCE plus Electron.
+
+    Never reachable from Doctor's Fix All: creating it writes real storage
+    and turns on kernel swap for the rest of this session, so it only ever
+    runs after an explicit confirm here.
+    """
+
+    BINDINGS = [("escape", "back", "Back")]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.status_text = ""
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Label("Swap", classes="screen-title")
+        yield Static("", id="swap-status")
+        with Grid(classes="row2"):
+            yield Button("Enable", id="enable", variant="success")
+            yield Button("Disable", id="disable", variant="error")
+        yield Button("Back", id="back", variant="primary")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self._refresh()
+
+    def on_screen_resume(self) -> None:
+        self._refresh()
+
+    def _refresh(self) -> None:
+        ram_mb, active = doctor.swap_status()
+        exists = os.path.exists(SWAP_FILE)
+        ram_line = f"{ram_mb} MB RAM" if ram_mb is not None else "RAM unknown"
+        if active:
+            state = f"active — {SWAP_FILE}"
+        elif exists:
+            state = "file exists but is not active — Enable turns it on"
+        else:
+            state = "not set up"
+        self.status_text = f"{ram_line}\n{state}"
+        self.query_one("#swap-status", Static).update(self.status_text)
+        self.query_one("#enable", Button).disabled = active
+        self.query_one("#disable", Button).disabled = not active and not exists
+
+    @on(Button.Pressed, "#enable")
+    def _enable(self) -> None:
+        self.app.push_screen(
+            ConfirmScreen(
+                "Enable swap",
+                f"Writes a {doctor.SWAP_SIZE_MB} MB file to {SWAP_FILE} and "
+                "turns on kernel swap for the rest of this session.\n\n"
+                "Some devices' kernels refuse an unprivileged swapon outright "
+                "— the log will say so rather than pretend it worked. It does "
+                "not survive a real device reboot on its own, and costs real "
+                "storage and some flash wear while active. Disable removes it.",
+                confirm_label="Enable",
+            ),
+            when_confirmed(self.app, lambda: ActionScreen("Enable swap", doctor.create_swap)),
+        )
+
+    @on(Button.Pressed, "#disable")
+    def _disable(self) -> None:
+        self.app.push_screen(
+            ConfirmScreen(
+                "Disable swap",
+                f"Turns off kernel swap and deletes {SWAP_FILE}.",
+                confirm_label="Disable",
+            ),
+            when_confirmed(self.app, lambda: ActionScreen("Disable swap", doctor.remove_swap)),
+        )
 
     @on(Button.Pressed, "#back")
     def action_back(self) -> None:

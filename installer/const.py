@@ -24,3 +24,9 @@ LAUNCHER_SRC = os.path.join(REPO_DIR, "alabs")
 # Termux writes here; TMPDIR is set in a normal Termux session but not always
 # in the environment a launcher inherits, so fall back explicitly.
 TMPDIR = os.environ.get("TMPDIR", f"{TERMUX_PREFIX}/tmp")
+
+# An opt-in swap file for devices where XFCE plus an Electron app or two
+# outgrows RAM. Lives next to REPO_DIR, not under TMPDIR: TMPDIR is bound
+# into the container's /tmp by --shared-tmp and is not meant to hold
+# anything this large or persistent.
+SWAP_FILE = os.path.expanduser("~/.arinanolabs-swap")

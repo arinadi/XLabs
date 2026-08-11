@@ -304,12 +304,30 @@ Querying installed Android apps is unreliable from Termux, and reporting
 <!-- screenshot: doctor -->
 
 Repository checkout, launcher target, Textual, proot-distro, PulseAudio,
-Termux:X11, the GPU renderer, the X11 app, the container, audio, the security
-archive, Electron apps' sandbox, Firefox's video defaults, and stale X11
-sockets.
+Termux:X11, the GPU renderer, the X11 app, the container, storage, DNS,
+timezone, audio, the security archive, Electron apps' sandbox, Firefox's
+video defaults, swap, and stale X11 sockets.
 
 **GPU renderer** is `virglrenderer-android`. Without it the desktop runs on
 llvmpipe — everything is drawn on the CPU.
+
+**Storage** reuses the same free-space check the installer runs before
+pulling the image, at a lower floor: once a container exists, apt's own
+cache is the only space a repair can free without deleting something you
+put there yourself, so that is all the fix does — `apt-get clean` and
+`autoremove`.
+
+**DNS** failures inside the container read exactly like a dead mirror —
+`apt-get update` fails with "Temporary failure in name resolution" even
+though the connection itself is fine. The usual cause is `resolv.conf`
+being empty or a dangling symlink (some images ship one pointing at
+systemd-resolved, which does not run under proot). The repair replaces it
+with `1.1.1.1` and `8.8.8.8`.
+
+**Timezone** is UTC in the image and nothing ever points it at the device's
+own zone, so file timestamps and a terminal's clock inside the container
+silently disagree with Android's. The repair reads the device's zone with
+`getprop persist.sys.timezone` and symlinks `/etc/localtime` to match.
 
 **Electron apps** (VS Code, and anything else built on Electron) open nothing
 at all under proot: their SUID sandbox needs unprivileged user namespaces,
@@ -320,14 +338,23 @@ whatever gets installed later is caught too — and adds `--no-sandbox` to its
 `.desktop` launcher. proot is already the outer isolation boundary on a
 personal device, so there is nothing behind the sandbox worth protecting.
 
-That last one is the fix for stuttering YouTube. There is no VA-API through
-proot, so VP9 and AV1 are decoded on the CPU — and that, not rendering, is what
-makes playback bad. The repair drops a preferences file into the container that
-turns both off, so YouTube falls back to H.264. They are defaults rather than
-locks: `about:config` still wins.
+Firefox's video defaults are the fix for stuttering YouTube. There is no
+VA-API through proot, so VP9 and AV1 are decoded on the CPU — and that, not
+rendering, is what makes playback bad. The repair drops a preferences file
+into the container that turns both off, so YouTube falls back to H.264. They
+are defaults rather than locks: `about:config` still wins.
 
 VirGL does not solve this. It accelerates OpenGL, and the cost of a video is in
 decoding it.
+
+**Swap** is reported, never auto-applied. XFCE plus an Electron app or two
+comfortably outgrows 4-6 GB of RAM, and Android does not guarantee zram — but
+creating a swap file writes real storage, costs some flash wear, needs the
+device's kernel to allow an unprivileged `swapon` at all, and at least one
+device out there has reportedly gotten one stuck. None of that belongs in an
+unattended Fix All, so this is the one Doctor check that never carries a
+repair — only a dedicated **Swap** screen, gated behind a confirmation, with
+its own Disable to undo it.
 
 **Audio** works the same way as Bench, because no single method works
 everywhere. Three have failed here already: TCP where the module loaded but

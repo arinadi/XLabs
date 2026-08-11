@@ -20,9 +20,10 @@ from .const import (
     LAUNCHER_SRC,
     PREFIX_BIN,
     REPO_DIR,
+    SWAP_FILE,
     TMPDIR,
 )
-from .preflight import X11_APK_URL, check_x11_app
+from .preflight import X11_APK_URL, check_storage, check_x11_app
 from .system import (
     container_command,
     container_path,
@@ -35,6 +36,11 @@ from .system import (
 )
 
 Log = Callable[[str], None]
+
+# preflight.check_storage() defaults to 4 GB — enough to install the image
+# from nothing. Once a container exists, the floor that actually matters is
+# how little is left before apt or a download starts failing outright.
+STORAGE_MIN_GB = 1.5
 
 
 class Issue(NamedTuple):
@@ -103,6 +109,25 @@ def _fix_stale_sockets(log: Log) -> bool:
     return True
 
 
+CLEAN_SCRIPT = """#!/bin/bash
+apt-get clean
+apt-get autoremove -y
+"""
+
+
+def _fix_storage(log: Log) -> bool:
+    """apt cache and orphaned packages — the only space a repair can free
+    without deleting something the user put there themselves."""
+    if not is_installed():
+        log("  no container to clean up")
+        return False
+    if not write_container_script("arinanolabs-clean.sh", CLEAN_SCRIPT):
+        log("  could not write the cleanup script")
+        return False
+    rc = stream_cmd(container_command("arinanolabs-clean.sh"), log, timeout=300)
+    return rc == 0
+
+
 # ── Diagnosis ──────────────────────────────────────────────
 
 
@@ -135,6 +160,19 @@ def diagnose() -> list[Issue]:
             "Repository",
             repo_ok,
             REPO_DIR if repo_ok else f"{REPO_DIR} is not a git checkout — re-run install.sh",
+        )
+    )
+
+    # Storage. Only worth an auto-fix once there is a container to clean —
+    # apt's cache is the only space a repair can free without deleting
+    # something the user put there themselves.
+    storage = check_storage(STORAGE_MIN_GB)
+    issues.append(
+        Issue(
+            "Storage",
+            storage.ok,
+            storage.message,
+            _fix_storage if not storage.ok and is_installed() else None,
         )
     )
 
@@ -266,6 +304,39 @@ def diagnose() -> list[Issue]:
             )
         )
 
+    # DNS. A container can reach an IP but not a hostname when resolv.conf
+    # is empty or a dead symlink — apt then fails with "Temporary failure in
+    # name resolution" while `ping 1.1.1.1` works fine, which reads as a
+    # dead mirror rather than what it actually is.
+    if is_installed():
+        dns_ok = _resolv_conf_ok()
+        issues.append(
+            Issue(
+                "DNS",
+                dns_ok,
+                "resolv.conf has a nameserver" if dns_ok
+                else "No usable nameserver in resolv.conf",
+                None if dns_ok else _fix_resolv_conf,
+            )
+        )
+
+    # Timezone. The image ships UTC and nothing ever points it at the
+    # device's own zone, so file timestamps and the clock in a terminal
+    # inside the container silently disagree with Android's.
+    if is_installed():
+        android_tz = _android_timezone()
+        if android_tz:
+            container_tz = _container_timezone()
+            tz_ok = container_tz == android_tz
+            issues.append(
+                Issue(
+                    "Timezone",
+                    tz_ok,
+                    container_tz or "Not set",
+                    None if tz_ok else _fix_timezone,
+                )
+            )
+
     # Electron apps (VS Code and anything else installed later) — only
     # worth mentioning once at least one is actually present.
     if is_installed():
@@ -306,7 +377,209 @@ def diagnose() -> list[Issue]:
         )
     )
 
+    # Swap. No `fix` — see the module docstring by SWAP_RAM_CEILING_MB for
+    # why this is never something Fix All runs unattended. Reported only
+    # once RAM is actually tight and nothing is already swapping.
+    ram_mb, has_swap = swap_status()
+    if ram_mb is not None and ram_mb < SWAP_RAM_CEILING_MB and not has_swap:
+        issues.append(
+            Issue(
+                "Swap",
+                False,
+                f"{ram_mb} MB RAM, no swap active — XFCE plus an Electron "
+                "app or two can exceed this; enable it from the Swap screen",
+            )
+        )
+
     return issues
+
+
+# ── DNS ────────────────────────────────────────────────────
+
+# A container can reach an IP but not a hostname when resolv.conf is empty
+# or a dead symlink (e.g. to systemd-resolved, which does not run under
+# proot) — apt then fails with "Temporary failure in name resolution" while
+# a plain ping to an IP works, which reads as a dead mirror rather than
+# what it actually is.
+RESOLV_CONF = "/etc/resolv.conf"
+RESOLV_CONF_CONTENT = "nameserver 1.1.1.1\nnameserver 8.8.8.8\n"
+
+
+def _resolv_conf_ok() -> bool:
+    try:
+        with open(container_path(RESOLV_CONF), encoding="utf-8") as f:
+            content = f.read()
+    except OSError:
+        return False
+    return any(
+        line.strip().startswith("nameserver ") and len(line.strip().split()) >= 2
+        for line in content.splitlines()
+    )
+
+
+def _fix_resolv_conf(log: Log) -> bool:
+    target = container_path(RESOLV_CONF)
+    # A dead symlink still "exists" for os.path.exists() to disagree with —
+    # remove whatever is there before writing a real file.
+    if os.path.islink(target) or os.path.exists(target):
+        try:
+            os.remove(target)
+        except OSError as e:
+            log(f"  could not remove the old {RESOLV_CONF}: {e}")
+            return False
+    try:
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with open(target, "w", encoding="utf-8", newline="\n") as f:
+            f.write(RESOLV_CONF_CONTENT)
+    except OSError as e:
+        log(f"  could not write {RESOLV_CONF}: {e}")
+        return False
+    log(f"  wrote {RESOLV_CONF} (1.1.1.1, 8.8.8.8)")
+    return True
+
+
+# ── Timezone ───────────────────────────────────────────────
+
+# The image ships UTC and nothing ever points it at the device's own zone,
+# so file timestamps and the clock in a terminal inside the container
+# silently disagree with Android's.
+TIMEZONE_FILE = "/etc/timezone"
+LOCALTIME_FILE = "/etc/localtime"
+
+
+def _android_timezone() -> str | None:
+    rc, out = run_cmd("getprop persist.sys.timezone", timeout=10)
+    tz = out.strip()
+    return tz if rc == 0 and tz else None
+
+
+def _container_timezone() -> str | None:
+    try:
+        with open(container_path(TIMEZONE_FILE), encoding="utf-8") as f:
+            return f.read().strip() or None
+    except OSError:
+        return None
+
+
+def _fix_timezone(log: Log) -> bool:
+    android_tz = _android_timezone()
+    if not android_tz:
+        log("  could not read the device timezone (getprop persist.sys.timezone)")
+        return False
+
+    if not os.path.isfile(container_path(f"/usr/share/zoneinfo/{android_tz}")):
+        log(f"  {android_tz} has no zoneinfo file in the container")
+        return False
+
+    localtime = container_path(LOCALTIME_FILE)
+    try:
+        if os.path.islink(localtime) or os.path.exists(localtime):
+            os.remove(localtime)
+        os.symlink(f"/usr/share/zoneinfo/{android_tz}", localtime)
+    except OSError as e:
+        log(f"  could not link {LOCALTIME_FILE}: {e}")
+        return False
+
+    try:
+        with open(container_path(TIMEZONE_FILE), "w", encoding="utf-8", newline="\n") as f:
+            f.write(android_tz + "\n")
+    except OSError as e:
+        log(f"  could not write {TIMEZONE_FILE}: {e}")
+        return False
+
+    log(f"  container timezone set to {android_tz}")
+    return True
+
+
+# ── Swap ───────────────────────────────────────────────────
+
+# XFCE plus an Electron app or two comfortably exceeds 4-6 GB of RAM, and
+# Android does not guarantee zram. A swap file is the standard fix, but
+# creating one writes real storage, costs some flash wear, and needs the
+# device's kernel to allow an unprivileged swapon — not universal, and one
+# device out there reportedly could not undo an accidental one. None of that
+# belongs in an unattended Fix All, so this Issue never carries a `fix`; the
+# actual create_swap()/remove_swap() calls only ever run from a dedicated,
+# confirmed action in the UI.
+SWAP_RAM_CEILING_MB = 6144
+SWAP_SIZE_MB = 2048
+
+
+def _ram_total_mb() -> int | None:
+    try:
+        with open("/proc/meminfo", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("MemTotal:"):
+                    return int(line.split()[1]) // 1024
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
+def _swap_active() -> bool:
+    try:
+        with open("/proc/swaps", encoding="utf-8") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return False
+    return len(lines) > 1
+
+
+def swap_status() -> tuple[int | None, bool]:
+    """(total RAM in MB, whether swap is already active)."""
+    return _ram_total_mb(), _swap_active()
+
+
+def create_swap(log: Log) -> bool:
+    """Create (if needed) and enable SWAP_FILE. Only call this after the
+    user has explicitly confirmed — see the module docstring above."""
+    if os.path.exists(SWAP_FILE):
+        log(f"  {SWAP_FILE} already exists")
+    else:
+        free_gb = shutil.disk_usage(os.path.dirname(SWAP_FILE) or os.sep).free / (1024**3)
+        if free_gb * 1024 < SWAP_SIZE_MB * 2:
+            log(f"  only {free_gb:.1f} GB free — not enough headroom for a "
+                f"{SWAP_SIZE_MB} MB swap file")
+            return False
+        log(f"  creating {SWAP_FILE} ({SWAP_SIZE_MB} MB)")
+        rc, out = run_cmd(
+            f'fallocate -l {SWAP_SIZE_MB}M "{SWAP_FILE}" 2>/dev/null || '
+            f'dd if=/dev/zero of="{SWAP_FILE}" bs=1M count={SWAP_SIZE_MB}',
+            timeout=180,
+        )
+        if rc != 0 or not os.path.exists(SWAP_FILE):
+            log(f"  could not allocate the file: {out.strip()}")
+            return False
+        os.chmod(SWAP_FILE, 0o600)
+
+    rc, out = run_cmd(f'mkswap "{SWAP_FILE}"', timeout=60)
+    if rc != 0:
+        log(f"  mkswap failed: {out.strip()}")
+        return False
+
+    rc, out = run_cmd(f'swapon "{SWAP_FILE}"', timeout=30)
+    if rc != 0:
+        log(f"  swapon failed — this device's kernel may not allow it "
+            f"without root: {out.strip()}")
+        return False
+
+    log(f"  swap active: {SWAP_FILE}")
+    return True
+
+
+def remove_swap(log: Log) -> bool:
+    """Undo create_swap(): turn swap off and delete the file."""
+    rc, out = run_cmd(f'swapoff "{SWAP_FILE}"', timeout=30)
+    if rc != 0 and os.path.exists(SWAP_FILE):
+        log(f"  swapoff reported: {out.strip()}")
+    if os.path.exists(SWAP_FILE):
+        try:
+            os.remove(SWAP_FILE)
+        except OSError as e:
+            log(f"  could not delete {SWAP_FILE}: {e}")
+            return False
+    log("  swap disabled and file removed")
+    return True
 
 
 # ── Firefox video defaults ─────────────────────────────────
