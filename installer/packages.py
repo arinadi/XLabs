@@ -57,11 +57,16 @@ def valid_term(term: str) -> bool:
     return bool(SAFE_TERM.match(term.strip().lower()))
 
 
-def search(term: str) -> tuple[list[Package], str | None]:
+def _noop(_message: str) -> None:
+    pass
+
+
+def search(term: str, log: Log = _noop) -> tuple[list[Package], str | None]:
     """Search the container's package lists.
 
     Returns (results, error). An error is a sentence for the user, not a
-    traceback.
+    traceback — the raw command and its output go to `log`, so a failure can
+    be read rather than guessed at.
     """
     term = term.strip().lower()
     if not term:
@@ -74,12 +79,15 @@ def search(term: str) -> tuple[list[Package], str | None]:
     if not write_container_script("arinanolabs-search.sh", SEARCH_SCRIPT):
         return [], "Could not write the search script."
 
-    rc, out = run_cmd(
-        f"{container_command('arinanolabs-search.sh')} {term}",
-        timeout=120,
-    )
+    command = f"{container_command('arinanolabs-search.sh')} {term}"
+    log(f"$ {command}")
+    rc, out = run_cmd(command, timeout=120)
+    log(f"exit {rc}, {len(out.splitlines())} line(s)")
+    for line in out.strip().splitlines()[:6]:
+        log(f"  {line}")
+
     if rc != 0:
-        return [], "The container could not be queried."
+        return [], "The container could not be queried — see the output below."
 
     results = []
     for line in out.splitlines():

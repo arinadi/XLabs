@@ -204,27 +204,26 @@ def diagnose() -> list[Issue]:
         )
     )
 
-    # Audio. The server lives in Termux and the container opens its socket
-    # through the shared tmp, so both have to hold or there is no sound.
+    # Audio. Which method works is a device question, so report the one in
+    # use and whether it is actually reachable.
+    method = audio.load_method()
     server = audio.server_running()
     issues.append(
         Issue(
             "Audio server",
             server,
-            "Running" if server else "PulseAudio is not running",
+            f"{method.name} — {method.server}" if server else "PulseAudio is not running",
             None if server else audio.ensure_server,
         )
     )
 
-    # Checked by connecting, not by listing modules: a module can be loaded
-    # and accept nothing, which is how the old TCP path failed silently.
-    reachable = audio.socket_ready()
+    live = server and audio.reachable(method)
     issues.append(
         Issue(
-            "Audio socket",
-            reachable,
-            audio.PULSE_SOCKET if reachable else "Not accepting connections",
-            None if reachable else audio.ensure_server,
+            "Audio reachable",
+            live,
+            "Answering" if live else f"No answer on {method.server} — run Audio to test methods",
+            None if live else audio.ensure_server,
         )
     )
 
@@ -234,9 +233,8 @@ def diagnose() -> list[Issue]:
             Issue(
                 "Audio client",
                 client,
-                audio.CLIENT_CONF if client
-                else "No client.conf — shared memory breaks the handshake in proot",
-                None if client else audio.write_client_conf,
+                audio.CLIENT_CONF if client else "No client.conf in the container",
+                None if client else (lambda log: audio.write_client_conf(method, log)),
             )
         )
 

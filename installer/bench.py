@@ -26,6 +26,8 @@ Log = Callable[[str], None]
 PROFILE_KEY = "GPU_PROFILE"
 SCORE_KEY = "GPU_PROFILE_SCORE"
 
+ANGLE_DIR = "/data/data/com.termux/files/usr/opt/angle-android"
+
 # Duration per scene, in seconds. Three scenes at two seconds is enough to
 # separate software rendering from hardware; a full glmark2 run is minutes.
 SCENES = ("build", "texture", "shading")
@@ -56,6 +58,28 @@ PRESETS = (
         "virgl_test_server_android",
         "virgl_test_server_android",
         {"GALLIUM_DRIVER": "virpipe", "MESA_GL_VERSION_OVERRIDE": "4.0"},
+    ),
+    Preset(
+        "angle",
+        "virgl_test_server through ANGLE (Mali path)",
+        f"LD_LIBRARY_PATH={ANGLE_DIR}/vulkan "
+        "virgl_test_server --use-egl-surfaceless --use-gles",
+        {
+            "GALLIUM_DRIVER": "virpipe",
+            "MESA_GL_VERSION_OVERRIDE": "4.1COMPAT",
+            "MESA_GLSL_VERSION_OVERRIDE": "410",
+        },
+    ),
+    Preset(
+        "angle-null",
+        "ANGLE with the null Vulkan loader",
+        f"LD_LIBRARY_PATH={ANGLE_DIR}/vulkan-null "
+        "virgl_test_server --use-egl-surfaceless --use-gles",
+        {
+            "GALLIUM_DRIVER": "virpipe",
+            "MESA_GL_VERSION_OVERRIDE": "4.1COMPAT",
+            "MESA_GLSL_VERSION_OVERRIDE": "410",
+        },
     ),
     Preset(
         "zink",

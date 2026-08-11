@@ -167,3 +167,12 @@ ConfirmScreen {
     padding: 0 1;
     color: $success;
 }
+
+/* Raw command output on the Tools screen, so a failed search can be read. */
+#tools-log {
+    height: 8;
+    margin: 0 2 1 2;
+    padding: 0 1;
+    border: round $primary;
+    background: $surface-darken-1;
+}

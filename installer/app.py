@@ -769,6 +769,9 @@ class ToolsScreen(CopyableScreen):
         yield Input(placeholder="Search packages, e.g. neovim", id="query")
         yield Static("", id="tools-status")
         yield DataTable(id="tools-table", cursor_type="row", zebra_stripes=True)
+        # The command and its raw output. A search that finds nothing and one
+        # that failed look identical without this.
+        yield RichLog(id="tools-log", markup=True, wrap=True, auto_scroll=True)
         with Horizontal(id="action-buttons"):
             yield Button("C", id="copy")
             yield Button("Install", id="install", variant="success", disabled=True)
@@ -794,7 +797,13 @@ class ToolsScreen(CopyableScreen):
 
     @work(thread=True)
     def run_search(self, term: str) -> None:
-        results, error = packages.search(term)
+        pane = self.query_one("#tools-log", RichLog)
+        self.app.call_from_thread(pane.clear)
+
+        def log(message: str) -> None:
+            self.app.call_from_thread(pane.write, message)
+
+        results, error = packages.search(term, log)
         self.app.call_from_thread(self._show, results, error)
 
     def _show(self, results: list[packages.Package], error: str | None) -> None:
@@ -859,6 +868,8 @@ class ToolsScreen(CopyableScreen):
 
     def copy_payload(self) -> str:
         lines = [f"arinanoLabs package search — {get_version()}", ""]
+        lines.append(self.status_text)
+        lines.append("")
         if not self._results:
             lines.append("(no results)")
         lines += [

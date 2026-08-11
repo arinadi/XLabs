@@ -4,3 +4,6 @@ __pycache__/
 
 # Per-device settings, written by the app
 .env
+
+# Local scratch: pasted device diagnostics
+debug.md

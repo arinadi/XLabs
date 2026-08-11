@@ -252,7 +252,7 @@ def test_audio_test_tone_is_valid() -> None:
 
 def test_doctor_reports_audio() -> None:
     names = {i.name for i in doctor.diagnose()}
-    for expected in ("Audio server", "Audio socket", "Audio output"):
+    for expected in ("Audio server", "Audio reachable", "Audio output"):
         check(expected in names, f"{expected} missing from the diagnosis")
 
 

@@ -355,7 +355,7 @@ def start_xfce4(log=_noop) -> bool:
         gpu = "# no virgl server running, so software rendering"
         log("  no virgl server, the session will use software rendering")
 
-    if not write_container_script(SESSION_SCRIPT_NAME, SESSION_SCRIPT.replace("@GPU@", gpu).replace("@PULSE@", audio.PULSE_SERVER)):
+    if not write_container_script(SESSION_SCRIPT_NAME, SESSION_SCRIPT.replace("@GPU@", gpu).replace("@PULSE@", audio.load_method().server)):
         log("  could not write the session script")
         return False
 

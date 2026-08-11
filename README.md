@@ -270,29 +270,41 @@ locks: `about:config` still wins.
 VirGL does not solve this. It accelerates OpenGL, and the cost of a video is in
 decoding it.
 
-**Audio** reaches the container through a Unix socket, not TCP. The server runs
-in Termux and `--shared-tmp` puts its socket at `/tmp/pulse-socket` inside the
-container — a file it can simply open, with no port to bind and no loopback to
-traverse.
+**Audio** works the same way as Bench, because no single method works
+everywhere. Three have failed here already: TCP where the module loaded but
+nothing listened, a Unix socket that connected and then failed its handshake,
+and shared memory that does not survive the proot boundary.
 
-That is not the documented approach, which is TCP. TCP was tried and failed on
-a device: the module loaded, `pactl list modules` listed it, and every address
-the container tried was refused. Listed is not the same as listening, so the
-check now connects rather than reads a list.
+So the methods are declared and tested end to end, and the one that plays is
+written to `.env` and used by every later start:
 
-**Audio** plays a test tone from Termux first and then from inside the
-container. Heard from Termux only means the socket is not reaching in; heard
-from neither means Android has no working sink.
+| Method | Transport |
+|--------|-----------|
+| `unix` | Socket in the shared tmp, shared memory off |
+| `unix-shm` | Same socket, shared memory on |
+| `tcp` | Loopback TCP, shared memory off |
+| `tcp-shm` | Loopback TCP, shared memory on |
+
+It plays from Termux first. If that fails, nothing in the container will help
+and it stops there rather than testing four methods against a dead sink.
 
 **Bench** answers a question this project could not answer from the outside.
 The published guidance is written for Qualcomm hardware — zink is reported to
 work only there, Turnip is Adreno-only — so on an Exynos or Mali device the
 right configuration is genuinely unknown.
 
-So it measures. glmark2 runs under each configuration in turn — software
-rendering as a baseline, `virgl_test_server_android`, and the zink server —
-and the winner is written to `.env` and used by every later start. It needs
-termux-x11 running, but not the desktop.
+So it measures. glmark2 runs under each configuration in turn and the winner
+is written to `.env`, to be used by every later start:
+
+| Preset | Path |
+|--------|------|
+| `software` | llvmpipe — the baseline that says whether acceleration helped |
+| `virgl` | `virgl_test_server_android`, works on most devices |
+| `angle` | virgl → ANGLE → Vulkan, the Mali path |
+| `angle-null` | ANGLE with the null Vulkan loader |
+| `zink` | OpenGL on Vulkan, reported to work only on Qualcomm |
+
+It needs termux-x11 running, but not the desktop.
 
 **Recording is not possible**, and no amount of configuration changes that. The
 Termux app does not declare `android.permission.RECORD_AUDIO`, so PulseAudio

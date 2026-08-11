@@ -1,13 +1,13 @@
 """Audio: the PulseAudio server runs in Termux, clients run in the container.
 
-The container has no sound hardware, and it does not need networking to reach
-the server either. --shared-tmp binds Termux's tmp over the container's /tmp,
-so a Unix socket in $PREFIX/tmp is simply a file the container can open.
+There is no single method that works everywhere, and this project has now
+tried three that did not: TCP where the module loaded but nothing listened, a
+Unix socket that connected and then failed its handshake with "Protocol
+error", and shared memory that cannot cross the proot boundary cleanly.
 
-TCP was the documented approach everywhere and it failed on a real device:
-the module loaded, `pactl list modules` listed it, and every address the
-container tried was refused — listed but not listening. The socket removes
-the question entirely: no port, no binding, no loopback.
+So the methods are declared and measured, the way the GPU presets are. Each
+one is configured, tested end to end from inside the container, and the first
+that works is written to the .env and used by every later start.
 
 Recording is not supported and cannot be: the Termux app does not declare
 android.permission.RECORD_AUDIO, module-sles-source fails to initialise, and
@@ -21,8 +21,9 @@ import os
 import struct
 import time
 import wave
-from typing import Callable
+from typing import Callable, NamedTuple
 
+from . import config
 from .const import TMPDIR
 from .system import (
     container_command,
@@ -35,109 +36,65 @@ from .system import (
 
 Log = Callable[[str], None]
 
-# On the Termux side. This project's uninstall script has always cleaned up
-# $TMPDIR/pulse-socket, which suggests the original setup used it too.
+METHOD_KEY = "AUDIO_METHOD"
+
 PULSE_SOCKET = f"{TMPDIR}/pulse-socket"
-
-# What clients inside the container use: with --shared-tmp, /tmp there is
-# Termux's tmp here.
-PULSE_SERVER = "unix:/tmp/pulse-socket"
-
-MODULE_ARGS = f"module-native-protocol-unix socket={PULSE_SOCKET} auth-anonymous=1"
-
-TEST_TONE_NAME = "arinanolabs-test-tone.wav"
-
-# The client half, inside the container. Only libpulse reads this; the daemon
-# lives in Termux.
 CLIENT_CONF = "/etc/pulse/client.conf"
+TEST_TONE_NAME = "arinanolabs-test-tone.wav"
+PROBE_SCRIPT_NAME = "arinanolabs-audio.sh"
 
-CLIENT_CONF_BODY = """# arinanoLabs — PulseAudio client settings for proot.
-#
-# enable-shm and enable-memfd are off because PulseAudio negotiates shared
-# memory and passes file descriptors over the socket to do it. proot
-# intercepts syscalls, and that handshake fails across the boundary — the
-# symptom is "Connection failure: Protocol error" on a socket that plainly
-# exists and is accepting connections. Without shared memory the samples
-# travel over the socket itself: a little more CPU, and it works.
-#
-# autospawn is off because there is no daemon in the container and none
-# should be started; daemon-binary points at true so nothing tries.
-autospawn = no
-daemon-binary = /bin/true
-enable-shm = no
-enable-memfd = no
-default-server = unix:/tmp/pulse-socket
-"""
 
-PLAY_SCRIPT = f"""#!/bin/bash
-# Connecting and playing are different failures, and a bare exit code cannot
-# tell them apart. This reports each separately.
+class Method(NamedTuple):
+    name: str
+    description: str
+    # Passed to the daemon as --load, so no client connection is needed to
+    # apply it.
+    module: str
+    # What clients inside the container point at.
+    server: str
+    # PulseAudio moves samples through shared memory when it can, setting it
+    # up by passing file descriptors over the connection. proot intercepts
+    # syscalls, and that is a poor bet across the boundary — but it is worth
+    # measuring rather than assuming.
+    shm: bool
 
-echo "paplay: $(command -v paplay || echo MISSING)"
-echo "socket: $(ls -l /tmp/pulse-socket 2>&1)"
-echo "tone:   $(ls -l /tmp/{TEST_TONE_NAME} 2>&1)"
-echo
 
-export PULSE_SERVER={PULSE_SERVER}
-echo "PULSE_SERVER=$PULSE_SERVER"
-if ! pactl info >/dev/null 2>&1; then
-    echo "could not reach the server:"
-    pactl info 2>&1 | sed 's/^/    /'
-    exit 1
-fi
+UNIX_MODULE = f"module-native-protocol-unix socket={PULSE_SOCKET} auth-anonymous=1"
+TCP_MODULE = "module-native-protocol-tcp auth-ip-acl=127.0.0.1 auth-anonymous=1"
 
-pactl info 2>&1 | grep -E "Server String|Server Name|Default Sink" | sed 's/^/    /'
-echo
-echo "sinks visible from in here:"
-pactl list sinks short 2>&1 | sed 's/^/    /'
-echo
-echo "volume and mute:"
-pactl list sinks 2>&1 | grep -E "^[[:space:]]+(Volume|Mute)" | head -4 | sed 's/^/    /'
-echo
-echo "playing..."
-paplay --verbose /tmp/{TEST_TONE_NAME} 2>&1 | sed 's/^/    /'
-echo "exit: ${{PIPESTATUS[0]}}"
-"""
+# Ordered by how likely they are to work here. The socket comes first because
+# --shared-tmp already puts it inside the container as an ordinary file, with
+# no networking involved.
+METHODS = (
+    Method("unix", "Unix socket, shared memory off", UNIX_MODULE, "unix:/tmp/pulse-socket", False),
+    Method("unix-shm", "Unix socket, shared memory on", UNIX_MODULE, "unix:/tmp/pulse-socket", True),
+    Method("tcp", "TCP, shared memory off", TCP_MODULE, "tcp:127.0.0.1", False),
+    Method("tcp-shm", "TCP, shared memory on", TCP_MODULE, "tcp:127.0.0.1", True),
+)
+
+DEFAULT_METHOD = METHODS[0]
+
+
+def method_by_name(name: str) -> Method | None:
+    return next((m for m in METHODS if m.name == name), None)
+
+
+def load_method() -> Method:
+    """The method a previous test proved, or the most likely one."""
+    name = config.get(METHOD_KEY)
+    return (method_by_name(name) if name else None) or DEFAULT_METHOD
+
+
+def save_method(method: Method) -> bool:
+    return config.set_value(METHOD_KEY, method.name)
+
+
+# ── Server and client configuration ────────────────────────
 
 
 def server_running() -> bool:
     rc, _ = run_cmd("pgrep -f pulseaudio")
     return rc == 0
-
-
-def socket_ready() -> bool:
-    """The socket exists and the server answers on it.
-
-    Checked by connecting, not by listing modules. A module can be loaded and
-    still accept nothing — which is exactly how the TCP path failed while
-    every check reported success.
-    """
-    if not os.path.exists(PULSE_SOCKET):
-        return False
-    rc, _ = run_cmd(f"pactl -s unix:{PULSE_SOCKET} info")
-    return rc == 0
-
-
-def client_conf_present() -> bool:
-    return os.path.exists(container_path(CLIENT_CONF))
-
-
-def write_client_conf(log: Log) -> bool:
-    """Place the client settings inside the container.
-
-    Written through the rootfs from the host, so no container login is
-    needed and it works before the desktop has ever started.
-    """
-    target = container_path(CLIENT_CONF)
-    try:
-        os.makedirs(os.path.dirname(target), exist_ok=True)
-        with open(target, "w", encoding="utf-8", newline="\n") as f:
-            f.write(CLIENT_CONF_BODY)
-    except OSError as e:
-        log(f"  could not write {CLIENT_CONF}: {e}")
-        return False
-    log(f"  wrote {CLIENT_CONF} (shared memory disabled)")
-    return True
 
 
 def sinks() -> list[str]:
@@ -148,49 +105,92 @@ def sinks() -> list[str]:
     return [line.split("\t")[1] for line in out.splitlines() if "\t" in line]
 
 
-def ensure_server(log: Log) -> bool:
-    """Get PulseAudio running with a socket the container can open.
+def client_conf_body(method: Method) -> str:
+    shm = "yes" if method.shm else "no"
+    return f"""# arinanoLabs — PulseAudio client settings for proot.
+# Written by the audio test for method "{method.name}".
+#
+# autospawn is off because there is no daemon in the container and none
+# should be started; daemon-binary points at true so nothing tries.
+autospawn = no
+daemon-binary = /bin/true
+enable-shm = {shm}
+enable-memfd = {shm}
+default-server = {method.server}
+"""
 
-    Success means a connection was made, not that a module appeared in a
-    list. Restarts the daemon when the socket is missing: --start does not
-    apply new --load arguments to a server that is already up.
+
+def write_client_conf(method: Method, log: Log) -> bool:
+    """Place the client settings inside the container.
+
+    Written through the rootfs from the host, so no container login is needed
+    and it applies before the desktop has ever started.
     """
-    # The client half matters as much as the server: without it the container
-    # connects and then fails the shared-memory handshake.
-    if is_installed() and not client_conf_present():
-        write_client_conf(log)
-
-    if server_running() and socket_ready():
-        log("  already running, socket ready")
+    target = container_path(CLIENT_CONF)
+    try:
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with open(target, "w", encoding="utf-8", newline="\n") as f:
+            f.write(client_conf_body(method))
         return True
+    except OSError as e:
+        log(f"  could not write {CLIENT_CONF}: {e}")
+        return False
 
+
+def client_conf_present() -> bool:
+    return os.path.exists(container_path(CLIENT_CONF))
+
+
+def reachable(method: Method) -> bool:
+    """Whether the server answers on this method's address, from Termux.
+
+    Checked by connecting, not by listing modules: a module can be loaded and
+    accept nothing, which is exactly how the TCP method failed while every
+    check reported success.
+    """
+    address = method.server.replace("unix:/tmp/", f"unix:{TMPDIR}/")
+    rc, _ = run_cmd(f"pactl -s {address} info")
+    return rc == 0
+
+
+def start_with(method: Method, log: Log) -> bool:
+    """Restart PulseAudio carrying this method's module."""
     if server_running():
-        log("  restarting PulseAudio to open the socket")
         run_cmd("pulseaudio --kill")
         time.sleep(1)
-
     run_cmd(f"rm -f {PULSE_SOCKET}")
+
     stream_cmd(
-        f'pulseaudio --start --exit-idle-time=-1 --load="{MODULE_ARGS}"',
+        f'pulseaudio --start --exit-idle-time=-1 --load="{method.module}"',
         log,
         timeout=60,
     )
     time.sleep(1)
+    return reachable(method)
 
-    if socket_ready():
-        log(f"  socket ready at {PULSE_SOCKET}")
+
+def ensure_server(log: Log) -> bool:
+    """Bring up audio using whichever method was proved to work."""
+    method = load_method()
+    log(f"  method: {method.name} ({method.description})")
+
+    if is_installed():
+        write_client_conf(method, log)
+
+    if server_running() and reachable(method):
+        log("  already running and reachable")
         return True
 
-    # Loading at startup is preferred because it needs no client connection,
-    # but trying at runtime costs nothing before giving up.
-    log("  socket did not open, loading the module at runtime")
-    stream_cmd(f"pacmd load-module {MODULE_ARGS}", log, timeout=60)
-    if socket_ready():
-        log(f"  socket ready at {PULSE_SOCKET}")
+    if start_with(method, log):
+        log(f"  server ready on {method.server}")
         return True
 
-    log("  [red]the socket is not accepting connections[/red]")
+    log("  [red]the server is not reachable on this method[/red]")
+    log("  run Doctor -> Audio to test the others")
     return False
+
+
+# ── Test tone ──────────────────────────────────────────────
 
 
 def write_test_tone(path: str, seconds: float = 1.0, hz: int = 440) -> bool:
@@ -215,62 +215,97 @@ def write_test_tone(path: str, seconds: float = 1.0, hz: int = 440) -> bool:
         return False
 
 
+def probe_script(method: Method) -> str:
+    return f"""#!/bin/bash
+export PULSE_SERVER={method.server}
+if ! pactl info >/dev/null 2>&1; then
+    echo "FAIL connect"
+    pactl info 2>&1 | sed 's/^/    /'
+    exit 1
+fi
+echo "connected"
+pactl info 2>&1 | grep -E "Server String|Default Sink" | sed 's/^/    /'
+paplay /tmp/{TEST_TONE_NAME} 2>&1 | sed 's/^/    /'
+status=${{PIPESTATUS[0]}}
+echo "play exit: $status"
+[ "$status" = "0" ] && echo "OK play"
+exit "$status"
+"""
+
+
+# ── The test ───────────────────────────────────────────────
+
+
 def test(log: Log) -> None:
-    """Play a tone from Termux, then from the container.
-
-    Two stages on purpose. If Termux plays and the container does not, the
-    fault is between them. If neither plays, it is the Android side and
-    nothing in the container will help.
-    """
+    """Try each method end to end and keep the first that plays."""
     log("── Termux side ───────────────────────────────")
-
-    # Prepared, not merely reported. Stop kills PulseAudio and takes the
-    # socket with it, so a test run after stopping the desktop would
-    # otherwise always report a failure it was itself able to fix.
-    log("Preparing the audio server...")
-    ensure_server(log)
-    log("")
-    log(f"server running: {server_running()}")
-    log(f"socket answers: {socket_ready()}  ({PULSE_SOCKET})")
-
-    found = sinks()
-    log(f"sinks:          {', '.join(found) if found else 'NONE — nothing can play'}")
-    log("")
+    log(f"sinks: {', '.join(sinks()) if sinks() else 'NONE — nothing can play'}")
 
     tone = os.path.join(TMPDIR, TEST_TONE_NAME)
     if not write_test_tone(tone):
         log("[red]Could not write the test tone.[/red]")
         return
-    log(f"test tone: {tone}")
+    log(f"tone:  {tone}")
     log("")
 
     log("Playing from Termux (tests the Android audio path)...")
     rc = stream_cmd(f"paplay {tone}", log, timeout=30)
-    log(f"  exit {rc}" + ("" if rc == 0 else "  [yellow]no sound from Termux itself[/yellow]"))
+    if rc != 0:
+        log("[red]Termux itself cannot play.[/red] Nothing in the container will help.")
+        return
+    log("  ok")
     log("")
 
     if not is_installed():
-        log("No container, so the second half is skipped.")
+        log("No container, so the methods cannot be tested.")
         return
 
-    log("Playing from inside the container (tests the shared socket)...")
-    if not write_container_script("arinanolabs-audio.sh", PLAY_SCRIPT):
-        log("[red]Could not write the playback script.[/red]")
+    working: Method | None = None
+
+    for method in METHODS:
+        log(f"── {method.name}: {method.description}")
+
+        if not start_with(method, lambda _m: None):
+            log("  server not reachable from Termux, skipping")
+            log("")
+            continue
+
+        if not write_client_conf(method, log):
+            log("")
+            continue
+        if not write_container_script(PROBE_SCRIPT_NAME, probe_script(method)):
+            log("")
+            continue
+
+        captured: list[str] = []
+
+        def collect(line: str, sink: list[str] = captured) -> None:
+            sink.append(line)
+            log(f"  {line}")
+
+        stream_cmd(container_command(PROBE_SCRIPT_NAME), collect, timeout=90)
+
+        if any("OK play" in line for line in captured):
+            log("  [green]this one works[/green]")
+            working = method
+            log("")
+            break
+        log("")
+
+    log("── Result ────────────────────────────────────")
+    if working is None:
+        log("[red]No method played from inside the container.[/red]")
+        log("The Termux side is fine, so the fault is in the boundary.")
+        log("Copy this report with C — the per-method errors above are the")
+        log("useful part.")
         return
 
-    stream_cmd(
-        container_command("arinanolabs-audio.sh"),
-        log,
-        timeout=90,
-    )
+    log(f"[bold green]Using {working.name}: {working.description}[/bold green]")
+    if save_method(working):
+        log(f"  saved to {config.CONFIG_PATH}; Start Desktop will use it")
+    else:
+        log("  [yellow]could not save the choice[/yellow]")
 
-    log("")
-    log("[dim]Reading the container half:[/dim]")
-    log("[dim]  could not reach the server -> see whether the socket file[/dim]")
-    log("[dim]     exists above; --shared-tmp is what makes it visible.[/dim]")
-    log("[dim]  reached it, exit 0, silent -> the path works and the sound is[/dim]")
-    log("[dim]     going elsewhere. Check the volume and mute lines.[/dim]")
-    log("[dim]  reached it, non-zero exit  -> the error above says why.[/dim]")
     log("")
     log("[dim]Recording is not possible on this stack: the Termux app does[/dim]")
     log("[dim]not declare RECORD_AUDIO, so there is no microphone source.[/dim]")
