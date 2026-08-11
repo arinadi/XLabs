@@ -536,6 +536,27 @@ def test_package_terms_reject_shell_metacharacters() -> None:
     check(error is not None, "a hostile search reported no error")
 
 
+def test_search_notices_missing_package_lists() -> None:
+    """Regression: the image ships with no apt lists.
+
+    Every Dockerfile layer ends with rm -rf /var/lib/apt/lists/*, so on a
+    fresh container apt-cache matches nothing and every search looked like
+    "no such package" rather than "nothing to search".
+    """
+    check(
+        isinstance(packages.lists_present(), bool),
+        "lists_present must answer with a bool",
+    )
+
+    body = packages.SEARCH_SCRIPT
+    check("apt-cache search" in body, "the search no longer uses apt-cache")
+    check("apt-get update" in packages.UPDATE_SCRIPT, "the update script does not update")
+
+    # Both paths that install must refresh first, or they fail on a fresh
+    # container the same way search did.
+    check("apt-get update" in packages.INSTALL_SCRIPT, "install does not refresh lists")
+
+
 async def test_tools_screen_searches() -> None:
     app = ArinanoLabsApp()
     async with app.run_test(size=(80, 40)) as pilot:
@@ -657,6 +678,7 @@ def main() -> int:
         test_termux_duplicates_are_safe,
         test_update_offers_restart,
         test_package_terms_reject_shell_metacharacters,
+        test_search_notices_missing_package_lists,
         test_tools_screen_searches,
         test_other_actions_do_not_offer_restart,
         test_export_never_creates_a_repo_directory,

@@ -8,10 +8,18 @@ avoids nested quoting.
 
 from __future__ import annotations
 
+import os
 import re
 from typing import Callable, NamedTuple
 
-from .system import container_command, is_installed, run_cmd, stream_cmd, write_container_script
+from .system import (
+    container_command,
+    container_path,
+    is_installed,
+    run_cmd,
+    stream_cmd,
+    write_container_script,
+)
 
 Log = Callable[[str], None]
 
@@ -40,6 +48,11 @@ while IFS= read -r line; do
 done < /tmp/arinanolabs-search.out
 """
 
+UPDATE_SCRIPT = """#!/bin/bash
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+"""
+
 INSTALL_SCRIPT = """#!/bin/bash
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
@@ -61,6 +74,33 @@ def _noop(_message: str) -> None:
     pass
 
 
+def lists_present() -> bool:
+    """Whether the container has any apt package lists.
+
+    The image ships without them: every Dockerfile layer ends with
+    `rm -rf /var/lib/apt/lists/*` to keep the download small. apt-cache
+    searches those lists, so on a fresh container every search matches
+    nothing — which reads as "the package does not exist" rather than "there
+    is nothing to search".
+    """
+    try:
+        entries = os.listdir(container_path("/var/lib/apt/lists"))
+    except OSError:
+        return False
+    return any(name not in {"lock", "partial", "auxfiles"} for name in entries)
+
+
+def update_lists(log: Log) -> bool:
+    """Fetch the package lists. Slow, so it streams."""
+    if not write_container_script("arinanolabs-update.sh", UPDATE_SCRIPT):
+        log("Could not write the update script.")
+        return False
+    log("Fetching package lists (the image ships without them)...")
+    rc = stream_cmd(container_command("arinanolabs-update.sh"), log, timeout=900)
+    log(f"apt-get update exit {rc}")
+    return rc == 0
+
+
 def search(term: str, log: Log = _noop) -> tuple[list[Package], str | None]:
     """Search the container's package lists.
 
@@ -75,6 +115,9 @@ def search(term: str, log: Log = _noop) -> tuple[list[Package], str | None]:
         return [], "Use letters, digits, dot, plus or dash only."
     if not is_installed():
         return [], "No container yet — install it from the menu first."
+
+    if not lists_present() and not update_lists(log):
+        return [], "Could not fetch the package lists — see the output below."
 
     if not write_container_script("arinanolabs-search.sh", SEARCH_SCRIPT):
         return [], "Could not write the search script."

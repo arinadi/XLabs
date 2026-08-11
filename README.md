@@ -235,6 +235,14 @@ show an **I** against anything already installed, then highlight a row and
 press **Install**. apt runs inside the container with its output streamed;
 Termux is not touched.
 
+The first search fetches the package lists, which takes a moment. The image
+ships without them — every Dockerfile layer ends with
+`rm -rf /var/lib/apt/lists/*` to keep the download small — so without this
+every search would match nothing and read as "no such package".
+
+An output pane below the results shows the command and its raw output, because
+a failed search and an empty one otherwise look identical.
+
 Search terms and package names are validated against the Debian package-name
 shape and rejected rather than escaped — they end up in a shell command.
 
