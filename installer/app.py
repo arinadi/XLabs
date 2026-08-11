@@ -1050,13 +1050,18 @@ class ReposScreen(CopyableScreen):
         )
         yield DataTable(id="repos-table", cursor_type="row", zebra_stripes=True)
         with Grid(classes="row3"):
-            yield Button("Enable", id="enable", variant="success")
+            yield Button("Add", id="add", variant="success")
+            yield Button("Enable", id="enable")
             yield Button("Remove", id="remove", variant="error")
-            yield Button("Re-scan", id="rescan")
         with Grid(classes="row2"):
+            yield Button("Re-scan", id="rescan")
             yield Button("C", id="copy")
-            yield Button("Back", id="back", variant="primary")
+        yield Button("Back", id="back", variant="primary")
         yield Footer()
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._repos: list[packages.Repo] = []
 
     def on_mount(self) -> None:
         self.query_one("#repos-table", DataTable).add_columns(
@@ -1068,25 +1073,32 @@ class ReposScreen(CopyableScreen):
         self._fill()
 
     def _fill(self) -> None:
+        # Built-in repos first, then anything added by hand or in an earlier
+        # session that this screen would otherwise have no record of.
+        self._repos = list(packages.REPOS) + packages.discovered_custom_repos()
         table = self.query_one("#repos-table", DataTable)
         table.clear()
-        for repo in packages.REPOS:
+        for repo in self._repos:
             mark = "[green]on[/green]" if packages.repo_enabled(repo) else ""
             table.add_row(mark, repo.name, repo.description)
 
     def _selected(self):
         row = self.query_one("#repos-table", DataTable).cursor_row
-        if row is None or not (0 <= row < len(packages.REPOS)):
+        if row is None or not (0 <= row < len(self._repos)):
             return None
-        return packages.REPOS[row]
+        return self._repos[row]
 
     def copy_payload(self) -> str:
         lines = [f"arinanoLabs repositories - {get_version()}", ""]
         lines += [
             f"{'on ' if packages.repo_enabled(r) else '   '} {r.name:<12} {r.description}"
-            for r in packages.REPOS
+            for r in self._repos
         ]
         return "\n".join(lines)
+
+    @on(Button.Pressed, "#add")
+    def _add(self) -> None:
+        self.app.push_screen(AddRepoScreen())
 
     @on(Button.Pressed, "#rescan")
     def _rescan(self) -> None:
@@ -1139,6 +1151,78 @@ class ReposScreen(CopyableScreen):
                 confirm_label="Remove",
             ),
             when_confirmed(self.app, lambda: ActionScreen(f"Remove {repo.name}", run)),
+        )
+
+    @on(Button.Pressed, "#back")
+    def action_back(self) -> None:
+        self.app.pop_screen()
+
+
+class AddRepoScreen(Screen):
+    """A custom repository: name, URI, suites, components, signing key."""
+
+    BINDINGS = [("escape", "back", "Back")]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.status_text = ""
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Label("Add repository", classes="screen-title")
+        with VerticalScroll(id="add-repo-form"):
+            yield Static(
+                "A signing key is required — nothing here is added to apt's "
+                "trusted set otherwise, and packages from it would fail to verify.",
+                id="add-repo-note",
+            )
+            yield Label("Name (used as the filename)")
+            yield Input(placeholder="e.g. syncthing", id="repo-name")
+            yield Label("Repository URI")
+            yield Input(placeholder="https://apt.syncthing.net/", id="repo-uri")
+            yield Label("Suites")
+            yield Input(placeholder="syncthing", id="repo-suites")
+            yield Label("Components")
+            yield Input(placeholder="release", value="main", id="repo-components")
+            yield Label("Signing key URL")
+            yield Input(placeholder="https://.../key.gpg", id="repo-key")
+            yield Static("", id="add-repo-status")
+        with Grid(classes="row2"):
+            yield Button("Add", id="submit", variant="success")
+            yield Button("Back", id="back", variant="primary")
+        yield Footer()
+
+    def _status(self, message: str) -> None:
+        self.status_text = message
+        self.query_one("#add-repo-status", Static).update(message)
+
+    @on(Button.Pressed, "#submit")
+    def _submit(self) -> None:
+        name = self.query_one("#repo-name", Input).value.strip()
+        uri = self.query_one("#repo-uri", Input).value.strip()
+        suites = self.query_one("#repo-suites", Input).value.strip()
+        components = self.query_one("#repo-components", Input).value.strip()
+        key_url = self.query_one("#repo-key", Input).value.strip()
+
+        problems = packages.validate_custom_repo(name, uri, suites, components, key_url)
+        if problems:
+            self._status("\n".join(f"- {p}" for p in problems))
+            return
+
+        repo = packages.build_custom_repo(name, uri, suites, components, key_url)
+
+        def run(log) -> None:
+            packages.add_repo(repo, log)
+
+        self.app.push_screen(
+            ConfirmScreen(
+                f"Add {repo.name}",
+                f"{uri}\nSuites: {suites}  Components: {components}\n\n"
+                f"Signing key from:\n{key_url}\n\n"
+                "A repository you add can install software on this system.",
+                confirm_label="Add",
+            ),
+            when_confirmed(self.app, lambda: ActionScreen(f"Add {repo.name}", run)),
         )
 
     @on(Button.Pressed, "#back")

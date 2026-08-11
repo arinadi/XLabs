@@ -606,6 +606,112 @@ def repo_enabled(repo: Repo) -> bool:
     return os.path.exists(container_path(_repo_file(repo)))
 
 
+# ── Custom repositories ─────────────────────────────────────
+
+# apt lines are one line each: a newline in any field lets a value smuggle
+# in a second directive. None of these characters belong in a URI, suite or
+# component name either, so rejecting them costs nothing real.
+SAFE_URI = re.compile(r"^https?://[^\s]+$")
+SAFE_WORDS = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9.+~_-]*(\s[a-zA-Z0-9][a-zA-Z0-9.+~_-]*)*$")
+
+CUSTOM_PREFIX = "arinanolabs-"
+CUSTOM_SUFFIX = ".sources"
+
+
+def valid_repo_name(name: str) -> bool:
+    """Same shape as a package name: it becomes a filename component."""
+    return valid_term(name)
+
+
+def validate_custom_repo(
+    name: str, uri: str, suites: str, components: str, key_url: str
+) -> list[str]:
+    """Field-by-field problems, or an empty list when the repo can be added."""
+    problems = []
+
+    if not valid_repo_name(name):
+        problems.append("Name: letters, digits, dot, plus or dash only.")
+    elif repo_by_name(name) is not None:
+        problems.append(f"Name: '{name}' is a built-in repository.")
+    elif name in discovered_custom_names():
+        problems.append(f"Name: '{name}' is already added.")
+
+    if not SAFE_URI.match(uri.strip()):
+        problems.append("URI: must start with http:// or https://, no spaces.")
+
+    if not suites.strip() or not SAFE_WORDS.match(suites.strip()):
+        problems.append("Suites: one or more words, e.g. 'stable' or 'trixie main'.")
+
+    if not components.strip() or not SAFE_WORDS.match(components.strip()):
+        problems.append("Components: one or more words, e.g. 'main'.")
+
+    # Not optional. A repo signed by nothing apt already trusts cannot be
+    # verified, and pointing it at Debian's own key would make apt reject
+    # every package from it — the signature simply would not match.
+    if not key_url.strip():
+        problems.append("Signing key URL: required for a repository apt does not already trust.")
+    elif not SAFE_URI.match(key_url.strip()):
+        problems.append("Signing key URL: must start with http:// or https://, no spaces.")
+
+    return problems
+
+
+def build_custom_repo(name: str, uri: str, suites: str, components: str, key_url: str) -> Repo:
+    """Assumes validate_custom_repo() already passed."""
+    key_path = f"{KEYRING_DIR}/{CUSTOM_PREFIX}{name}.asc"
+    stanza = (
+        "Types: deb\n"
+        f"URIs: {uri.strip()}\n"
+        f"Suites: {suites.strip()}\n"
+        f"Components: {components.strip()}\n"
+        f"Signed-By: {key_path}\n"
+    )
+    return Repo(name, f"Custom: {uri.strip()}", stanza, key_url.strip())
+
+
+def discovered_custom_names() -> list[str]:
+    """Names of arinanolabs-managed repos in the container beyond REPOS.
+
+    Covers a repo added by an earlier run of this feature, or added by hand
+    following the same naming convention.
+    """
+    directory = container_path("/etc/apt/sources.list.d")
+    try:
+        entries = os.listdir(directory)
+    except OSError:
+        return []
+
+    names = []
+    for entry in entries:
+        if entry.startswith(CUSTOM_PREFIX) and entry.endswith(CUSTOM_SUFFIX):
+            name = entry[len(CUSTOM_PREFIX) : -len(CUSTOM_SUFFIX)]
+            if repo_by_name(name) is None:
+                names.append(name)
+    return names
+
+
+def discovered_custom_repos() -> list[Repo]:
+    """Custom repos as Repo objects, read back from what is on disk.
+
+    `.stanza` is left empty: these are only ever passed to repo_enabled() and
+    remove_repo(), which use `.name` alone, never to add_repo() again.
+    """
+    repos = []
+    for name in discovered_custom_names():
+        path = container_path(f"/etc/apt/sources.list.d/{CUSTOM_PREFIX}{name}{CUSTOM_SUFFIX}")
+        uri = ""
+        try:
+            with open(path, encoding="utf-8") as f:
+                for line in f:
+                    if line.strip().startswith("URIs:"):
+                        uri = line.split(":", 1)[1].strip().split()[0]
+                        break
+        except OSError:
+            pass
+        repos.append(Repo(name, f"Custom: {uri}" if uri else "Custom repository", "", None))
+    return repos
+
+
 def add_repo(repo: Repo, log: Log) -> bool:
     """Write the repository and its key into the container.
 

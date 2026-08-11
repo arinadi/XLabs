@@ -274,6 +274,16 @@ under `/etc/apt/keyrings` so apt verifies it the way it verifies Debian:
 | `mozilla` | Firefox tracking release rather than ESR |
 | `vscode` | Visual Studio Code |
 
+**Add** takes any repository: name, URI, suites, components, and a signing key
+URL. The key is mandatory — a repository signed by nothing apt already trusts
+cannot be verified, and pointing it at Debian's own key would not help, since
+the signature simply would not match. Every field is validated before
+anything is written: the name cannot collide with a built-in repo or one
+already added, and none of the fields may contain a newline, which could
+otherwise smuggle a second directive into the stanza. Repos added by an
+earlier session, or by hand under the `arinanolabs-` naming convention, show
+up in the list too.
+
 Search terms and package names are validated against the Debian package-name
 shape and rejected rather than escaped — they end up in a shell command.
 

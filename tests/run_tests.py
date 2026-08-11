@@ -31,11 +31,13 @@ from installer import app as app_module
 from installer import audio, doctor, packages
 from installer.app import (
     ActionScreen,
+    AddRepoScreen,
     ArinanoLabsApp,
     ConfirmScreen,
     DoctorScreen,
     DupesScreen,
     MainScreen,
+    ReposScreen,
     StatusScreen,
     ToolsScreen,
 )
@@ -688,6 +690,137 @@ def test_search_notices_missing_package_lists() -> None:
     check("apt-get update" in packages.INSTALL_SCRIPT, "install does not refresh lists")
 
 
+def test_validate_custom_repo() -> None:
+    """The Add Repo form is a shell-adjacent surface: values land in a
+    written apt config and one field's URL is later handed to curl."""
+    from installer import packages
+
+    check(
+        packages.validate_custom_repo("", "", "", "", "") != [],
+        "empty fields must be rejected",
+    )
+    check(
+        packages.validate_custom_repo(
+            "syncthing",
+            "https://apt.syncthing.net/",
+            "syncthing",
+            "release",
+            "https://syncthing.net/release-key.gpg",
+        )
+        == [],
+        "a well-formed custom repo was rejected",
+    )
+
+    # A name colliding with a built-in repo, or one already added, must be
+    # refused rather than silently overwriting it.
+    for builtin in packages.REPOS:
+        check(
+            packages.validate_custom_repo(
+                builtin.name, "https://x.invalid/", "a", "main", "https://x.invalid/key"
+            )
+            != [],
+            f"the built-in name '{builtin.name}' was accepted for a custom repo",
+        )
+
+    # A repo with no key cannot be verified, so it must not be
+    # constructible — this is not optional the way it is for backports.
+    check(
+        packages.validate_custom_repo("nokey", "https://x.invalid/", "a", "main", "") != [],
+        "a repo with no signing key was accepted",
+    )
+
+    # A newline in any field could smuggle a second apt directive into the
+    # stanza (e.g. an extra Signed-By: pointing somewhere else).
+    for hostile in (
+        "https://x.invalid/\nSigned-By: /etc/shadow",
+        "https://x.invalid/ extra",
+    ):
+        check(
+            packages.validate_custom_repo("evil", hostile, "a", "main", "https://x.invalid/key")
+            != [],
+            f"a hostile URI was accepted: {hostile!r}",
+        )
+
+    stanza = packages.build_custom_repo(
+        "syncthing",
+        "https://apt.syncthing.net/",
+        "syncthing",
+        "release",
+        "https://syncthing.net/release-key.gpg",
+    ).stanza
+    check("URIs: https://apt.syncthing.net/" in stanza, "URI missing from the built stanza")
+    check(
+        "Signed-By: /etc/apt/keyrings/arinanolabs-syncthing.asc" in stanza,
+        "the stanza does not point at the fetched key",
+    )
+
+
+async def test_add_repo_screen() -> None:
+    """The custom-repo form: validation blocks bad input, a good one reaches
+    confirmation, and every control stays reachable at phone widths.
+
+    Two clicks on the same button in quick succession is a known pacing
+    issue in Textual's test pilot rather than anything about this screen —
+    calling the handler directly showed the logic was correct before the
+    delay was added, so this is not papering over a real bug.
+    """
+    for width, height in ((80, 40), (45, 30), (40, 24)):
+        app = ArinanoLabsApp()
+        async with app.run_test(size=(width, height)) as pilot:
+            await pilot.pause()
+            await pilot.click("#tools")
+            await pilot.pause()
+            await pilot.click("#repos")
+            await pilot.pause()
+            check(isinstance(app.screen, ReposScreen), f"got {app.screen!r}")
+            for button in app.screen.query(Button):
+                check(
+                    app.screen.region.contains_region(button.region),
+                    f"{button.id} off screen at {width}x{height} on ReposScreen",
+                )
+
+            await pilot.click("#add")
+            await pilot.pause()
+            check(isinstance(app.screen, AddRepoScreen), f"got {app.screen!r}")
+            for button in app.screen.query(Button):
+                check(
+                    app.screen.region.contains_region(button.region),
+                    f"{button.id} off screen at {width}x{height} on AddRepoScreen",
+                )
+
+            await pilot.click("#submit")
+            await asyncio.sleep(0.15)
+            await pilot.pause()
+            check(isinstance(app.screen, AddRepoScreen), "empty submit left the form")
+            check("Name:" in app.screen.status_text, f"no validation message: {app.screen.status_text!r}")
+
+            app.screen.query_one("#repo-name", Input).value = "syncthing"
+            app.screen.query_one("#repo-uri", Input).value = "https://apt.syncthing.net/"
+            app.screen.query_one("#repo-suites", Input).value = "syncthing"
+            app.screen.query_one("#repo-key", Input).value = "https://syncthing.net/release-key.gpg"
+            await asyncio.sleep(0.15)
+            await pilot.pause()
+
+            await pilot.click("#submit")
+            await asyncio.sleep(0.15)
+            await pilot.pause()
+            check(
+                isinstance(app.screen, ConfirmScreen),
+                f"valid submit did not reach confirmation at {width}x{height}: {app.screen!r}",
+            )
+
+            await pilot.click("#cancel")
+            await pilot.pause()
+            check(isinstance(app.screen, AddRepoScreen), "cancel discarded the form")
+
+            await pilot.click("#back")
+            await pilot.pause()
+            check(isinstance(app.screen, ReposScreen), "back from the form did not return")
+            await pilot.click("#back")
+            await pilot.pause()
+            check(isinstance(app.screen, ToolsScreen), "back from Repos did not return")
+
+
 async def test_tools_screen_searches() -> None:
     app = ArinanoLabsApp()
     async with app.run_test(size=(80, 40)) as pilot:
@@ -812,6 +945,8 @@ def main() -> int:
         test_update_offers_restart,
         test_package_terms_reject_shell_metacharacters,
         test_search_notices_missing_package_lists,
+        test_validate_custom_repo,
+        test_add_repo_screen,
         test_tools_screen_searches,
         test_other_actions_do_not_offer_restart,
         test_export_never_creates_a_repo_directory,

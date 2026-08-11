@@ -176,3 +176,29 @@ ConfirmScreen {
     border: round $primary;
     background: $surface-darken-1;
 }
+
+/* Add Repository form */
+#add-repo-note {
+    margin: 1 2 0 2;
+    padding: 1;
+    border: round $primary;
+}
+
+#add-repo-status {
+    margin: 0 2;
+    padding: 0 1;
+    color: $error;
+    height: auto;
+}
+
+AddRepoScreen Label {
+    margin: 1 2 0 2;
+}
+
+AddRepoScreen Input {
+    margin: 0 2;
+}
+
+#add-repo-form {
+    height: 1fr;
+}
