@@ -31,20 +31,6 @@ SURVIVOR_PATTERN = (
     "termux-x11|virgl_test_server"
 )
 
-# Sent to the session before anything is killed. --fast skips saving state,
-# which is what we want: the point is to release the display, not to restore
-# this session later.
-LOGOUT_SCRIPT = r"""#!/bin/bash
-export DISPLAY=:0
-export XDG_RUNTIME_DIR="/tmp/runtime-$(id -u)"
-if command -v xfce4-session-logout >/dev/null 2>&1; then
-    timeout 8 xfce4-session-logout --logout --fast 2>&1
-else
-    echo "xfce4-session-logout not present"
-fi
-"""
-
-
 def _noop(_message: str) -> None:
     pass
 
@@ -74,57 +60,48 @@ def stop_desktop(log=_noop) -> bool:
     """Stop the desktop, innermost first, and report whether it worked.
 
     Order matters and used to be inverted: the Android X server was killed
-    first, which pulls the display out from under the session and guarantees
-    an unclean teardown. The session gets asked to leave first now, and the
-    display goes last.
+    first, which pulls the display out from under the session. The container
+    goes first now and the display last.
     """
-    # 1. Ask the session to log out. Best effort — if there is no session, or
-    #    no D-Bus to carry the request, this simply does nothing.
-    if is_running():
-        log("Asking the session to log out...")
-        if write_container_script("arinanolabs-logout.sh", LOGOUT_SCRIPT):
-            run_cmd(
-                f"proot-distro login {CONTAINER_NAME} --user {ADMIN_USER} "
-                "--shared-tmp -- bash /tmp/arinanolabs-logout.sh",
-                timeout=20,
-            )
-        if _wait_gone("xfce4-session|startxfce4", 8):
-            log("  session exited on request")
-        else:
-            log("  no response, killing instead")
-
-    # 2. Kill the container. proot runs with --kill-on-exit, so taking the
+    # 1. Kill the container. proot runs with --kill-on-exit, so taking the
     #    proot process takes every process inside with it — which is why the
     #    long list of xfce4/thunar/dbus patterns this used to carry is neither
     #    needed nor safe.
+    #
+    #    There is no polite logout step. xfce4-session-logout talks to the
+    #    session manager over its D-Bus and ICE sockets, and a fresh
+    #    proot-distro login has neither — no DBUS_SESSION_BUS_ADDRESS pointing
+    #    at the running session — so the request never arrived and every stop
+    #    simply waited eight seconds before killing anyway. TERM first still
+    #    gives the tree a chance to exit on its own.
     log("Stopping the container...")
     run_cmd(f"pkill -TERM -f 'proot.*{CONTAINER_NAME}' 2>/dev/null")
     if not _wait_gone(f"proot.*{CONTAINER_NAME}", 5):
         run_cmd(f"pkill -9 -f 'proot.*{CONTAINER_NAME}' 2>/dev/null")
         _wait_gone(f"proot.*{CONTAINER_NAME}", 3)
 
-    # 3. Now the display can go.
+    # 2. Now the display can go.
     log("Stopping X11...")
     run_cmd("pkill -TERM -f termux-x11 2>/dev/null")
     _wait_gone("termux-x11", 3)
     run_cmd("pkill -9 -f termux-x11 2>/dev/null")
     run_cmd("am force-stop com.termux.x11 2>/dev/null")
 
-    # 4. Audio and the renderer. `pulseaudio --kill` is the supported way and
+    # 3. Audio and the renderer. `pulseaudio --kill` is the supported way and
     #    unloads its own modules; the old code unloaded module-null-sink,
     #    which was never loaded, and left the aaudio/sles sinks behind.
     log("Stopping audio and renderer...")
     run_cmd("pulseaudio --kill 2>/dev/null")
     run_cmd("pkill -TERM -f virgl_test_server 2>/dev/null")
 
-    # 5. Anything that outlived its parent.
+    # 4. Anything that outlived its parent.
     rc, _ = run_cmd(f"pgrep -f '{SURVIVOR_PATTERN}'")
     if rc == 0:
         log("Sweeping survivors...")
         run_cmd(f"pkill -9 -f '{SURVIVOR_PATTERN}' 2>/dev/null")
         time.sleep(0.5)
 
-    # 6. Sockets and runtime dirs. With --shared-tmp the container's /tmp is
+    # 5. Sockets and runtime dirs. With --shared-tmp the container's /tmp is
     #    this directory, so this is where the session's residue actually is;
     #    the rootfs paths below only matter for sessions started before that
     #    change.
@@ -143,7 +120,7 @@ def stop_desktop(log=_noop) -> bool:
 
     run_cmd("termux-wake-unlock 2>/dev/null")
 
-    # 7. Say what actually happened rather than always claiming success.
+    # 6. Say what actually happened rather than always claiming success.
     rc, out = run_cmd(f"pgrep -af '{SURVIVOR_PATTERN}'")
     if rc == 0:
         log("[yellow]Stopped, but these survived:[/yellow]")

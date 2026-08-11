@@ -200,13 +200,18 @@ Start offers to pull one instead of failing further down.
 
 Innermost first, which is the opposite of what feels natural:
 
-1. Ask the session to leave — `xfce4-session-logout --logout --fast`, 8s grace
-2. `TERM` then `KILL` this container's proot tree — proot runs with
+1. `TERM` then `KILL` this container's proot tree — proot runs with
    `--kill-on-exit`, so that takes everything inside with it
-3. X11 down, then the Android app force-stopped
-4. `pulseaudio --kill`, virgl down
-5. Sweep anything that outlived its parent
-6. Remove sockets, lock files and runtime directories
+2. X11 down, then the Android app force-stopped
+3. `pulseaudio --kill`, virgl down
+4. Sweep anything that outlived its parent
+5. Remove sockets, lock files and runtime directories
+
+There is no polite logout step. `xfce4-session-logout` reaches the session
+manager over its D-Bus and ICE sockets, and a fresh `proot-distro login` has
+neither, so the request never arrived — every stop just waited eight seconds
+and then killed anyway. `TERM` before `KILL` still lets the tree exit on its
+own.
 
 Then it **verifies with `pgrep` and tells you what survived**, rather than
 printing "Stopped" regardless.
