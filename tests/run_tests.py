@@ -194,6 +194,30 @@ def test_firefox_prefs_are_defaults_not_locks() -> None:
         check(lines, "the repair explained nothing")
 
 
+def test_cross_module_references_exist() -> None:
+    """Guard: calling a name that lives in a different module.
+
+    audio.py called desktop.is_installed(), which lives in system.py. Nothing
+    caught it until the feature ran on a device and died halfway through the
+    test it was meant to provide.
+    """
+    import inspect
+    import re
+
+    from installer import start as start_module
+    from installer import system as system_module
+
+    aliases = {"desktop": start_module, "system": system_module}
+    for module in (audio, doctor, app_module, packages):
+        source = inspect.getsource(module)
+        for alias, attribute in re.findall(r"\b(desktop|system)\.([a-zA-Z_]\w*)", source):
+            check(
+                hasattr(aliases[alias], attribute),
+                f"{module.__name__} calls {alias}.{attribute}, "
+                f"which {aliases[alias].__name__} does not define",
+            )
+
+
 def test_audio_test_tone_is_valid() -> None:
     """The tone is generated rather than shipped, so it must be a real WAV."""
     import wave
@@ -602,6 +626,7 @@ def main() -> int:
         test_preflight_shape,
         test_doctor_scan_shape,
         test_firefox_prefs_are_defaults_not_locks,
+        test_cross_module_references_exist,
         test_audio_test_tone_is_valid,
         test_doctor_reports_audio,
         test_tui_navigation,

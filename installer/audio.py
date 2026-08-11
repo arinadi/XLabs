@@ -21,7 +21,7 @@ from typing import Callable
 
 from . import start as desktop
 from .const import CONTAINER_NAME, TMPDIR
-from .system import run_cmd, stream_cmd
+from .system import is_installed, run_cmd, stream_cmd
 
 Log = Callable[[str], None]
 
@@ -122,7 +122,7 @@ def test(log: Log) -> None:
     log(f"  exit {rc}" + ("" if rc == 0 else "  [yellow]no sound from Termux itself[/yellow]"))
     log("")
 
-    if not desktop.is_installed():
+    if not is_installed():
         log("No container, so the second half is skipped.")
         return
 

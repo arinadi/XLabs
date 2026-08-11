@@ -154,14 +154,25 @@ def start_pulseaudio(log=_noop) -> bool:
 
 
 def load_audio_modules(log=_noop) -> bool:
-    run_cmd(
+    """Open the TCP path the container connects back through.
+
+    This used to fire three commands, ignore every result and return True. A
+    device with working Termux audio and three sinks still had no sound in the
+    container because the module never loaded and nothing said so.
+    """
+    rc, out = run_cmd(
         "pactl load-module module-native-protocol-tcp "
-        "auth-ip-acl=127.0.0.1 auth-anonymous=1 port=4713 2>/dev/null"
+        "auth-ip-acl=127.0.0.1 auth-anonymous=1 port=4713"
     )
-    # Android-specific sinks; absent on most builds, so failure is expected.
-    run_cmd("pactl load-module module-aaudio-sink 2>/dev/null")
-    run_cmd("pactl load-module module-sles-sink 2>/dev/null")
-    return True
+
+    loaded, modules = run_cmd("pactl list modules short")
+    if loaded == 0 and "module-native-protocol-tcp" in modules:
+        return True
+
+    log("  module-native-protocol-tcp did not load — the container will be silent")
+    for line in out.strip().splitlines()[:3]:
+        log(f"    {line}")
+    return False
 
 
 def virgl_running() -> bool:
