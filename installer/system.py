@@ -13,7 +13,15 @@ import threading
 import time
 from datetime import datetime, timezone
 
-from .const import HOME_BIN, LAUNCHER_SRC, PREFIX_BIN, PROOT_DIR, REPO_DIR, TMPDIR
+from .const import (
+    CONTAINER_NAME,
+    HOME_BIN,
+    LAUNCHER_SRC,
+    PREFIX_BIN,
+    PROOT_DIR,
+    REPO_DIR,
+    TMPDIR,
+)
 
 
 def run_cmd(cmd: str, timeout: int = 60) -> tuple[int, str]:
@@ -258,3 +266,23 @@ def write_container_script(name: str, content: str) -> bool:
         return True
     except OSError:
         return False
+
+
+def container_command(script_name: str, user: str | None = None) -> str:
+    """Command that runs a script placed by write_container_script.
+
+    --shared-tmp is not optional here: the script is written to Termux's tmp,
+    and without the flag the container's /tmp is its own rootfs directory
+    where the file does not exist. Four call sites forgot it independently,
+    which is why building the command is no longer left to callers.
+    """
+    user_flag = f"--user {user} " if user else ""
+    return (
+        f"proot-distro login {CONTAINER_NAME} {user_flag}--shared-tmp "
+        f"-- bash /tmp/{script_name}"
+    )
+
+
+def container_path(path: str) -> str:
+    """Where a path inside the container lives on the host."""
+    return os.path.join(PROOT_DIR, "rootfs", path.lstrip("/"))

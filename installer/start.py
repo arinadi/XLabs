@@ -11,7 +11,7 @@ import time
 
 from . import audio, bench
 from .const import ADMIN_USER, CONTAINER_NAME, PROOT_DIR, REPO_DIR, TMPDIR
-from .system import run_cmd, write_container_script
+from .system import container_command, run_cmd, write_container_script
 
 ANGLE_DIR = "/data/data/com.termux/files/usr/opt/angle-android"
 XFCE_LOG = os.path.join(REPO_DIR, "xfce4.log")
@@ -360,8 +360,7 @@ def start_xfce4(log=_noop) -> bool:
         return False
 
     cmd = (
-        f"proot-distro login {CONTAINER_NAME} --user {ADMIN_USER} --shared-tmp "
-        f"-- bash /tmp/{SESSION_SCRIPT_NAME}"
+        container_command(SESSION_SCRIPT_NAME, user=ADMIN_USER)
     )
 
     log(f"  {cmd}")
@@ -439,8 +438,7 @@ def _run_container_probe() -> tuple[int, str]:
         return 1, "could not write the probe script"
 
     return run_cmd(
-        f"proot-distro login {CONTAINER_NAME} --shared-tmp "
-        "-- bash /tmp/arinanolabs-probe.sh",
+        container_command("arinanolabs-probe.sh"),
         timeout=120,
     )
 

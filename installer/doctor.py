@@ -19,12 +19,13 @@ from .const import (
     IMAGE_REF,
     LAUNCHER_SRC,
     PREFIX_BIN,
-    PROOT_DIR,
     REPO_DIR,
     TMPDIR,
 )
 from .preflight import X11_APK_URL, check_x11_app
 from .system import (
+    container_command,
+    container_path,
     ensure_home_bin_on_path,
     is_installed,
     link_launcher,
@@ -227,6 +228,18 @@ def diagnose() -> list[Issue]:
         )
     )
 
+    if is_installed():
+        client = audio.client_conf_present()
+        issues.append(
+            Issue(
+                "Audio client",
+                client,
+                audio.CLIENT_CONF if client
+                else "No client.conf — shared memory breaks the handshake in proot",
+                None if client else audio.write_client_conf,
+            )
+        )
+
     sink_names = audio.sinks()
     issues.append(
         Issue(
@@ -238,8 +251,8 @@ def diagnose() -> list[Issue]:
     )
 
     # Firefox video defaults — only worth mentioning where Firefox exists.
-    if os.path.exists(_container_path(FIREFOX_BIN)):
-        tuned = os.path.exists(_container_path(FIREFOX_PREFS_FILE))
+    if os.path.exists(container_path(FIREFOX_BIN)):
+        tuned = os.path.exists(container_path(FIREFOX_PREFS_FILE))
         issues.append(
             Issue(
                 "Firefox video",
@@ -290,18 +303,13 @@ pref("media.av1.enabled", false);
 """
 
 
-def _container_path(path: str) -> str:
-    """Map a path inside the container to its location on the host."""
-    return os.path.join(PROOT_DIR, "rootfs", path.lstrip("/"))
-
-
 def _fix_firefox_prefs(log: Log) -> bool:
-    directory = _container_path(FIREFOX_PREFS_DIR)
+    directory = container_path(FIREFOX_PREFS_DIR)
     if not os.path.isdir(directory):
         log(f"  {FIREFOX_PREFS_DIR} does not exist in the container")
         return False
 
-    target = _container_path(FIREFOX_PREFS_FILE)
+    target = container_path(FIREFOX_PREFS_FILE)
     try:
         with open(target, "w", encoding="utf-8", newline="\n") as f:
             f.write(FIREFOX_PREFS)
@@ -369,7 +377,7 @@ def _container_provides(binaries: set[str]) -> set[str]:
         return set()
 
     rc, out = run_cmd(
-        f"proot-distro login {CONTAINER_NAME} -- bash /tmp/arinanolabs-which.sh",
+        container_command("arinanolabs-which.sh"),
         timeout=120,
     )
     if rc != 0:

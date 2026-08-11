@@ -23,8 +23,15 @@ import time
 import wave
 from typing import Callable
 
-from .const import CONTAINER_NAME, TMPDIR
-from .system import is_installed, run_cmd, stream_cmd, write_container_script
+from .const import TMPDIR
+from .system import (
+    container_command,
+    container_path,
+    is_installed,
+    run_cmd,
+    stream_cmd,
+    write_container_script,
+)
 
 Log = Callable[[str], None]
 
@@ -39,6 +46,28 @@ PULSE_SERVER = "unix:/tmp/pulse-socket"
 MODULE_ARGS = f"module-native-protocol-unix socket={PULSE_SOCKET} auth-anonymous=1"
 
 TEST_TONE_NAME = "arinanolabs-test-tone.wav"
+
+# The client half, inside the container. Only libpulse reads this; the daemon
+# lives in Termux.
+CLIENT_CONF = "/etc/pulse/client.conf"
+
+CLIENT_CONF_BODY = """# arinanoLabs — PulseAudio client settings for proot.
+#
+# enable-shm and enable-memfd are off because PulseAudio negotiates shared
+# memory and passes file descriptors over the socket to do it. proot
+# intercepts syscalls, and that handshake fails across the boundary — the
+# symptom is "Connection failure: Protocol error" on a socket that plainly
+# exists and is accepting connections. Without shared memory the samples
+# travel over the socket itself: a little more CPU, and it works.
+#
+# autospawn is off because there is no daemon in the container and none
+# should be started; daemon-binary points at true so nothing tries.
+autospawn = no
+daemon-binary = /bin/true
+enable-shm = no
+enable-memfd = no
+default-server = unix:/tmp/pulse-socket
+"""
 
 PLAY_SCRIPT = f"""#!/bin/bash
 # Connecting and playing are different failures, and a bare exit code cannot
@@ -89,6 +118,28 @@ def socket_ready() -> bool:
     return rc == 0
 
 
+def client_conf_present() -> bool:
+    return os.path.exists(container_path(CLIENT_CONF))
+
+
+def write_client_conf(log: Log) -> bool:
+    """Place the client settings inside the container.
+
+    Written through the rootfs from the host, so no container login is
+    needed and it works before the desktop has ever started.
+    """
+    target = container_path(CLIENT_CONF)
+    try:
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with open(target, "w", encoding="utf-8", newline="\n") as f:
+            f.write(CLIENT_CONF_BODY)
+    except OSError as e:
+        log(f"  could not write {CLIENT_CONF}: {e}")
+        return False
+    log(f"  wrote {CLIENT_CONF} (shared memory disabled)")
+    return True
+
+
 def sinks() -> list[str]:
     """Output devices PulseAudio knows about. No sink means no sound."""
     rc, out = run_cmd("pactl list sinks short 2>/dev/null")
@@ -104,6 +155,11 @@ def ensure_server(log: Log) -> bool:
     list. Restarts the daemon when the socket is missing: --start does not
     apply new --load arguments to a server that is already up.
     """
+    # The client half matters as much as the server: without it the container
+    # connects and then fails the shared-memory handshake.
+    if is_installed() and not client_conf_present():
+        write_client_conf(log)
+
     if server_running() and socket_ready():
         log("  already running, socket ready")
         return True
@@ -203,8 +259,7 @@ def test(log: Log) -> None:
         return
 
     stream_cmd(
-        f"proot-distro login {CONTAINER_NAME} --shared-tmp "
-        "-- bash /tmp/arinanolabs-audio.sh",
+        container_command("arinanolabs-audio.sh"),
         log,
         timeout=90,
     )

@@ -40,7 +40,7 @@ from installer.app import (
     ToolsScreen,
 )
 from installer.preflight import run_all_checks
-from installer.system import stream_cmd
+from installer.system import container_path, stream_cmd
 
 _failures: list[str] = []
 
@@ -184,7 +184,7 @@ def test_firefox_prefs_are_defaults_not_locks() -> None:
 
     # The repair refuses rather than raising when the target is absent.
     lines: list[str] = []
-    if not os.path.isdir(doctor._container_path(doctor.FIREFOX_PREFS_DIR)):
+    if not os.path.isdir(container_path(doctor.FIREFOX_PREFS_DIR)):
         check(
             not doctor._fix_firefox_prefs(lines.append),
             "the repair claimed success with no container",

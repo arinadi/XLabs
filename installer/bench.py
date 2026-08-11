@@ -17,7 +17,7 @@ from typing import Callable, NamedTuple
 
 from . import config
 from .const import CONTAINER_NAME
-from .system import is_installed, run_cmd, stream_cmd, write_container_script
+from .system import container_command, is_installed, run_cmd, stream_cmd, write_container_script
 
 Log = Callable[[str], None]
 
@@ -148,7 +148,7 @@ def install_glmark2(log: Log) -> bool:
         log("[red]Could not write the install script.[/red]")
         return False
     rc = stream_cmd(
-        f"proot-distro login {CONTAINER_NAME} -- bash /tmp/arinanolabs-glmark2.sh",
+        container_command("arinanolabs-glmark2.sh"),
         log,
         timeout=1800,
     )
@@ -197,8 +197,7 @@ def run(log: Log) -> None:
                 log(f"    {line}")
 
         rc = stream_cmd(
-            f"proot-distro login {CONTAINER_NAME} --shared-tmp "
-            f"-- bash /tmp/{BENCH_SCRIPT_NAME}",
+            container_command(BENCH_SCRIPT_NAME),
             collect,
             timeout=600,
         )

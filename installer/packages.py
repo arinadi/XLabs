@@ -11,8 +11,7 @@ from __future__ import annotations
 import re
 from typing import Callable, NamedTuple
 
-from .const import CONTAINER_NAME
-from .system import is_installed, run_cmd, stream_cmd, write_container_script
+from .system import container_command, is_installed, run_cmd, stream_cmd, write_container_script
 
 Log = Callable[[str], None]
 
@@ -76,8 +75,7 @@ def search(term: str) -> tuple[list[Package], str | None]:
         return [], "Could not write the search script."
 
     rc, out = run_cmd(
-        f"proot-distro login {CONTAINER_NAME} "
-        f"-- bash /tmp/arinanolabs-search.sh {term}",
+        f"{container_command('arinanolabs-search.sh')} {term}",
         timeout=120,
     )
     if rc != 0:
@@ -115,8 +113,7 @@ def install(names: list[str], log: Log) -> bool:
     log(f"Installing into the container: {', '.join(names)}")
     log("")
     rc = stream_cmd(
-        f"proot-distro login {CONTAINER_NAME} "
-        f"-- bash /tmp/arinanolabs-install.sh {' '.join(names)}",
+        f"{container_command('arinanolabs-install.sh')} {' '.join(names)}",
         log,
         timeout=1800,
     )
