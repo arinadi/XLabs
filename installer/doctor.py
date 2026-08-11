@@ -266,6 +266,22 @@ def diagnose() -> list[Issue]:
             )
         )
 
+    # Electron apps (VS Code and anything else installed later) — only
+    # worth mentioning once at least one is actually present.
+    if is_installed():
+        electron_found, electron_missing = _electron_status()
+        if electron_found:
+            electron_ok = electron_missing == 0
+            issues.append(
+                Issue(
+                    "Electron apps",
+                    electron_ok,
+                    "sandbox disabled" if electron_ok
+                    else f"{electron_missing} of {electron_found} still need --no-sandbox",
+                    None if electron_ok else _fix_electron_sandbox,
+                )
+            )
+
     # Firefox video defaults — only worth mentioning where Firefox exists.
     if os.path.exists(container_path(FIREFOX_BIN)):
         tuned = os.path.exists(container_path(FIREFOX_PREFS_FILE))
@@ -336,6 +352,141 @@ def _fix_firefox_prefs(log: Log) -> bool:
     log(f"  wrote {FIREFOX_PREFS_FILE}")
     log("  restart Firefox for it to take effect")
     return True
+
+
+# ── Electron sandbox ───────────────────────────────────────
+
+# Electron's SUID sandbox needs either a real setuid-root helper or working
+# unprivileged user namespaces. proot fakes namespace syscalls without a
+# kernel behind them, so Chromium's zygote sandbox init fails outright and
+# the app never opens — this is why VS Code (and anything else built on
+# Electron) does nothing when launched under proot. --no-sandbox turns that
+# subsystem off; proot is already the outer isolation boundary on a personal
+# device, so there is nothing behind it worth protecting.
+#
+# Detected the way distro packagers detect it: a chrome-sandbox helper next
+# to the resolved binary means Chromium/Electron, whatever the app is —
+# this catches whatever gets installed later, not only the vscode repo.
+APPLICATIONS_DIR = "/usr/share/applications"
+DEFAULT_PATH_DIRS = ("/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin")
+
+
+def _resolve_in_root(root: str, path: str, depth: int = 0) -> str | None:
+    """Host path for `path` as the container itself would resolve it.
+
+    os.path.realpath cannot be used here: an absolute symlink target stored
+    inside the container (e.g. /usr/bin/code -> /usr/share/code/code) is only
+    absolute *inside the container* — resolved against the host root it
+    points somewhere that does not exist.
+    """
+    if depth > 20:
+        return None
+    if not path.startswith("/"):
+        path = "/" + path
+    host = os.path.join(root, path.lstrip("/"))
+    if os.path.islink(host):
+        target = os.readlink(host)
+        if not os.path.isabs(target):
+            target = os.path.normpath(os.path.join(os.path.dirname(path), target))
+        return _resolve_in_root(root, target, depth + 1)
+    return host
+
+
+def _find_in_path(root: str, name: str) -> str | None:
+    if "/" in name:
+        resolved = _resolve_in_root(root, name)
+        return resolved if resolved and os.path.isfile(resolved) else None
+    for directory in DEFAULT_PATH_DIRS:
+        resolved = _resolve_in_root(root, f"{directory}/{name}")
+        if resolved and os.path.isfile(resolved):
+            return resolved
+    return None
+
+
+def _desktop_exec_binary(content: str) -> str | None:
+    for line in content.splitlines():
+        if line.startswith("Exec="):
+            rest = line[len("Exec="):].strip()
+            return rest.split()[0] if rest else None
+    return None
+
+
+def _desktop_is_sandboxed(content: str) -> bool:
+    for line in content.splitlines():
+        if line.startswith("Exec="):
+            return "--no-sandbox" in line
+    return False
+
+
+def _electron_desktop_files() -> list[tuple[str, str]]:
+    """(path, content) for every .desktop file that launches an Electron app."""
+    root = container_path("/")
+    directory = container_path(APPLICATIONS_DIR)
+    try:
+        names = sorted(os.listdir(directory))
+    except OSError:
+        return []
+
+    found = []
+    for name in names:
+        if not name.endswith(".desktop"):
+            continue
+        path = os.path.join(directory, name)
+        try:
+            with open(path, encoding="utf-8") as f:
+                content = f.read()
+        except OSError:
+            continue
+        binary = _desktop_exec_binary(content)
+        if not binary:
+            continue
+        resolved = _find_in_path(root, binary)
+        if not resolved:
+            continue
+        if os.path.isfile(os.path.join(os.path.dirname(resolved), "chrome-sandbox")):
+            found.append((path, content))
+    return found
+
+
+def _electron_status() -> tuple[int, int]:
+    """(Electron apps found, still missing --no-sandbox)."""
+    files = _electron_desktop_files()
+    missing = sum(1 for _, content in files if not _desktop_is_sandboxed(content))
+    return len(files), missing
+
+
+def _patch_desktop_exec(content: str, binary: str) -> str:
+    lines = content.splitlines()
+    for i, line in enumerate(lines):
+        if not line.startswith("Exec="):
+            continue
+        value = line[len("Exec="):]
+        if value.split()[0] != binary:
+            continue
+        lines[i] = f"Exec={binary} --no-sandbox{value[len(binary):]}"
+    return "\n".join(lines) + ("\n" if content.endswith("\n") else "")
+
+
+def _fix_electron_sandbox(log: Log) -> bool:
+    files = _electron_desktop_files()
+    patched = 0
+    ok = True
+    for path, content in files:
+        if _desktop_is_sandboxed(content):
+            continue
+        binary = _desktop_exec_binary(content)
+        assert binary is not None
+        try:
+            with open(path, "w", encoding="utf-8", newline="\n") as f:
+                f.write(_patch_desktop_exec(content, binary))
+        except OSError as e:
+            log(f"  could not write {path}: {e}")
+            ok = False
+            continue
+        log(f"  {os.path.basename(path)} -> Exec gets --no-sandbox")
+        patched += 1
+    log(f"  {patched} of {len(files)} Electron app(s) patched")
+    return ok
 
 
 # ── Termux packages the container already provides ─────────

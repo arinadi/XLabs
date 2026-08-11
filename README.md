@@ -304,11 +304,21 @@ Querying installed Android apps is unreliable from Termux, and reporting
 <!-- screenshot: doctor -->
 
 Repository checkout, launcher target, Textual, proot-distro, PulseAudio,
-Termux:X11, the GPU renderer, the X11 app, the container, stale X11 sockets,
-and Firefox's video defaults.
+Termux:X11, the GPU renderer, the X11 app, the container, audio, the security
+archive, Electron apps' sandbox, Firefox's video defaults, and stale X11
+sockets.
 
 **GPU renderer** is `virglrenderer-android`. Without it the desktop runs on
 llvmpipe — everything is drawn on the CPU.
+
+**Electron apps** (VS Code, and anything else built on Electron) open nothing
+at all under proot: their SUID sandbox needs unprivileged user namespaces,
+which proot only fakes without a kernel behind them, so Chromium's zygote
+sandbox init fails before the window ever appears. The repair finds every
+installed Electron app by its `chrome-sandbox` helper — not by name, so
+whatever gets installed later is caught too — and adds `--no-sandbox` to its
+`.desktop` launcher. proot is already the outer isolation boundary on a
+personal device, so there is nothing behind the sandbox worth protecting.
 
 That last one is the fix for stuttering YouTube. There is no VA-API through
 proot, so VP9 and AV1 are decoded on the CPU — and that, not rendering, is what
