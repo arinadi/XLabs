@@ -16,18 +16,18 @@ from __future__ import annotations
 import math
 import os
 import struct
+import time
 import wave
 from typing import Callable
 
-from . import start as desktop
 from .const import CONTAINER_NAME, TMPDIR
-from .system import is_installed, run_cmd, stream_cmd
+from .system import is_installed, run_cmd, stream_cmd, write_container_script
 
 Log = Callable[[str], None]
 
 # Termux's PulseAudio listens here and the session points clients at it.
 PULSE_PORT = 4713
-PULSE_SERVER = f"tcp:127.0.0.1:{PULSE_PORT}"
+PULSE_SERVER = "tcp:127.0.0.1"
 
 TEST_TONE_NAME = "arinanolabs-test-tone.wav"
 
@@ -59,19 +59,49 @@ def sinks() -> list[str]:
     return [line.split("\t")[1] for line in out.splitlines() if "\t" in line]
 
 
-def start_server(log: Log) -> bool:
-    rc = stream_cmd("pulseaudio --start --exit-idle-time=-1", log, timeout=60)
-    return rc == 0 or server_running()
+# Loaded by the daemon itself rather than by a client afterwards. Runtime
+# loading needs pactl to connect and authenticate, and when that fails the
+# module never loads — the container is then silent with no obvious cause.
+# Every published Termux recipe passes it at startup for this reason.
+TCP_MODULE_ARGS = "module-native-protocol-tcp auth-ip-acl=127.0.0.1 auth-anonymous=1"
 
 
-def load_tcp_module(log: Log) -> bool:
-    rc = stream_cmd(
-        "pactl load-module module-native-protocol-tcp "
-        f"auth-ip-acl=127.0.0.1 auth-anonymous=1 port={PULSE_PORT}",
+def ensure_server(log: Log) -> bool:
+    """Get PulseAudio running with the TCP module loaded.
+
+    Restarts the daemon when the module is missing: --start does not apply
+    new --load arguments to a server that is already up, so a daemon started
+    without the module can never gain it that way.
+    """
+    if server_running() and tcp_module_loaded():
+        log("  already running with the TCP module")
+        return True
+
+    if server_running():
+        log("  restarting PulseAudio so the TCP module can be loaded")
+        run_cmd("pulseaudio --kill")
+        time.sleep(1)
+
+    stream_cmd(
+        f'pulseaudio --start --exit-idle-time=-1 --load="{TCP_MODULE_ARGS}"',
         log,
         timeout=60,
     )
-    return rc == 0 or tcp_module_loaded()
+    time.sleep(1)
+
+    if tcp_module_loaded():
+        return True
+
+    # Fall back to loading it at runtime after all — worth a try before
+    # giving up, and it works when the client can authenticate.
+    log("  startup load did not take, trying pacmd")
+    stream_cmd(f"pacmd load-module {TCP_MODULE_ARGS}", log, timeout=60)
+    if tcp_module_loaded():
+        return True
+
+    log("  [red]module-native-protocol-tcp is not loaded[/red]")
+    log("  the container has no route to the audio server")
+    return False
 
 
 def write_test_tone(path: str, seconds: float = 1.0, hz: int = 440) -> bool:
@@ -104,18 +134,13 @@ def test(log: Log) -> None:
     """
     log("── Termux side ───────────────────────────────")
 
-    if not server_running():
-        log("PulseAudio is not running, starting it...")
-        start_server(log)
+    # Prepared, not merely reported. Stop kills PulseAudio and takes the
+    # module with it, so a test run after stopping the desktop would
+    # otherwise always report a failure it was itself able to fix.
+    log("Preparing the audio server...")
+    ensure_server(log)
+    log("")
     log(f"server running: {server_running()}")
-
-    # Loaded here rather than only reported. Stop kills PulseAudio, which
-    # takes the module with it, so testing audio after stopping the desktop
-    # would otherwise always report a failure the test itself could fix. It
-    # is the same call Start makes, and loading twice is harmless.
-    if not tcp_module_loaded():
-        log("TCP module is not loaded, loading it now...")
-        load_tcp_module(log)
     log(f"TCP module:     {tcp_module_loaded()}")
 
     found = sinks()
@@ -139,7 +164,7 @@ def test(log: Log) -> None:
         return
 
     log("Playing from inside the container (tests the TCP path)...")
-    if not desktop.write_container_script("arinanolabs-audio.sh", PLAY_SCRIPT):
+    if not write_container_script("arinanolabs-audio.sh", PLAY_SCRIPT):
         log("[red]Could not write the playback script.[/red]")
         return
 

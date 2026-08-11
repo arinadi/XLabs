@@ -30,6 +30,7 @@ from .system import (
     link_launcher,
     run_cmd,
     stream_cmd,
+    write_container_script,
 )
 
 Log = Callable[[str], None]
@@ -210,7 +211,7 @@ def diagnose() -> list[Issue]:
             "Audio server",
             server,
             "Running" if server else "PulseAudio is not running",
-            None if server else lambda log: audio.start_server(log),
+            None if server else audio.ensure_server,
         )
     )
 
@@ -220,7 +221,7 @@ def diagnose() -> list[Issue]:
             "Audio over TCP",
             tcp,
             "Loaded" if tcp else "module-native-protocol-tcp not loaded",
-            None if tcp else lambda log: audio.load_tcp_module(log),
+            None if tcp else audio.ensure_server,
         )
     )
 
@@ -362,7 +363,7 @@ def _container_provides(binaries: set[str]) -> set[str]:
     script = "#!/bin/bash\n" + "".join(
         f'command -v {b} >/dev/null 2>&1 && echo {b}\n' for b in sorted(binaries)
     )
-    if not desktop.write_container_script("arinanolabs-which.sh", script):
+    if not write_container_script("arinanolabs-which.sh", script):
         return set()
 
     rc, out = run_cmd(

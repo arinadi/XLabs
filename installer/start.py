@@ -9,8 +9,9 @@ import socket as sock
 import subprocess
 import time
 
+from . import audio
 from .const import ADMIN_USER, CONTAINER_NAME, PROOT_DIR, REPO_DIR, TMPDIR
-from .system import run_cmd
+from .system import run_cmd, write_container_script
 
 ANGLE_DIR = "/data/data/com.termux/files/usr/opt/angle-android"
 XFCE_LOG = os.path.join(REPO_DIR, "xfce4.log")
@@ -142,42 +143,6 @@ def acquire_wake_lock(log=_noop) -> bool:
         log("  wake lock unavailable (install Termux:API to keep sessions alive)")
         return False
     return True
-
-
-def start_pulseaudio(log=_noop) -> bool:
-    # No kill or socket cleanup here: stop_desktop has already run.
-    rc, out = run_cmd("pulseaudio --start --exit-idle-time=-1 2>&1")
-    if rc != 0 and "already running" not in out.lower():
-        log(f"  {out.strip()}")
-        return False
-    return True
-
-
-def load_audio_modules(log=_noop) -> bool:
-    """Open the TCP path the container connects back through.
-
-    This used to fire three commands, ignore every result and return True. A
-    device with working Termux audio and three sinks still had no sound in the
-    container because the module never loaded and nothing said so.
-    """
-    # Retried: a server that has only just been started may not be accepting
-    # connections yet, and a single failed pactl left the container silent.
-    out = ""
-    for attempt in range(3):
-        if attempt:
-            time.sleep(1)
-        _, out = run_cmd(
-            "pactl load-module module-native-protocol-tcp "
-            "auth-ip-acl=127.0.0.1 auth-anonymous=1 port=4713"
-        )
-        loaded, modules = run_cmd("pactl list modules short")
-        if loaded == 0 and "module-native-protocol-tcp" in modules:
-            return True
-
-    log("  module-native-protocol-tcp did not load — the container will be silent")
-    for line in out.strip().splitlines()[:3]:
-        log(f"    {line}")
-    return False
 
 
 def virgl_running() -> bool:
@@ -318,7 +283,7 @@ def wait_for_x11(log=_noop) -> bool:
 # dbus-launch --exit-with-session for exactly this reason.
 SESSION_SCRIPT = r"""#!/bin/bash
 export DISPLAY=:0
-export PULSE_SERVER=tcp:127.0.0.1:4713
+export PULSE_SERVER=@PULSE@
 export NO_AT_BRIDGE=1
 
 export XDG_RUNTIME_DIR="/tmp/runtime-$(id -u)"
@@ -373,7 +338,7 @@ def start_xfce4(log=_noop) -> bool:
         gpu = "# no virgl server running, so software rendering"
         log("  no virgl server, the session will use software rendering")
 
-    if not write_container_script(SESSION_SCRIPT_NAME, SESSION_SCRIPT.replace("@GPU@", gpu)):
+    if not write_container_script(SESSION_SCRIPT_NAME, SESSION_SCRIPT.replace("@GPU@", gpu).replace("@PULSE@", audio.PULSE_SERVER)):
         log("  could not write the session script")
         return False
 
@@ -443,24 +408,6 @@ status=$?
 head -25 /tmp/arinanolabs-session.out | sed 's/^/  /'
 echo "--- exit: $status (124 = still alive when the 8s timeout fired) ---"
 """
-
-
-def write_container_script(name: str, content: str) -> bool:
-    """Place a script where the container will see it at /tmp/<name>.
-
-    Written to the Termux tmp, not the container rootfs: --shared-tmp binds
-    the Termux tmp over /tmp, so anything left in rootfs/tmp is hidden the
-    moment the session starts.
-    """
-    try:
-        os.makedirs(TMPDIR, exist_ok=True)
-        path = os.path.join(TMPDIR, name)
-        with open(path, "w", newline="\n") as f:
-            f.write(content)
-        os.chmod(path, 0o755)
-        return True
-    except OSError:
-        return False
 
 
 def _run_container_probe() -> tuple[int, str]:
@@ -544,8 +491,7 @@ def collect_diagnostics(log=_noop) -> None:
 
 START_STEPS = [
     ("Acquiring wake lock", acquire_wake_lock),
-    ("Starting PulseAudio", start_pulseaudio),
-    ("Loading audio modules", load_audio_modules),
+    ("Starting audio server", audio.ensure_server),
     ("Starting virgl renderer", start_virgl),
     ("Preparing ICE socket directory", prepare_ice_dir),
     ("Starting X11 server", start_x11),

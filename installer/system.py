@@ -13,7 +13,7 @@ import threading
 import time
 from datetime import datetime, timezone
 
-from .const import HOME_BIN, LAUNCHER_SRC, PREFIX_BIN, PROOT_DIR, REPO_DIR
+from .const import HOME_BIN, LAUNCHER_SRC, PREFIX_BIN, PROOT_DIR, REPO_DIR, TMPDIR
 
 
 def run_cmd(cmd: str, timeout: int = 60) -> tuple[int, str]:
@@ -240,3 +240,21 @@ def human_size(path: str) -> str:
     if rc == 0 and out.strip():
         return out.split()[0]
     return "unknown"
+
+
+def write_container_script(name: str, content: str) -> bool:
+    """Place a script where the container will see it at /tmp/<name>.
+
+    Written to the Termux tmp, not the container rootfs: --shared-tmp binds
+    the Termux tmp over /tmp, so anything left in rootfs/tmp is hidden the
+    moment the session starts.
+    """
+    try:
+        os.makedirs(TMPDIR, exist_ok=True)
+        path = os.path.join(TMPDIR, name)
+        with open(path, "w", newline="\n") as f:
+            f.write(content)
+        os.chmod(path, 0o755)
+        return True
+    except OSError:
+        return False

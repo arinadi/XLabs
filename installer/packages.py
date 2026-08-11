@@ -11,9 +11,8 @@ from __future__ import annotations
 import re
 from typing import Callable, NamedTuple
 
-from . import start as desktop
 from .const import CONTAINER_NAME
-from .system import is_installed, run_cmd, stream_cmd
+from .system import is_installed, run_cmd, stream_cmd, write_container_script
 
 Log = Callable[[str], None]
 
@@ -73,7 +72,7 @@ def search(term: str) -> tuple[list[Package], str | None]:
     if not is_installed():
         return [], "No container yet — install it from the menu first."
 
-    if not desktop.write_container_script("arinanolabs-search.sh", SEARCH_SCRIPT):
+    if not write_container_script("arinanolabs-search.sh", SEARCH_SCRIPT):
         return [], "Could not write the search script."
 
     rc, out = run_cmd(
@@ -109,7 +108,7 @@ def install(names: list[str], log: Log) -> bool:
         log("Nothing selected.")
         return True
 
-    if not desktop.write_container_script("arinanolabs-install.sh", INSTALL_SCRIPT):
+    if not write_container_script("arinanolabs-install.sh", INSTALL_SCRIPT):
         log("[red]Could not write the install script.[/red]")
         return False
 
