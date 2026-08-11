@@ -32,9 +32,22 @@ Screen {
     background: $surface-darken-1;
 }
 
-#status-table {
+#status-table,
+#doctor-table {
     height: 1fr;
     margin: 1 2;
+}
+
+#doctor-buttons {
+    width: 100%;
+    height: auto;
+    margin: 0 2 1 2;
+}
+
+#doctor-buttons Button {
+    width: 1fr;
+    height: 3;
+    margin-right: 1;
 }
 
 #tools-body {

@@ -47,7 +47,12 @@ curl -sL https://raw.githubusercontent.com/arinadi/arinanoLabs/main/install.sh |
 `install.sh` is deliberately thin — it gets git, Python, and this repo onto the
 machine, then hands over to `~/arinanoLabs/install.py`, which does the rest:
 Python libraries, Termux packages (proot-distro, Termux:X11, PulseAudio,
-graphics), the Debian container, and the `~/bin/alabs` launcher.
+graphics), the Debian container, and the `alabs` launcher.
+
+The launcher is symlinked into `$PREFIX/bin`, which is Termux's entire default
+PATH — so `alabs` works immediately, in the session that ran the installer, with
+no shell startup file touched. Off Termux it falls back to `~/bin` and adds that
+to PATH in both `.bashrc` and `.profile`.
 
 It runs unattended and is safe to re-run — each step skips work already done,
 so a partial install can be resumed by running it again.
@@ -72,6 +77,7 @@ alabs                  # Launch the TUI
 | Update | `git pull` this repo |
 | Extra Tools | Planned, not implemented yet |
 | Status | Environment checks, cache size, version |
+| Doctor | Diagnoses the environment and repairs what it can, in one press |
 | Reset | Deletes the container and pulls a fresh image |
 | Clean Image Cache | Drops downloaded OCI layers, keeps the container |
 

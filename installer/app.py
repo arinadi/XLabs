@@ -24,6 +24,7 @@ from textual.widgets import (
     Static,
 )
 
+from . import doctor
 from . import start as desktop
 from .const import CACHE_DIR, CONTAINER_NAME, IMAGE_REF, REPO_DIR
 from .preflight import run_all_checks
@@ -251,6 +252,7 @@ class MainScreen(Screen):
             yield Button("Update", id="update")
             yield Button("Extra Tools", id="tools")
             yield Button("Status", id="status")
+            yield Button("Doctor", id="doctor")
             yield Button("Reset (Clean Install)", id="reset", variant="error")
             yield Button("Clean Image Cache", id="cache")
         yield Footer()
@@ -286,6 +288,10 @@ class MainScreen(Screen):
     def _status(self) -> None:
         self.app.push_screen(StatusScreen())
 
+    @on(Button.Pressed, "#doctor")
+    def _doctor(self) -> None:
+        self.app.push_screen(DoctorScreen())
+
     @on(Button.Pressed, "#reset")
     def _reset(self) -> None:
         self.app.push_screen(
@@ -310,6 +316,77 @@ class MainScreen(Screen):
             ),
             lambda ok: self.app.push_screen(ActionScreen("Clean Image Cache", run_clean_cache)) if ok else None,
         )
+
+
+class DoctorScreen(Screen):
+    """Environment diagnosis with a one-press repair for what is fixable."""
+
+    BINDINGS = [("escape", "back", "Back")]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._issues: list[doctor.Issue] = []
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Label("Doctor", classes="screen-title")
+        yield DataTable(id="doctor-table", cursor_type="row", zebra_stripes=True)
+        with Horizontal(id="doctor-buttons"):
+            yield Button("Re-scan", id="rescan")
+            yield Button("Fix", id="fix", variant="success", disabled=True)
+            yield Button("Back", id="back", variant="primary")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one("#doctor-table", DataTable).add_columns("Check", "State", "Detail")
+
+    def on_screen_resume(self) -> None:
+        """Also runs after returning from a fix, so the table is never stale."""
+        self.scan()
+
+    @work(thread=True)
+    def scan(self) -> None:
+        issues = doctor.diagnose()
+        self.app.call_from_thread(self._show_issues, issues)
+
+    def _show_issues(self, issues: list[doctor.Issue]) -> None:
+        self._issues = issues
+        table = self.query_one("#doctor-table", DataTable)
+        table.clear()
+        for issue in issues:
+            if issue.ok:
+                mark = "[green]●[/green]"
+            elif issue.fix is not None:
+                mark = "[yellow]○[/yellow]"
+            else:
+                mark = "[red]○[/red]"
+            table.add_row(issue.name, mark, issue.detail)
+
+        count = len(doctor.fixable(issues))
+        button = self.query_one("#fix", Button)
+        button.disabled = count == 0
+        button.label = f"Fix ({count})" if count else "Fix"
+
+    @on(Button.Pressed, "#rescan")
+    def _rescan(self) -> None:
+        self.scan()
+
+    @on(Button.Pressed, "#fix")
+    def _fix(self) -> None:
+        issues = self._issues
+
+        def runner(log) -> None:
+            repaired, attempted = doctor.run_fixes(issues, log)
+            if attempted:
+                log(f"[bold]{repaired} of {attempted} repaired.[/bold]")
+                if repaired < attempted:
+                    log("Remaining problems need you — see the detail column.")
+
+        self.app.push_screen(ActionScreen("Doctor — Fix", runner))
+
+    @on(Button.Pressed, "#back")
+    def action_back(self) -> None:
+        self.app.pop_screen()
 
 
 class ToolsScreen(Screen):

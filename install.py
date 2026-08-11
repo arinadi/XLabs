@@ -19,10 +19,13 @@ try:
     from installer.const import (
         ADMIN_USER,
         CONTAINER_NAME,
+        HOME_BIN,
         IMAGE_REF,
+        LAUNCHER_SRC,
         PROOT_DIR,
         REPO_DIR,
     )
+    from installer.system import ensure_home_bin_on_path, link_launcher
     from installer.preflight import (
         X11_APK_URL,
         blocking_failure,
@@ -35,9 +38,6 @@ except ImportError:
         "Use the bootstrapper instead:\n"
         "  curl -sL https://raw.githubusercontent.com/arinadi/arinanoLabs/main/install.sh | bash"
     )
-
-BIN_DIR = os.path.expanduser("~/bin")
-BASHRC = os.path.expanduser("~/.bashrc")
 
 CYAN, GREEN, YELLOW, RED, DIM, NC = (
     "\033[0;36m", "\033[0;32m", "\033[1;33m", "\033[0;31m", "\033[2m", "\033[0m",
@@ -228,34 +228,20 @@ def setup_admin_user() -> None:
 
 def install_launcher() -> None:
     say("Installing launcher")
-    source = os.path.join(REPO_DIR, "alabs")
-    if not os.path.exists(source):
-        fail("launcher", f"{source} not found")
+    linked, where = link_launcher()
+    if not linked:
+        fail("launcher", where)
         return
 
-    os.chmod(source, 0o755)
-    os.makedirs(BIN_DIR, exist_ok=True)
-    link = os.path.join(BIN_DIR, "alabs")
+    ok(f"{where} -> {LAUNCHER_SRC}")
 
-    # ~/bin is on Termux's default PATH. Symlink rather than copy so a later
-    # git pull updates the launcher too.
-    if os.path.islink(link) or os.path.exists(link):
-        os.remove(link)
-    try:
-        os.symlink(source, link)
-    except OSError:
-        shutil.copy2(source, link)
-        os.chmod(link, 0o755)
-
-    try:
-        existing = open(BASHRC).read() if os.path.exists(BASHRC) else ""
-    except OSError:
-        existing = ""
-    if "$HOME/bin" not in existing:
-        with open(BASHRC, "a") as f:
-            f.write('\n# arinanoLabs\nexport PATH="$HOME/bin:$PATH"\n')
-
-    ok(f"{link} -> {source}")
+    # $PREFIX/bin is already on PATH; only the ~/bin fallback needs a shell
+    # startup entry, and then alabs is available in the next session.
+    if where.startswith(HOME_BIN):
+        touched = ensure_home_bin_on_path()
+        if touched:
+            ok(f"added ~/bin to PATH in {', '.join(os.path.basename(t) for t in touched)}")
+        _manual.append("Open a new terminal session so ~/bin is on PATH")
 
 
 # ── Main ───────────────────────────────────────────────────
