@@ -266,13 +266,30 @@ chmod 0700 "$XDG_RUNTIME_DIR"
 
 echo "starting as $(whoami), DISPLAY=$DISPLAY, XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR"
 
+# xfce4-session directly, not startxfce4. With DISPLAY already set,
+# startxfce4 only prints "X server already running", sets prog=/bin/sh and
+# hands off to xinitrc — and on this setup the chain ends there, silently.
+# A device probe showed xfce4-session itself still running after 8 seconds,
+# so the session works; the wrapper is what loses it. The termux-x11 README
+# recommends xfce4-session for the same reason.
+if command -v xfce4-session >/dev/null 2>&1; then
+    SESSION=xfce4-session
+else
+    SESSION=startxfce4
+fi
+echo "session binary: $SESSION"
+
+# Not exec: keeping this shell alive means the exit status reaches the log.
+# Without it xfce4.log simply stopped, which said nothing about why.
 if [ -z "$DBUS_SESSION_BUS_ADDRESS" ] && command -v dbus-launch >/dev/null 2>&1; then
-    echo "wrapping the session in dbus-launch"
-    exec dbus-launch --exit-with-session startxfce4
+    echo "launching under dbus-launch"
+    dbus-launch --exit-with-session "$SESSION"
+else
+    echo "using the existing session bus: ${DBUS_SESSION_BUS_ADDRESS:-none}"
+    "$SESSION"
 fi
 
-echo "using the existing session bus: ${DBUS_SESSION_BUS_ADDRESS:-none}"
-exec startxfce4
+echo "session exited with status $?"
 """
 
 SESSION_SCRIPT_NAME = "arinanolabs-session.sh"
@@ -334,13 +351,18 @@ export DISPLAY=:0
 echo "xset q:"
 xset q 2>&1 | head -3 | sed 's/^/  /'
 
-echo "--- xfce4-session foreground run, 8s ---"
+echo "already running inside the container:"
+pgrep -a 'xfce4-session|xfwm4|xfdesktop' 2>&1 | sed 's/^/  /' || echo "  (none)"
+
+# Mirrors the real start command, so its result means something. If a session
+# is already up this will say so rather than starting a second one.
+echo "--- dbus-launch xfce4-session foreground run, 8s ---"
 su admin -c '
 export DISPLAY=:0
 export XDG_RUNTIME_DIR=/tmp/runtime-probe
 mkdir -p $XDG_RUNTIME_DIR
 chmod 0700 $XDG_RUNTIME_DIR
-timeout 8 xfce4-session
+timeout 8 dbus-launch --exit-with-session xfce4-session
 ' >/tmp/arinanolabs-session.out 2>&1
 # Capture the session's own status, not sed's: piping straight into head
 # reported the pipeline's exit code and always said 0.
