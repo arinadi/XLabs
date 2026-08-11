@@ -166,6 +166,9 @@ def diagnose() -> list[Issue]:
         ("proot-distro", "proot-distro", ["proot-distro"], False),
         ("PulseAudio", "pulseaudio", ["pulseaudio"], False),
         ("Termux:X11", "termux-x11", ["termux-x11-nightly", "xorg-xrandr"], True),
+        # Without this the desktop runs on llvmpipe. It lives in x11-repo and
+        # works on most devices, unlike the zink server.
+        ("GPU renderer", "virgl_test_server_android", ["virglrenderer-android"], True),
     ):
         present = shutil.which(binary) is not None
         issues.append(

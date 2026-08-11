@@ -163,8 +163,18 @@ def install_termux_packages() -> None:
         say(f"Installing {label}")
         if run(f"pkg install -y {' '.join(packages)}") == 0:
             ok(label)
+            continue
+
+        # One unavailable name fails the whole line and takes every other
+        # package in it down too — which is how a device ended up without
+        # virglrenderer-android despite it being available. Retry one at a
+        # time to salvage the rest.
+        warn(f"{label} failed as a group, retrying one at a time")
+        missing = [p for p in packages if run(f"pkg install -y {p}") != 0]
+        if missing:
+            fail(label, f"could not install: {', '.join(missing)}")
         else:
-            fail(label, f"pkg install failed for {label}")
+            ok(f"{label} (installed individually)")
 
     check_x11_app()
 
