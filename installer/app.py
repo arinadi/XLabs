@@ -400,7 +400,7 @@ class MainScreen(Screen):
     # Short labels keep three to a row; the full meaning lives in the tooltip.
     TOOLTIPS = {
         "update": "Pull the latest arinanoLabs",
-        "tools": "Extra tools (not implemented yet)",
+        "tools": "Search and install packages in the container",
         "status": "Environment checks and versions",
         "doctor": "Diagnose and repair the environment",
         "reset": "Delete the container and reinstall it",

@@ -69,21 +69,16 @@ Then open a new terminal session:
 alabs                  # Launch the TUI
 ```
 
-| Action | What it does |
-|--------|--------------|
-| Start Desktop | Wake lock → PulseAudio → virgl → X11 → Xfce4 |
-| Stop Desktop | Kills the stack and clears every socket it left behind |
-| Update | `git pull` this repo, then offers to relaunch on the new code |
-| Extra Tools | Planned, not implemented yet |
-| Status | Environment checks, cache size, version |
-| Doctor | Diagnoses the environment and repairs what it can, in one press |
-| Doctor → Dupes | Tools installed in both Termux and the container |
-| Reset | Deletes the container and pulls a fresh image |
-| Clean Image Cache | Drops downloaded OCI layers, keeps the container |
+The menu is two rows of buttons, sized for a thumb:
 
-Reset and Clean Image Cache are behind a confirmation dialog. Everything is
-tappable — Termux delivers touches as mouse events, so the TUI is usable
-without a keyboard.
+| | | |
+|---|---|---|
+| **Start Desktop** | **Stop Desktop** | |
+| Update | Tools | Status |
+| Doctor | Reset | Cache |
+
+Everything is tappable — Termux delivers touches as mouse events. Full
+reference below in [The TUI, screen by screen](#-the-tui-screen-by-screen).
 
 ---
 
@@ -109,16 +104,9 @@ flowchart LR
 
 ### Python TUI
 
-Built with [Textual](https://github.com/Textualize/textual):
-
-- **Touch-first** — full-width buttons, no number-key menus to hit
-- **Never blocks** — every action runs in a thread worker, so a ten-minute
-  image pull streams into the log pane while the UI stays live
-- **Status view** — environment checks, cache size, version
-- **Guarded destructive actions** — Reset and Clean Cache go through a modal
-- **Copyable output** — the `C` button on any log, Status or Doctor screen puts
-  the text on the clipboard and mirrors it to a file, so a failure can be
-  pasted somewhere useful
+Built with [Textual](https://github.com/Textualize/textual). Every action runs
+in a thread worker, so a ten-minute image pull streams into a log pane while
+the interface stays live.
 
 Every screen returns to the menu, and anything destructive is gated behind a
 confirmation first:
@@ -130,8 +118,12 @@ stateDiagram-v2
     MainScreen --> ActionScreen: Start · Stop · Update
     MainScreen --> StatusScreen: Status
     MainScreen --> DoctorScreen: Doctor
-    MainScreen --> ToolsScreen: Extra Tools
-    MainScreen --> ConfirmScreen: Reset · Clean Cache
+    MainScreen --> ToolsScreen: Tools
+    MainScreen --> ConfirmScreen: Reset · Cache
+
+    ToolsScreen --> ConfirmScreen: Install
+    DoctorScreen --> DupesScreen: Dupes
+    DupesScreen --> ConfirmScreen: Remove
 
     ConfirmScreen --> MainScreen: Cancel
     ConfirmScreen --> ActionScreen: Confirm
@@ -141,6 +133,7 @@ stateDiagram-v2
     StatusScreen --> MainScreen: Back
     ToolsScreen --> MainScreen: Back
     DoctorScreen --> MainScreen: Back
+    DupesScreen --> DoctorScreen: Back
     ActionScreen --> MainScreen: Back, once idle
 ```
 
@@ -176,6 +169,141 @@ sequenceDiagram
 
 ---
 
+## 🖥️ The TUI, screen by screen
+
+<!-- screenshot: main menu -->
+
+### Start Desktop
+
+Brings the whole stack up in order, streaming each step:
+
+1. **Wake lock** — `termux-wake-lock`, so Android does not freeze the session
+2. **PulseAudio** — server plus the TCP module the container connects back to
+3. **virgl renderer** — first one that exists, or software rendering
+4. **ICE socket directory** — `/tmp/.ICE-unix`, which `xfce4-session` needs to
+   accept its own children and which nothing else on this stack creates
+5. **X11 server** — `termux-x11 :0`, then opens the Termux:X11 app
+6. **Wait for the socket** — until it accepts a connection, not merely exists
+7. **Session** — `dbus-launch --exit-with-session xfce4-session` as `admin`
+
+It always runs a full stop first, even when nothing appears to be running.
+Leftovers outlive the session that made them, and a stale `.X0-lock` or an
+orphaned proot is exactly what breaks the next start.
+
+If the desktop does not come up, a **full diagnostic report is collected
+automatically** — no need to go and ask for it. With no container installed,
+Start offers to pull one instead of failing further down.
+
+### Stop Desktop
+
+<!-- screenshot: stop -->
+
+Innermost first, which is the opposite of what feels natural:
+
+1. Ask the session to leave — `xfce4-session-logout --logout --fast`, 8s grace
+2. `TERM` then `KILL` this container's proot tree — proot runs with
+   `--kill-on-exit`, so that takes everything inside with it
+3. X11 down, then the Android app force-stopped
+4. `pulseaudio --kill`, virgl down
+5. Sweep anything that outlived its parent
+6. Remove sockets, lock files and runtime directories
+
+Then it **verifies with `pgrep` and tells you what survived**, rather than
+printing "Stopped" regardless.
+
+### Update
+
+`git pull --ff-only`, falling back to a hard reset on `origin/main` when the
+fast-forward is refused. When it finishes, a **Restart** button relaunches
+`alabs` on the code that was just pulled — pulling into a running process
+otherwise does nothing, since the old modules are already loaded.
+
+### Tools
+
+<!-- screenshot: tools search -->
+
+A package browser for the container.
+
+Type a name and press Enter to search the container's package lists. Results
+show an **I** against anything already installed, then highlight a row and
+press **Install**. apt runs inside the container with its output streamed;
+Termux is not touched.
+
+Search terms and package names are validated against the Debian package-name
+shape and rejected rather than escaped — they end up in a shell command.
+
+### Status
+
+<!-- screenshot: status -->
+
+Internet, free storage, Python, proot-distro, the Termux:X11 package **and**
+the Android app, the container, whether the desktop is running, image cache
+size, and the version.
+
+Three states, not two: ● present, ○ missing, and **? for could not tell**.
+Querying installed Android apps is unreliable from Termux, and reporting
+"missing" when the honest answer is "unknown" sends you fixing the wrong thing.
+
+### Doctor
+
+<!-- screenshot: doctor -->
+
+Nine checks — repository checkout, launcher target, Textual, proot-distro,
+PulseAudio, Termux:X11, the X11 app, the container, and stale X11 sockets.
+
+| Button | What it does |
+|--------|--------------|
+| **Re-scan** | Run the checks again |
+| **Fix (N)** | Repair everything repairable, in one press |
+| **Diagnose** | The same full report Start prints when it fails |
+| **Dupes** | Tools installed in both Termux and the container |
+
+Only genuinely fixable problems are counted in **Fix**. Anything needing you —
+a missing APK, no checkout — says so instead of offering a button that cannot
+help.
+
+**Diagnose** reports host processes and sockets, then probes inside the
+container: the admin user, the session binaries, the shared socket, `xset q`
+against the display, and a foreground session run. It ends with a short guide
+to reading it.
+
+**Dupes** lists tools present on both sides and can uninstall the Termux
+copies, treating the container as primary. Only packages the container is
+confirmed to provide are offered, nothing arinanoLabs itself needs is ever a
+candidate, and it is deliberately not part of **Fix** — removing packages from
+your Termux is a decision, not a repair.
+
+### Reset and Cache
+
+**Reset** deletes the container and pulls a fresh image. **Cache** drops
+downloaded OCI layers and keeps the container. Both go through a confirmation
+that spells out what is lost.
+
+### Copying anything
+
+Every screen that produces output — logs, Status, Doctor, Dupes, Tools — has a
+**C** button and a `c` key. It tries the Android clipboard via
+`termux-clipboard-set`, then the terminal's own OSC 52, and **always mirrors
+the text to a file** as well, because the usual reason to copy a failure is to
+paste it somewhere for help and neither clipboard is guaranteed.
+
+The button is a letter rather than a clipboard glyph — Termux's font cannot be
+relied on to have one.
+
+### Keys
+
+| Key | Where |
+|-----|-------|
+| `q` | Quit, from the menu |
+| `Escape` | Back — refused while an action is still running |
+| `c` | Copy the screen's output |
+| `Enter` | Run the search, in Tools |
+
+The layout holds down to a 36-column terminal, well under a typical Termux
+portrait width. A test drives every screen at 40, 45 and 60 columns.
+
+---
+
 ## 📦 What's Included
 
 ### In the image
@@ -199,10 +327,7 @@ The dev toolchain, Zsh, on-screen keyboard, theming and the pre-baked panel
 layout were removed to get back to a build of known-good shape. They are in git
 history and come back once the baseline is confirmed working.
 
-### Extra Tools
-
-Menu entry is a placeholder. Install what you need with `apt` inside the
-container in the meantime.
+Anything else is a search away in [Tools](#tools).
 
 ---
 
