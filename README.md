@@ -248,8 +248,18 @@ Querying installed Android apps is unreliable from Termux, and reporting
 
 <!-- screenshot: doctor -->
 
-Nine checks — repository checkout, launcher target, Textual, proot-distro,
-PulseAudio, Termux:X11, the X11 app, the container, and stale X11 sockets.
+Repository checkout, launcher target, Textual, proot-distro, PulseAudio,
+Termux:X11, the X11 app, the container, stale X11 sockets, and Firefox's video
+defaults.
+
+That last one is the fix for stuttering YouTube. There is no VA-API through
+proot, so VP9 and AV1 are decoded on the CPU — and that, not rendering, is what
+makes playback bad. The repair drops a preferences file into the container that
+turns both off, so YouTube falls back to H.264. They are defaults rather than
+locks: `about:config` still wins.
+
+VirGL does not solve this. It accelerates OpenGL, and the cost of a video is in
+decoding it.
 
 | Button | What it does |
 |--------|--------------|

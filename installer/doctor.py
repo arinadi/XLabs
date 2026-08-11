@@ -18,6 +18,7 @@ from .const import (
     IMAGE_REF,
     LAUNCHER_SRC,
     PREFIX_BIN,
+    PROOT_DIR,
     REPO_DIR,
     TMPDIR,
 )
@@ -197,6 +198,19 @@ def diagnose() -> list[Issue]:
         )
     )
 
+    # Firefox video defaults — only worth mentioning where Firefox exists.
+    if os.path.exists(_container_path(FIREFOX_BIN)):
+        tuned = os.path.exists(_container_path(FIREFOX_PREFS_FILE))
+        issues.append(
+            Issue(
+                "Firefox video",
+                tuned,
+                "H.264 preferred" if tuned
+                else "VP9/AV1 enabled — software decoded, stutters on YouTube",
+                None if tuned else _fix_firefox_prefs,
+            )
+        )
+
     # Leftovers from a bad shutdown.
     stale = _stale_sockets_present()
     issues.append(
@@ -209,6 +223,56 @@ def diagnose() -> list[Issue]:
     )
 
     return issues
+
+
+# ── Firefox video defaults ─────────────────────────────────
+
+# Firefox scans this directory for default preferences, so a file here
+# applies before any profile exists and without locking anything: the values
+# can still be changed in about:config.
+FIREFOX_BIN = "/usr/bin/firefox-esr"
+FIREFOX_PREFS_DIR = "/usr/lib/firefox-esr/browser/defaults/preferences"
+FIREFOX_PREFS_FILE = f"{FIREFOX_PREFS_DIR}/arinanolabs-video.js"
+
+FIREFOX_PREFS = """// arinanoLabs — video defaults for proot on Android.
+//
+// YouTube serves VP9 or AV1 by default. Neither can be hardware decoded in
+// this stack: there is no VA-API through proot, so both are decoded on the
+// CPU, and that is what makes playback stutter. Turning them off makes
+// YouTube fall back to H.264, which is far cheaper to decode.
+//
+// VirGL does not help here. It accelerates OpenGL — rendering and
+// compositing — while the cost of a video is in decoding it.
+//
+// These are defaults, not locks. Change them in about:config if you want
+// AV1 back on a device that can afford it.
+pref("media.mediasource.vp9.enabled", false);
+pref("media.av1.enabled", false);
+"""
+
+
+def _container_path(path: str) -> str:
+    """Map a path inside the container to its location on the host."""
+    return os.path.join(PROOT_DIR, "rootfs", path.lstrip("/"))
+
+
+def _fix_firefox_prefs(log: Log) -> bool:
+    directory = _container_path(FIREFOX_PREFS_DIR)
+    if not os.path.isdir(directory):
+        log(f"  {FIREFOX_PREFS_DIR} does not exist in the container")
+        return False
+
+    target = _container_path(FIREFOX_PREFS_FILE)
+    try:
+        with open(target, "w", encoding="utf-8", newline="\n") as f:
+            f.write(FIREFOX_PREFS)
+    except OSError as e:
+        log(f"  could not write the preferences: {e}")
+        return False
+
+    log(f"  wrote {FIREFOX_PREFS_FILE}")
+    log("  restart Firefox for it to take effect")
+    return True
 
 
 # ── Termux packages the container already provides ─────────

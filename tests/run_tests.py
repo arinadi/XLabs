@@ -160,6 +160,39 @@ def test_doctor_scan_shape() -> None:
     )
 
 
+def test_firefox_prefs_are_defaults_not_locks() -> None:
+    """The video tuning must set defaults the user can still override."""
+    body = doctor.FIREFOX_PREFS
+    for line in body.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("//"):
+            continue
+        check(
+            stripped.startswith("pref(") and stripped.endswith(");"),
+            f"unexpected line in the prefs file: {line!r}",
+        )
+        # lockPref would stop about:config from changing it.
+        check("lockPref" not in stripped, f"prefs must not lock: {line!r}")
+
+    for expected in ("media.mediasource.vp9.enabled", "media.av1.enabled"):
+        check(expected in body, f"{expected} missing from the prefs")
+
+    # Without a container there is nothing to tune, so the check stays out of
+    # the way rather than reporting a problem that cannot exist yet.
+    if not doctor.is_installed():
+        names = {i.name for i in doctor.diagnose()}
+        check("Firefox video" not in names, "reported Firefox with no container")
+
+    # The repair refuses rather than raising when the target is absent.
+    lines: list[str] = []
+    if not os.path.isdir(doctor._container_path(doctor.FIREFOX_PREFS_DIR)):
+        check(
+            not doctor._fix_firefox_prefs(lines.append),
+            "the repair claimed success with no container",
+        )
+        check(lines, "the repair explained nothing")
+
+
 async def test_tui_navigation() -> None:
     app = ArinanoLabsApp()
     async with app.run_test(size=(80, 40)) as pilot:
@@ -548,6 +581,7 @@ def main() -> int:
         test_stream_cmd_shows_carriage_return_progress,
         test_preflight_shape,
         test_doctor_scan_shape,
+        test_firefox_prefs_are_defaults_not_locks,
         test_tui_navigation,
         test_destructive_actions_are_gated,
         test_escape_cannot_leave_running_action,
