@@ -1,0 +1,92 @@
+/* Sized for a phone screen driven by touch: full-width targets, generous
+   height, nothing that needs a precise tap. */
+
+Screen {
+    background: $surface;
+}
+
+#menu {
+    padding: 1 2;
+    align: center top;
+}
+
+#menu Button {
+    width: 100%;
+    height: 3;
+    margin-bottom: 1;
+}
+
+.screen-title {
+    width: 100%;
+    padding: 1 2;
+    text-style: bold;
+    color: $text;
+    background: $panel;
+}
+
+#log {
+    height: 1fr;
+    margin: 1 2;
+    padding: 1;
+    border: round $primary;
+    background: $surface-darken-1;
+}
+
+#status-table {
+    height: 1fr;
+    margin: 1 2;
+}
+
+#tools-body {
+    height: 1fr;
+    margin: 1 2;
+    padding: 1;
+    border: round $primary;
+}
+
+/* The Back button on every sub-screen. */
+Screen > Button#back {
+    width: 100%;
+    height: 3;
+    margin: 0 2 1 2;
+}
+
+/* Confirmation modal */
+ConfirmScreen {
+    align: center middle;
+    background: $background 60%;
+}
+
+#dialog {
+    width: 90%;
+    max-width: 60;
+    height: auto;
+    max-height: 80%;
+    padding: 1 2;
+    border: thick $error;
+    background: $surface;
+}
+
+#dialog-title {
+    width: 100%;
+    text-style: bold;
+    color: $error;
+    margin-bottom: 1;
+}
+
+#dialog-body {
+    width: 100%;
+    margin-bottom: 1;
+}
+
+#dialog-buttons {
+    width: 100%;
+    height: auto;
+    align: center middle;
+}
+
+#dialog-buttons Button {
+    width: 1fr;
+    height: 3;
+    margin: 0 1;
+}

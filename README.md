@@ -44,30 +44,35 @@ Your Android phone is a pocket PC with 8GB+ RAM and an ARM64 CPU — it deserves
 curl -sL https://raw.githubusercontent.com/arinadi/arinanoLabs/main/install.sh | bash
 ```
 
-The bootstrapper checks for git, Python, and pip, installs the `rich` TUI
-library, clones this repo to `~/arinanoLabs`, and links the launcher to
-`~/bin/alabs`.
+`install.sh` is deliberately thin — it only guarantees git and Python, then
+hands over to `install.py`, which does the rest: Python libraries, the repo
+checkout at `~/arinanoLabs`, Termux packages (proot-distro, Termux:X11,
+PulseAudio, graphics), the Debian container, and the `~/bin/alabs` launcher.
 
-Then open a new terminal session and run `alabs`. On a fresh device the Debian
-container is not present yet — provision it from the menu with **[6] Reset
-(Clean Install)**, which pulls `ghcr.io/arinadi/arinanolabs:latest`.
+It runs unattended and is safe to re-run — each step skips work already done,
+so a partial install can be resumed by running it again.
+
+Then open a new terminal session:
 
 ### Daily Use
 
 ```bash
-alabs                  # Launch TUI menu
+alabs                  # Launch the TUI
 ```
 
-| Key | Action |
-|-----|--------|
-| `1` | Start Desktop |
-| `2` | Stop Desktop |
-| `3` | Update (git pull this repo) |
-| `4` | Extra Tools |
-| `5` | Status |
-| `6` | Reset (Clean Install) |
-| `7` | Clean Image Cache |
-| `0` | Exit |
+| Action | What it does |
+|--------|--------------|
+| Start Desktop | Wake lock → PulseAudio → virgl → X11 → Xfce4 |
+| Stop Desktop | Kills the stack and clears every socket it left behind |
+| Update | `git pull` this repo |
+| Extra Tools | Planned, not implemented yet |
+| Status | Environment checks, cache size, version |
+| Reset | Deletes the container and pulls a fresh image |
+| Clean Image Cache | Drops downloaded OCI layers, keeps the container |
+
+Reset and Clean Image Cache are behind a confirmation dialog. Everything is
+tappable — Termux delivers touches as mouse events, so the TUI is usable
+without a keyboard.
 
 ---
 
@@ -93,11 +98,13 @@ flowchart LR
 
 ### Python TUI
 
-Built with [Rich](https://github.com/Textualize/rich):
+Built with [Textual](https://github.com/Textualize/textual):
 
-- **Streamed output** — image pulls and package installs render live
-- **Status view** — container present, desktop running, version
-- **Guarded destructive actions** — Reset and Clean Cache require typing `yes`
+- **Touch-first** — full-width buttons, no number-key menus to hit
+- **Never blocks** — every action runs in a thread worker, so a ten-minute
+  image pull streams into the log pane while the UI stays live
+- **Status view** — environment checks, cache size, version
+- **Guarded destructive actions** — Reset and Clean Cache go through a modal
 
 ---
 
@@ -144,15 +151,16 @@ The container ships Mesa userspace (`libgl1-mesa-dri`, `libglx-mesa0`,
 
 ```
 arinanoLabs/
-├── install.sh          ← Bootstrap entry point
-├── install.py          ← Python entry
-├── alabs               ← Post-install TUI launcher
-├── installer/          ← Python TUI modules
-│   ├── npyscreen_app.py ←  Menu + handlers
-│   ├── start.py        ←   Start/stop desktop
-│   ├── install.py      ←   Termux-side dependency install
-│   ├── preflight.py    ←   Environment checks
-│   └── ui.py           ←   Shared Rich helpers
+├── install.sh          ← Bootstrap: git + Python only
+├── install.py          ← Full installer, runs standalone
+├── alabs               ← TUI launcher
+├── installer/          ← TUI package
+│   ├── app.py          ←   Textual app: screens, runners
+│   ├── app.tcss        ←   Styling
+│   ├── start.py        ←   Desktop lifecycle
+│   ├── preflight.py    ←   Environment checks (pure stdlib)
+│   ├── system.py       ←   Subprocess helpers
+│   └── const.py        ←   Paths and names
 ├── image/              ← System definition (Dockerfile + configs)
 ├── docker/dev/         ← Local TUI test harness
 └── docs/               ← Debugging notes and references

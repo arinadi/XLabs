@@ -1,10 +1,6 @@
 #!/bin/bash
-# arinanoLabs TUI — resolve symlink so the launcher works from anywhere
+# arinanoLabs TUI launcher.
+# readlink -f resolves ~/bin/alabs back to the repo, so this works from
+# anywhere and keeps working after a git pull.
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
-cd "$SCRIPT_DIR"
-python3 -c "
-import sys, os
-sys.path.insert(0, os.getcwd())
-from installer.npyscreen_app import run_npyscreen
-run_npyscreen()
-"
+exec env PYTHONPATH="$SCRIPT_DIR" python3 -m installer.app "$@"
