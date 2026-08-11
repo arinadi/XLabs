@@ -12,6 +12,7 @@ import shutil
 import sys
 from typing import Callable, NamedTuple
 
+from . import audio
 from . import start as desktop
 from .const import (
     CONTAINER_NAME,
@@ -198,6 +199,37 @@ def diagnose() -> list[Issue]:
             container,
             "Installed" if container else "Not installed",
             None if container else _fix_container,
+        )
+    )
+
+    # Audio. The server lives in Termux and the container reaches it over
+    # TCP, so all three have to hold or there is simply no sound.
+    server = audio.server_running()
+    issues.append(
+        Issue(
+            "Audio server",
+            server,
+            "Running" if server else "PulseAudio is not running",
+            None if server else lambda log: audio.start_server(log),
+        )
+    )
+
+    tcp = audio.tcp_module_loaded()
+    issues.append(
+        Issue(
+            "Audio over TCP",
+            tcp,
+            "Loaded" if tcp else "module-native-protocol-tcp not loaded",
+            None if tcp else lambda log: audio.load_tcp_module(log),
+        )
+    )
+
+    found = audio.sinks()
+    issues.append(
+        Issue(
+            "Audio output",
+            bool(found),
+            ", ".join(found) if found else "No sink — Android has nothing to play through",
         )
     )
 

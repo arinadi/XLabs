@@ -28,6 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from textual.widgets import Button, DataTable, Input, RichLog, Static  # noqa: E402
 
 from installer import app as app_module  # noqa: E402
+from installer import audio  # noqa: E402
 from installer import doctor  # noqa: E402
 from installer import packages  # noqa: E402
 from installer.app import (  # noqa: E402
@@ -191,6 +192,25 @@ def test_firefox_prefs_are_defaults_not_locks() -> None:
             "the repair claimed success with no container",
         )
         check(lines, "the repair explained nothing")
+
+
+def test_audio_test_tone_is_valid() -> None:
+    """The tone is generated rather than shipped, so it must be a real WAV."""
+    import wave
+
+    path = os.path.join(tempfile.gettempdir(), "arinanolabs-tone-probe.wav")
+    check(audio.write_test_tone(path, seconds=0.2), "the tone was not written")
+    with wave.open(path) as handle:
+        check(handle.getnchannels() == 1, "expected mono")
+        check(handle.getsampwidth() == 2, "expected 16-bit samples")
+        check(handle.getnframes() > 0, "the tone has no frames")
+    os.remove(path)
+
+
+def test_doctor_reports_audio() -> None:
+    names = {i.name for i in doctor.diagnose()}
+    for expected in ("Audio server", "Audio over TCP", "Audio output"):
+        check(expected in names, f"{expected} missing from the diagnosis")
 
 
 async def test_tui_navigation() -> None:
@@ -582,6 +602,8 @@ def main() -> int:
         test_preflight_shape,
         test_doctor_scan_shape,
         test_firefox_prefs_are_defaults_not_locks,
+        test_audio_test_tone_is_valid,
+        test_doctor_reports_audio,
         test_tui_navigation,
         test_destructive_actions_are_gated,
         test_escape_cannot_leave_running_action,

@@ -269,12 +269,25 @@ locks: `about:config` still wins.
 VirGL does not solve this. It accelerates OpenGL, and the cost of a video is in
 decoding it.
 
+**Audio** is three things at once: PulseAudio running in Termux, its TCP module
+loaded, and a sink on the Android side. Any one missing is silence, and they
+fail in different places — so **Audio** plays a test tone from Termux first and
+then from inside the container. Heard from Termux only means the container
+cannot reach the server; heard from neither means Android has no working sink.
+
+**Recording is not possible**, and no amount of configuration changes that. The
+Termux app does not declare `android.permission.RECORD_AUDIO`, so PulseAudio
+has no microphone source — `module-sles-source` fails to initialise, and
+forcing it yields silence rather than audio. `termux-microphone-record` from
+Termux:API works, but it is a separate app and cannot feed the container.
+
 | Button | What it does |
 |--------|--------------|
 | **Re-scan** | Run the checks again |
 | **Fix (N)** | Repair everything repairable, in one press |
 | **Diagnose** | The same full report Start prints when it fails |
 | **Dupes** | Tools installed in both Termux and the container |
+| **Audio** | Play a test tone from Termux, then from the container |
 
 Only genuinely fixable problems are counted in **Fix**. Anything needing you —
 a missing APK, no checkout — says so instead of offering a button that cannot

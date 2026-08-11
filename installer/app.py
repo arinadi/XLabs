@@ -29,6 +29,7 @@ from textual.widgets import (
     Static,
 )
 
+from . import audio
 from . import doctor
 from . import packages
 from . import start as desktop
@@ -535,16 +536,17 @@ class DoctorScreen(CopyableScreen):
         yield Header()
         yield Label("Doctor", classes="screen-title")
         yield DataTable(id="doctor-table", cursor_type="row", zebra_stripes=True)
-        # Paired rows: these do not fit side by side on a phone terminal.
-        with Grid(classes="row2"):
+        # Three to a row, with Back on its own full-width row: it is the
+        # most-used control and deserves the biggest target.
+        with Grid(classes="row3"):
             yield Button("Re-scan", id="rescan")
             yield Button("Fix", id="fix", variant="success", disabled=True)
-        with Grid(classes="row2"):
             yield Button("Diagnose", id="diagnose")
+        with Grid(classes="row3"):
             yield Button("Dupes", id="dupes")
-        with Horizontal(id="action-buttons"):
+            yield Button("Audio", id="audio")
             yield Button("C", id="copy")
-            yield Button("Back", id="back", variant="primary")
+        yield Button("Back", id="back", variant="primary")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -606,6 +608,10 @@ class DoctorScreen(CopyableScreen):
     @on(Button.Pressed, "#dupes")
     def _dupes(self) -> None:
         self.app.push_screen(DupesScreen())
+
+    @on(Button.Pressed, "#audio")
+    def _audio(self) -> None:
+        self.app.push_screen(ActionScreen("Audio Test", audio.test))
 
     @on(Button.Pressed, "#fix")
     def _fix(self) -> None:
