@@ -305,6 +305,64 @@ async def test_narrow_terminal_layout() -> None:
                 )
 
 
+async def test_update_offers_restart() -> None:
+    """Update should be able to relaunch onto the code it just pulled.
+
+    The runner is swapped for a controllable one: the real update finishes
+    instantly when there is no checkout, which would make the "disabled while
+    working" assertion a race.
+    """
+    release = threading.Event()
+
+    def blocking(log) -> None:
+        log("pulling")
+        release.wait(timeout=15)
+
+    original = app_module.run_update
+    app_module.run_update = blocking
+
+    app = ArinanoLabsApp()
+    try:
+        async with app.run_test(size=(60, 30)) as pilot:
+            await pilot.pause()
+            check(app.restart_requested is False, "restart wanted before it was asked for")
+
+            await pilot.click("#update")
+            await asyncio.sleep(0.5)
+
+            screen = app.screen
+            check(isinstance(screen, ActionScreen), f"got {screen!r}")
+            check(
+                screen.query_one("#restart", Button).disabled,
+                "restart was offered while the update was still running",
+            )
+
+            release.set()
+            for _ in range(80):
+                await asyncio.sleep(0.1)
+                if not app.screen.query_one("#back", Button).disabled:
+                    break
+            await pilot.pause()
+
+            check(
+                not app.screen.query_one("#restart", Button).disabled,
+                "restart stayed disabled after the update finished",
+            )
+
+            await pilot.click("#restart")
+            await pilot.pause()
+            check(app.restart_requested, "pressing Restart did not request one")
+    finally:
+        app_module.run_update = original
+        release.set()
+
+
+def test_other_actions_do_not_offer_restart() -> None:
+    """Only Update relaunches. Everything else just returns to the menu."""
+    plain = ActionScreen("Plain", lambda log: None)
+    check(plain._offer_restart is False, "restart is opt-in and was not requested")
+
+
 def _expected_export_path() -> str:
     directory = (
         app_module.REPO_DIR
@@ -382,6 +440,8 @@ def main() -> int:
         test_copy_buttons_export_output,
         test_narrow_terminal_layout,
         test_termux_duplicates_are_safe,
+        test_update_offers_restart,
+        test_other_actions_do_not_offer_restart,
         test_export_never_creates_a_repo_directory,
     ]
 

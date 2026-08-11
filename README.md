@@ -74,7 +74,7 @@ alabs                  # Launch the TUI
 |--------|--------------|
 | Start Desktop | Wake lock → PulseAudio → virgl → X11 → Xfce4 |
 | Stop Desktop | Kills the stack and clears every socket it left behind |
-| Update | `git pull` this repo |
+| Update | `git pull` this repo, then offers to relaunch on the new code |
 | Extra Tools | Planned, not implemented yet |
 | Status | Environment checks, cache size, version |
 | Doctor | Diagnoses the environment and repairs what it can, in one press |

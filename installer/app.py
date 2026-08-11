@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 
 from rich.text import Text
@@ -157,10 +158,11 @@ class ActionScreen(CopyableScreen):
 
     BINDINGS = [("escape", "back", "Back")]
 
-    def __init__(self, title: str, runner) -> None:
+    def __init__(self, title: str, runner, offer_restart: bool = False) -> None:
         super().__init__()
         self._title = title
         self._runner = runner
+        self._offer_restart = offer_restart
         self._log: RichLog | None = None
         # RichLog keeps rendered strips, not text, so the plain lines are kept
         # alongside it for copying.
@@ -175,12 +177,16 @@ class ActionScreen(CopyableScreen):
         yield RichLog(id="log", markup=True, wrap=True, auto_scroll=True)
         with Horizontal(id="action-buttons"):
             yield Button("C", id="copy")
+            if self._offer_restart:
+                yield Button("Restart", id="restart", variant="success", disabled=True)
             yield Button("Back", id="back", variant="primary", disabled=True)
         yield Footer()
 
     def on_mount(self) -> None:
         self._log = self.query_one("#log", RichLog)
         self.query_one("#copy", Button).tooltip = "Copy this log"
+        if self._offer_restart:
+            self.query_one("#restart", Button).tooltip = "Relaunch alabs on the new code"
         self.run_task()
 
     def copy_payload(self) -> str:
@@ -204,7 +210,19 @@ class ActionScreen(CopyableScreen):
         self._busy = False
         button = self.query_one("#back", Button)
         button.disabled = False
-        button.focus()
+        if self._offer_restart:
+            restart = self.query_one("#restart", Button)
+            restart.disabled = False
+            restart.focus()
+        else:
+            button.focus()
+
+    @on(Button.Pressed, "#restart")
+    def _restart(self) -> None:
+        if self._busy:
+            self.notify("Still working — wait for it to finish.", severity="warning")
+            return
+        self.app.request_restart()
 
     @on(Button.Pressed, "#back")
     def action_back(self) -> None:
@@ -317,7 +335,9 @@ def run_update(log) -> None:
 
     log("")
     if rc == 0:
-        log("[green]Up to date.[/green] Restart alabs to pick up changes.")
+        log("[green]Up to date.[/green]")
+        log("Press Restart to relaunch on the new code, or Back to keep")
+        log("running the version already loaded.")
     else:
         log("[red]Update failed.[/red]")
 
@@ -431,7 +451,7 @@ class MainScreen(Screen):
 
     @on(Button.Pressed, "#update")
     def _update(self) -> None:
-        self.app.push_screen(ActionScreen("Update", run_update))
+        self.app.push_screen(ActionScreen("Update", run_update, offer_restart=True))
 
     @on(Button.Pressed, "#tools")
     def _tools(self) -> None:
@@ -698,13 +718,39 @@ class ArinanoLabsApp(App):
     CSS_PATH = "app.tcss"
     TITLE = "arinanoLabs"
 
+    def __init__(self) -> None:
+        super().__init__()
+        self.restart_requested = False
+
     def on_mount(self) -> None:
         self.sub_title = get_version()
         self.push_screen(MainScreen())
 
+    def request_restart(self) -> None:
+        """Leave Textual first, then relaunch from main().
+
+        Exiting before re-executing matters: it restores the terminal out of
+        the alternate screen and raw mode. Replacing the process from inside a
+        running app would leave the terminal wedged.
+        """
+        self.restart_requested = True
+        self.exit()
+
 
 def main() -> None:
-    ArinanoLabsApp().run()
+    app = ArinanoLabsApp()
+    app.run()
+
+    if not app.restart_requested:
+        return
+
+    # execv, not another App().run(): the point of restarting is to load code
+    # that git just changed, and the old modules are already imported.
+    try:
+        os.execv(sys.executable, [sys.executable, "-m", "installer.app"])
+    except OSError as e:
+        print(f"Could not restart automatically ({e}).")
+        print("Run alabs again to pick up the update.")
 
 
 if __name__ == "__main__":
