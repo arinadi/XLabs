@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
+import tempfile
 
+from rich.text import Text
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, VerticalScroll
@@ -29,6 +32,90 @@ from . import start as desktop
 from .const import CACHE_DIR, CONTAINER_NAME, IMAGE_REF, REPO_DIR
 from .preflight import run_all_checks
 from .system import get_version, human_size, is_installed, run_cmd, stream_cmd
+
+
+# ── Copying output ─────────────────────────────────────────
+
+# A copy is always mirrored to a file, so the text survives even when no
+# clipboard is reachable — the usual reason to copy this is to paste it
+# somewhere else for help.
+EXPORT_NAME = "arinanolabs-last-output.txt"
+
+
+def _to_clipboard(app, text: str) -> str | None:
+    """Put `text` on a clipboard. Returns how it got there, or None.
+
+    termux-clipboard-set reaches the real Android clipboard but needs the
+    termux-api package and the Termux:API app. Textual's own path uses an
+    OSC 52 escape, which only lands if the terminal honours it.
+    """
+    if shutil.which("termux-clipboard-set"):
+        try:
+            result = subprocess.run(
+                ["termux-clipboard-set"], input=text, text=True, timeout=10
+            )
+            if result.returncode == 0:
+                return "the Android clipboard"
+        except (OSError, subprocess.SubprocessError):
+            pass
+
+    try:
+        app.copy_to_clipboard(text)
+        return "the terminal clipboard"
+    except Exception:  # noqa: BLE001 - clipboard support is best effort
+        return None
+
+
+def _write_export(text: str) -> str | None:
+    """Mirror the copy to a file, next to the repo when there is one.
+
+    Deliberately does not create the repo directory: off-device there is no
+    checkout, and a copy action has no business making one.
+    """
+    directory = REPO_DIR if os.path.isdir(REPO_DIR) else tempfile.gettempdir()
+    path = os.path.join(directory, EXPORT_NAME)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        return path
+    except OSError:
+        return None
+
+
+class CopyableScreen(Screen):
+    """A screen whose visible output can be copied out as plain text.
+
+    Subclasses return their content from `copy_payload`. The button is
+    labelled "C" rather than a clipboard glyph: Termux's font cannot be
+    relied on to have one.
+    """
+
+    BINDINGS = [("c", "copy", "Copy")]
+
+    def copy_payload(self) -> str:
+        raise NotImplementedError
+
+    @on(Button.Pressed, "#copy")
+    def _copy_pressed(self) -> None:
+        self.action_copy()
+
+    def action_copy(self) -> None:
+        text = self.copy_payload().strip()
+        if not text:
+            self.notify("Nothing to copy yet.", severity="warning")
+            return
+
+        where = _to_clipboard(self.app, text)
+        path = _write_export(text)
+
+        if where and path:
+            self.notify(f"Copied to {where}. Also saved to {path}")
+        elif where:
+            self.notify(f"Copied to {where}.")
+        elif path:
+            self.notify(f"No clipboard available — saved to {path}", severity="warning")
+        else:
+            self.notify("Could not copy or save the output.", severity="error")
 
 
 # ── Confirmation ───────────────────────────────────────────
@@ -65,7 +152,7 @@ class ConfirmScreen(ModalScreen[bool]):
 # ── Generic action runner ──────────────────────────────────
 
 
-class ActionScreen(Screen):
+class ActionScreen(CopyableScreen):
     """Runs `runner(log)` in a thread and streams its output."""
 
     BINDINGS = [("escape", "back", "Back")]
@@ -75,6 +162,9 @@ class ActionScreen(Screen):
         self._title = title
         self._runner = runner
         self._log: RichLog | None = None
+        # RichLog keeps rendered strips, not text, so the plain lines are kept
+        # alongside it for copying.
+        self._lines: list[str] = []
         # Not _running: MessagePump uses that name for its own loop state, and
         # shadowing it stops the screen ever processing its mount.
         self._busy = True
@@ -83,17 +173,25 @@ class ActionScreen(Screen):
         yield Header()
         yield Label(self._title, classes="screen-title")
         yield RichLog(id="log", markup=True, wrap=True, auto_scroll=True)
-        yield Button("Back", id="back", variant="primary", disabled=True)
+        with Horizontal(id="action-buttons"):
+            yield Button("C", id="copy")
+            yield Button("Back", id="back", variant="primary", disabled=True)
         yield Footer()
 
     def on_mount(self) -> None:
         self._log = self.query_one("#log", RichLog)
+        self.query_one("#copy", Button).tooltip = "Copy this log"
         self.run_task()
+
+    def copy_payload(self) -> str:
+        return "\n".join(self._lines)
 
     @work(thread=True)
     def run_task(self) -> None:
         def log(message: str = "") -> None:
             assert self._log is not None
+            # Markup is for the pane; the copy should be readable as text.
+            self._lines.append(Text.from_markup(message).plain)
             self.app.call_from_thread(self._log.write, message)
 
         try:
@@ -123,20 +221,36 @@ class ActionScreen(Screen):
 # ── Status ─────────────────────────────────────────────────
 
 
-class StatusScreen(Screen):
+class StatusScreen(CopyableScreen):
     BINDINGS = [("escape", "back", "Back")]
 
     def compose(self) -> ComposeResult:
         yield Header()
         yield Label("Status", classes="screen-title")
         yield DataTable(id="status-table", cursor_type="row", zebra_stripes=True)
-        yield Button("Back", id="back", variant="primary")
+        with Horizontal(id="action-buttons"):
+            yield Button("C", id="copy")
+            yield Button("Back", id="back", variant="primary")
         yield Footer()
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._rows: list[tuple[str, str, str]] = []
 
     def on_mount(self) -> None:
         table = self.query_one("#status-table", DataTable)
         table.add_columns("Check", "State", "Detail")
+        self.query_one("#copy", Button).tooltip = "Copy this report"
         self.load_status()
+
+    def copy_payload(self) -> str:
+        marks = {"ok": "ok", "no": "--", "unknown": "??"}
+        lines = [f"arinanoLabs status — {get_version()}", ""]
+        lines += [
+            f"{marks.get(state, '  '):<3} {name:<14} {detail}"
+            for name, state, detail in self._rows
+        ]
+        return "\n".join(lines)
 
     @work(thread=True)
     def load_status(self) -> None:
@@ -157,6 +271,7 @@ class StatusScreen(Screen):
         self.app.call_from_thread(self._fill, rows)
 
     def _fill(self, rows: list[tuple[str, str, str]]) -> None:
+        self._rows = rows
         table = self.query_one("#status-table", DataTable)
         for name, state, detail in rows:
             mark = {
@@ -339,7 +454,7 @@ class MainScreen(Screen):
         )
 
 
-class DoctorScreen(Screen):
+class DoctorScreen(CopyableScreen):
     """Environment diagnosis with a one-press repair for what is fixable."""
 
     BINDINGS = [("escape", "back", "Back")]
@@ -352,15 +467,33 @@ class DoctorScreen(Screen):
         yield Header()
         yield Label("Doctor", classes="screen-title")
         yield DataTable(id="doctor-table", cursor_type="row", zebra_stripes=True)
+        # Two rows: five buttons side by side do not fit a phone terminal.
         with Horizontal(id="doctor-buttons"):
             yield Button("Re-scan", id="rescan")
             yield Button("Fix", id="fix", variant="success", disabled=True)
             yield Button("Diagnose", id="diagnose")
+        with Horizontal(id="action-buttons"):
+            yield Button("C", id="copy")
             yield Button("Back", id="back", variant="primary")
         yield Footer()
 
     def on_mount(self) -> None:
         self.query_one("#doctor-table", DataTable).add_columns("Check", "State", "Detail")
+        self.query_one("#copy", Button).tooltip = "Copy this report"
+
+    def copy_payload(self) -> str:
+        lines = [f"arinanoLabs doctor — {get_version()}", ""]
+        for issue in self._issues:
+            if issue.ok:
+                mark = "ok "
+            elif issue.unknown:
+                mark = "?? "
+            elif issue.fix is not None:
+                mark = "FIX"
+            else:
+                mark = "-- "
+            lines.append(f"{mark} {issue.name:<14} {issue.detail}")
+        return "\n".join(lines)
 
     def on_screen_resume(self) -> None:
         """Also runs after returning from a fix, so the table is never stale."""

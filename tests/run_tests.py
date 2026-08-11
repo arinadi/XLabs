@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+import tempfile
 import threading
 import time
 import traceback
@@ -223,6 +224,84 @@ async def test_escape_cannot_leave_running_action() -> None:
         release.set()
 
 
+async def test_copy_buttons_export_output() -> None:
+    """Every diagnostic screen must be able to hand its text back out."""
+    app = ArinanoLabsApp()
+    async with app.run_test(size=(80, 40)) as pilot:
+        await pilot.pause()
+
+        for entry, table in (("#status", "#status-table"), ("#doctor", "#doctor-table")):
+            await pilot.click(entry)
+            await pilot.pause()
+            await _wait_for_rows(pilot, app, table)
+
+            screen = app.screen
+            screen.query_one("#copy", Button)
+            payload = screen.copy_payload()
+            check(payload.strip(), f"{entry} produced an empty copy payload")
+            check("arinanoLabs" in payload, f"{entry} payload has no header: {payload[:40]!r}")
+
+            await pilot.click("#copy")
+            await pilot.pause()
+            check(
+                os.path.exists(_expected_export_path()),
+                "copy did not mirror the output to a file",
+            )
+
+            await pilot.click("#back")
+            await pilot.pause()
+            check(isinstance(app.screen, MainScreen), f"{entry} did not return to the menu")
+
+
+async def test_narrow_terminal_layout() -> None:
+    """Every control must stay reachable on a phone-width terminal.
+
+    Regression: adding a fifth button to Doctor pushed Back off screen, which
+    only showed up as an OutOfBounds click at 80 columns — a real phone is
+    narrower still.
+    """
+    app = ArinanoLabsApp()
+    async with app.run_test(size=(45, 30)) as pilot:
+        await pilot.pause()
+
+        for entry, table in (("#status", "#status-table"), ("#doctor", "#doctor-table")):
+            await pilot.click(entry)
+            await pilot.pause()
+            await _wait_for_rows(pilot, app, table)
+            # Raises OutOfBounds if the control is not on screen.
+            await pilot.click("#copy")
+            await pilot.pause()
+            await pilot.click("#back")
+            await pilot.pause()
+            check(isinstance(app.screen, MainScreen), f"{entry} did not return at 45 cols")
+
+        await pilot.click("#tools")
+        await pilot.pause()
+        await pilot.click("#back")
+        await pilot.pause()
+        check(isinstance(app.screen, MainScreen), "tools did not return at 45 cols")
+
+
+def _expected_export_path() -> str:
+    directory = (
+        app_module.REPO_DIR
+        if os.path.isdir(app_module.REPO_DIR)
+        else tempfile.gettempdir()
+    )
+    return os.path.join(directory, app_module.EXPORT_NAME)
+
+
+def test_export_never_creates_a_repo_directory() -> None:
+    """Copying must not conjure ~/arinanoLabs on a machine without a checkout."""
+    if os.path.isdir(app_module.REPO_DIR):
+        return  # nothing to prove on a real checkout
+    app_module._write_export("probe")
+    check(
+        not os.path.isdir(app_module.REPO_DIR),
+        f"copying created {app_module.REPO_DIR}",
+    )
+
+
 # ── Runner ─────────────────────────────────────────────────
 
 
@@ -245,6 +324,9 @@ def main() -> int:
         test_tui_navigation,
         test_destructive_actions_are_gated,
         test_escape_cannot_leave_running_action,
+        test_copy_buttons_export_output,
+        test_narrow_terminal_layout,
+        test_export_never_creates_a_repo_directory,
     ]
 
     for test in tests:

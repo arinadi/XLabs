@@ -116,6 +116,9 @@ Built with [Textual](https://github.com/Textualize/textual):
   image pull streams into the log pane while the UI stays live
 - **Status view** — environment checks, cache size, version
 - **Guarded destructive actions** — Reset and Clean Cache go through a modal
+- **Copyable output** — the `C` button on any log, Status or Doctor screen puts
+  the text on the clipboard and mirrors it to a file, so a failure can be
+  pasted somewhere useful
 
 Every screen returns to the menu, and anything destructive is gated behind a
 confirmation first:
