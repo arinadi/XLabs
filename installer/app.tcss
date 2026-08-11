@@ -143,3 +143,19 @@ ConfirmScreen {
     height: 3;
     margin: 0 1;
 }
+
+/* Extra Tools */
+#query {
+    margin: 1 2 0 2;
+}
+
+#tools-status {
+    margin: 0 2;
+    padding: 0 1;
+    color: $text-muted;
+}
+
+#tools-table {
+    height: 1fr;
+    margin: 1 2;
+}

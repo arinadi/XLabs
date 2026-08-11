@@ -25,10 +25,11 @@ import traceback
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from textual.widgets import Button, DataTable, RichLog  # noqa: E402
+from textual.widgets import Button, DataTable, Input, RichLog, Static  # noqa: E402
 
 from installer import app as app_module  # noqa: E402
 from installer import doctor  # noqa: E402
+from installer import packages  # noqa: E402
 from installer.app import (  # noqa: E402
     ActionScreen,
     ArinanoLabsApp,
@@ -363,6 +364,67 @@ def test_other_actions_do_not_offer_restart() -> None:
     check(plain._offer_restart is False, "restart is opt-in and was not requested")
 
 
+def test_package_terms_reject_shell_metacharacters() -> None:
+    """Search terms and package names reach a shell, so they are validated."""
+    for good in ("neovim", "python3-pip", "libgl1-mesa-dri", "g++", "bat"):
+        check(packages.valid_term(good), f"{good!r} should be accepted")
+
+    hostile = [
+        "a; rm -rf /", "a && whoami", "a | tee x", "a`id`", "a$(id)",
+        "a\nb", "../etc/passwd", "a b", "'", '"', "$PATH", "a>b", "",
+        "x" * 80,
+    ]
+    for term in hostile:
+        check(not packages.valid_term(term), f"{term!r} should be rejected")
+
+    lines: list[str] = []
+    check(
+        not packages.install(["neovim; rm -rf /"], lines.append),
+        "install accepted a name with shell syntax",
+    )
+    check(any("Refusing" in line for line in lines), f"no refusal logged: {lines}")
+
+    results, error = packages.search("a; rm -rf /")
+    check(results == [], "a hostile search returned results")
+    check(error is not None, "a hostile search reported no error")
+
+
+async def test_tools_screen_searches() -> None:
+    app = ArinanoLabsApp()
+    async with app.run_test(size=(80, 40)) as pilot:
+        await pilot.pause()
+        await pilot.click("#tools")
+        await pilot.pause()
+        check(isinstance(app.screen, ToolsScreen), f"got {app.screen!r}")
+
+        check(
+            app.screen.query_one("#install", Button).disabled,
+            "Install was offered before any search",
+        )
+
+        # No container off-device, so this exercises the error path.
+        app.screen.query_one("#query", Input).value = "neovim"
+        await pilot.press("enter")
+        for _ in range(40):
+            await asyncio.sleep(0.1)
+            await pilot.pause()
+            if "Searching" not in app.screen.status_text:
+                break
+        check(app.screen.status_text, "the search reported nothing at all")
+        check(
+            "Searching" not in app.screen.status_text,
+            f"the search never finished: {app.screen.status_text!r}",
+        )
+        check(
+            app.screen.query_one("#install", Button).disabled,
+            "Install was enabled with no results",
+        )
+
+        await pilot.click("#back")
+        await pilot.pause()
+        check(isinstance(app.screen, MainScreen), f"got {app.screen!r}")
+
+
 def _expected_export_path() -> str:
     directory = (
         app_module.REPO_DIR
@@ -441,6 +503,8 @@ def main() -> int:
         test_narrow_terminal_layout,
         test_termux_duplicates_are_safe,
         test_update_offers_restart,
+        test_package_terms_reject_shell_metacharacters,
+        test_tools_screen_searches,
         test_other_actions_do_not_offer_restart,
         test_export_never_creates_a_repo_directory,
     ]

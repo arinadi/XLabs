@@ -23,12 +23,14 @@ from textual.widgets import (
     DataTable,
     Footer,
     Header,
+    Input,
     Label,
     RichLog,
     Static,
 )
 
 from . import doctor
+from . import packages
 from . import start as desktop
 from .const import CACHE_DIR, CONTAINER_NAME, IMAGE_REF, REPO_DIR
 from .preflight import run_all_checks
@@ -693,21 +695,120 @@ class DupesScreen(CopyableScreen):
         self.app.pop_screen()
 
 
-class ToolsScreen(Screen):
+class ToolsScreen(CopyableScreen):
+    """Search the container's package lists and install from them."""
+
     BINDINGS = [("escape", "back", "Back")]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._results: list[packages.Package] = []
+        # Kept alongside the widget: Static does not expose its text back.
+        self.status_text = ""
 
     def compose(self) -> ComposeResult:
         yield Header()
         yield Label("Extra Tools", classes="screen-title")
-        yield Static(
-            "Not implemented yet.\n\n"
-            "Chromium, code-server, Neovim and GitHub CLI are planned. Until "
-            "they land, install them inside the container:\n\n"
-            f"    proot-distro login {CONTAINER_NAME} -- apt install <package>",
-            id="tools-body",
-        )
-        yield Button("Back", id="back", variant="primary")
+        yield Input(placeholder="Search packages, e.g. neovim", id="query")
+        yield Static("", id="tools-status")
+        yield DataTable(id="tools-table", cursor_type="row", zebra_stripes=True)
+        with Horizontal(id="action-buttons"):
+            yield Button("C", id="copy")
+            yield Button("Install", id="install", variant="success", disabled=True)
+            yield Button("Back", id="back", variant="primary")
         yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one("#tools-table", DataTable).add_columns("", "Package", "Description")
+        self.query_one("#copy", Button).tooltip = "Copy these results"
+        self.query_one("#install", Button).tooltip = "Install the highlighted package"
+        self.query_one("#query", Input).focus()
+        self._status("Search for a package, then pick a row and press Install.")
+
+    def _status(self, message: str) -> None:
+        self.status_text = message
+        self.query_one("#tools-status", Static).update(message)
+
+    @on(Input.Submitted, "#query")
+    def _submitted(self, event: Input.Submitted) -> None:
+        term = event.value.strip()
+        self._status(f"Searching for '{term}'...")
+        self.run_search(term)
+
+    @work(thread=True)
+    def run_search(self, term: str) -> None:
+        results, error = packages.search(term)
+        self.app.call_from_thread(self._show, results, error)
+
+    def _show(self, results: list[packages.Package], error: str | None) -> None:
+        self._results = results
+        table = self.query_one("#tools-table", DataTable)
+        table.clear()
+
+        for pkg in results:
+            mark = "[green]I[/green]" if pkg.installed else ""
+            table.add_row(mark, pkg.name, pkg.description[:70])
+
+        button = self.query_one("#install", Button)
+        button.disabled = not results
+
+        if error:
+            self._status(error)
+        else:
+            installed = sum(1 for p in results if p.installed)
+            self._status(
+                f"{len(results)} result(s), {installed} already installed "
+                "(marked I). Highlight one and press Install."
+            )
+
+    def _selected(self) -> packages.Package | None:
+        table = self.query_one("#tools-table", DataTable)
+        if not self._results:
+            return None
+        row = table.cursor_row
+        if row is None or not (0 <= row < len(self._results)):
+            return None
+        return self._results[row]
+
+    @on(Button.Pressed, "#install")
+    def _install(self) -> None:
+        pkg = self._selected()
+        if pkg is None:
+            self._status("Highlight a row first.")
+            return
+
+        if pkg.installed:
+            self._status(f"{pkg.name} is already installed.")
+            return
+
+        def run(log) -> None:
+            if packages.install([pkg.name], log):
+                log("")
+                log(f"[green]{pkg.name} installed.[/green]")
+            else:
+                log("")
+                log(f"[red]Could not install {pkg.name}.[/red]")
+
+        self.app.push_screen(
+            ConfirmScreen(
+                f"Install {pkg.name}",
+                f"{pkg.description}\n\n"
+                "This installs into the container with apt. "
+                "Termux is not touched.",
+                confirm_label="Install",
+            ),
+            lambda ok: self.app.push_screen(ActionScreen(f"Install {pkg.name}", run)) if ok else None,
+        )
+
+    def copy_payload(self) -> str:
+        lines = [f"arinanoLabs package search — {get_version()}", ""]
+        if not self._results:
+            lines.append("(no results)")
+        lines += [
+            f"{'I' if p.installed else ' '} {p.name:<28} {p.description}"
+            for p in self._results
+        ]
+        return "\n".join(lines)
 
     @on(Button.Pressed, "#back")
     def action_back(self) -> None:
