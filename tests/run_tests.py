@@ -32,7 +32,6 @@ from installer import audio, backup, doctor, packages, system
 from installer.app import (
     ActionScreen,
     AddRepoScreen,
-    XLabsApp,
     BackupScreen,
     ConfirmScreen,
     DoctorScreen,
@@ -42,6 +41,7 @@ from installer.app import (
     ReposScreen,
     SettingsScreen,
     ToolsScreen,
+    XLabsApp,
 )
 from installer.preflight import run_all_checks
 from installer.system import container_path, stream_cmd

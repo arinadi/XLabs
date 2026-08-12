@@ -12,6 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       packages: write
+    # `secrets` is not a valid context inside a step `if:` — GitHub rejects
+    # the whole workflow file at parse time if it's referenced there ("workflow
+    # file issue", 0 jobs scheduled). Mirroring the secret into env: first
+    # works around that, since `env` is allowed in `if:`.
+    env:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
     steps:
       - uses: actions/checkout@v4
@@ -30,7 +36,7 @@ jobs:
       # DOCKERHUB_TOKEN (an access token, not the account password) are
       # added as repo secrets — everything below degrades to GHCR-only.
       - name: Log in to Docker Hub
-        if: ${{ secrets.DOCKERHUB_TOKEN != '' }}
+        if: ${{ env.DOCKERHUB_TOKEN != '' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
