@@ -70,7 +70,7 @@ curl -sL https://raw.githubusercontent.com/arinadi/XLabs/main/install.sh | bash
 `install.sh` is deliberately thin — it gets git, Python, and this repo onto the
 machine, then hands over to `~/XLabs/install.py`, which does the rest:
 Python libraries, Termux packages (proot-distro, Termux:X11, PulseAudio,
-graphics), the Debian container, and the `xlabs` launcher.
+graphics), Debian, and the `xlabs` launcher.
 
 The launcher is symlinked into `$PREFIX/bin`, which is Termux's entire default
 PATH — so `xlabs` works immediately, in the session that ran the installer, with
@@ -111,7 +111,7 @@ reference below in [The TUI, screen by screen](#-the-tui-screen-by-screen).
 
 Two layers. The **core** is declarative — defined by `image/Dockerfile`, built in
 CI, published to `ghcr.io/arinadi/xlabs`. The **user layer** is whatever
-you install inside the running container; it survives across desktop restarts,
+you install inside Debian; it survives across desktop restarts,
 but a Reset wipes it.
 
 Every pull tries GHCR first and falls back to Docker Hub automatically if
@@ -176,7 +176,7 @@ stateDiagram-v2
 
 `ActionScreen` is where the long work happens. It hands the job to a thread so
 the terminal keeps redrawing, and refuses to be dismissed until that thread is
-done — leaving mid image pull would strand a half-installed container:
+done — leaving mid image pull would strand Debian half-installed:
 
 ```mermaid
 sequenceDiagram
@@ -228,7 +228,7 @@ Brings the whole stack up in order, streaming each step:
 
 1. **Wake lock** — `termux-wake-lock`, so Android does not freeze the session
 2. **Audio server** — PulseAudio plus a Unix socket in the shared tmp, which
-   is what the container opens
+   is what Debian opens
 3. **virgl renderer** — first one that exists, or software rendering
 4. **ICE socket directory** — `/tmp/.ICE-unix`, which `xfce4-session` needs to
    accept its own children and which nothing else on this stack creates
@@ -241,8 +241,8 @@ Leftovers outlive the session that made them, and a stale `.X0-lock` or an
 orphaned proot is exactly what breaks the next start.
 
 If the desktop does not come up, a **full diagnostic report is collected
-automatically** — no need to go and ask for it. With no container installed,
-Start offers to pull one instead of failing further down.
+automatically** — no need to go and ask for it. With Debian not installed,
+Start offers to pull it instead of failing further down.
 
 ### Stop Desktop
 
@@ -250,7 +250,7 @@ Start offers to pull one instead of failing further down.
 
 Innermost first, which is the opposite of what feels natural:
 
-1. `TERM` then `KILL` this container's proot tree — proot runs with
+1. `TERM` then `KILL` Debian's proot tree — proot runs with
    `--kill-on-exit`, so that takes everything inside with it
 2. X11 down, then the Android app force-stopped
 3. `pulseaudio --kill`, virgl down
@@ -277,11 +277,11 @@ otherwise does nothing, since the old modules are already loaded.
 
 <!-- screenshot: store search -->
 
-A package browser for the container.
+A package browser for Debian.
 
-Type a name and press Enter to search the container's package lists. Results
+Type a name and press Enter to search Debian's package lists. Results
 show an **I** against anything already installed, then highlight a row and
-press **Install**. apt runs inside the container with its output streamed;
+press **Install**. apt runs inside Debian with its output streamed;
 Termux is not touched.
 
 The first search fetches the package lists, which takes a moment. The image
@@ -292,7 +292,7 @@ every search would match nothing and read as "no such package".
 A failed search and an empty one otherwise look identical, so a failure also
 raises a toast notification on top of the status line.
 
-**Mirror** switches which Debian mirror the container fetches from. Debian
+**Mirror** switches which mirror Debian fetches from. Debian
 13's `debian.sources` carries the main archive and security as two separate
 stanzas at different paths; repointing both at a mirror sends security
 requests somewhere it likely does not carry, and `apt update` exits 100 — the
@@ -302,7 +302,7 @@ the chosen mirror. If the new mirror still fails, the previous sources are
 restored automatically.
 
 Identifying the security stanza by its `Suites:` field rather than by
-inspecting its URI matters once a container has already been broken by an
+inspecting its URI matters once Debian has already been broken by an
 older switch: a URI that has been repointed at an unrelated mirror carries no
 hint that it was ever security, so the earlier fix repaired the file the first
 time and then quietly re-broke it on every switch after — restoring whatever
@@ -345,7 +345,7 @@ Doctor's own checks with none of the fixes, so it is gone — its facts are
 folded in here instead, alongside a Diagnose/Fix that Status never had.
 
 Internet, Python, repository checkout, launcher target, Textual, proot-distro,
-PulseAudio, Termux:X11, the GPU renderer, the X11 app, the container, storage,
+PulseAudio, Termux:X11, the GPU renderer, the X11 app, Debian, storage,
 DNS, timezone, audio, the security archive, Electron apps' sandbox, Firefox's
 video defaults, and stale X11 sockets — plus a line up top with whatever does
 not fit the ok/broken shape of an Issue: whether the desktop is running, image
@@ -359,12 +359,12 @@ Querying installed Android apps is unreliable from Termux, and reporting
 llvmpipe — everything is drawn on the CPU.
 
 **Storage** reuses the same free-space check the installer runs before
-pulling the image, at a lower floor: once a container exists, apt's own
+pulling the image, at a lower floor: once Debian exists, apt's own
 cache is the only space a repair can free without deleting something you
 put there yourself, so that is all the fix does — `apt-get clean` and
 `autoremove`.
 
-**DNS** failures inside the container read exactly like a dead mirror —
+**DNS** failures inside Debian read exactly like a dead mirror —
 `apt-get update` fails with "Temporary failure in name resolution" even
 though the connection itself is fine. The usual cause is `resolv.conf`
 being empty or a dangling symlink (some images ship one pointing at
@@ -372,7 +372,7 @@ systemd-resolved, which does not run under proot). The repair replaces it
 with `1.1.1.1` and `8.8.8.8`.
 
 **Timezone** is UTC in the image and nothing ever points it at the device's
-own zone, so file timestamps and a terminal's clock inside the container
+own zone, so file timestamps and a terminal's clock inside Debian
 silently disagree with Android's. The repair reads the device's zone with
 `getprop persist.sys.timezone` and symlinks `/etc/localtime` to match.
 
@@ -388,7 +388,7 @@ personal device, so there is nothing behind the sandbox worth protecting.
 Firefox's video defaults are the fix for stuttering YouTube. There is no
 VA-API through proot, so VP9 and AV1 are decoded on the CPU — and that, not
 rendering, is what makes playback bad. The repair drops a preferences file
-into the container that turns both off, so YouTube falls back to H.264. They
+into Debian that turns both off, so YouTube falls back to H.264. They
 are defaults rather than locks: `about:config` still wins.
 
 VirGL does not solve this. It accelerates OpenGL, and the cost of a video is in
@@ -409,7 +409,7 @@ written to `.env` and used by every later start:
 | `tcp` | Loopback TCP, shared memory off |
 | `tcp-shm` | Loopback TCP, shared memory on |
 
-It plays from Termux first. If that fails, nothing in the container will help
+It plays from Termux first. If that fails, nothing in Debian will help
 and it stops there rather than testing four methods against a dead sink.
 
 **Bench** answers a question this project could not answer from the outside.
@@ -434,28 +434,28 @@ It needs termux-x11 running, but not the desktop.
 Termux app does not declare `android.permission.RECORD_AUDIO`, so PulseAudio
 has no microphone source — `module-sles-source` fails to initialise, and
 forcing it yields silence rather than audio. `termux-microphone-record` from
-Termux:API works, but it is a separate app and cannot feed the container.
+Termux:API works, but it is a separate app and cannot feed Debian.
 
 | Button | What it does |
 |--------|--------------|
 | **Re-scan** | Run the checks again |
 | **Fix (N)** | Repair everything repairable, in one press |
 | **Diagnose** | The same full report Start prints when it fails |
-| **Dupes** | Tools installed in both Termux and the container |
-| **Audio** | Play a test tone from Termux, then from the container |
+| **Dupes** | Tools installed in both Termux and Debian |
+| **Audio** | Play a test tone from Termux, then from Debian |
 | **Bench** | Measure each GPU configuration and keep the fastest |
 
 Only genuinely fixable problems are counted in **Fix**. Anything needing you —
 a missing APK, no checkout — says so instead of offering a button that cannot
 help.
 
-**Diagnose** reports host processes and sockets, then probes inside the
-container: the admin user, the session binaries, the shared socket, `xset q`
+**Diagnose** reports host processes and sockets, then probes inside
+Debian: the admin user, the session binaries, the shared socket, `xset q`
 against the display, and a foreground session run. It ends with a short guide
 to reading it.
 
 **Dupes** lists tools present on both sides and can uninstall the Termux
-copies, treating the container as primary. Only packages the container is
+copies, treating Debian as primary. Only packages Debian is
 confirmed to provide are offered, nothing XLabs itself needs is ever a
 candidate, and it is deliberately not part of **Fix** — removing packages from
 your Termux is a decision, not a repair.
@@ -478,14 +478,14 @@ a value means.
 
 **Mirror** gets special treatment beyond just being shown: choosing one from
 Store → Mirror now saves it, and it is automatically reapplied right after
-any fresh container install — Reset would otherwise silently revert to the
+any fresh Debian install — Reset would otherwise silently revert to the
 default mirror and throw away a measured choice every time.
 
 Every change here needs a desktop restart to take effect — none of these
 are read while a session is already running.
 
 **Uninstall XLabs**, at the bottom, is gated behind the same confirm popup
-as Reset and Cache. It stops the desktop, removes the container and cached
+as Reset and Cache. It stops the desktop, removes Debian and cached
 image layers, and unlinks the `xlabs` launcher from PATH. It does not touch
 `~/XLabs` (the repo this app runs from) or `~/XLabs-backups` — those are
 left for you to remove by hand if you want them gone too.
@@ -499,25 +499,25 @@ settings, the XFCE panel layout, anything installed or configured as the
 regular user. Not apt packages: those come back with a normal install, and
 re-archiving them would just be a slower way to redo what apt already does.
 
-Both directions run `tar` **through the container**, not as a host-side file
+Both directions run `tar` **through Debian**, not as a host-side file
 copy. proot fakes ownership and backs some files with a hardlink-emulation
 store (`rootfs/.l2s`) that a raw copy of the underlying files would not
 reproduce — `tar` running inside a proot login sees the same logical
-filesystem any other program in the container does.
+filesystem any other program in Debian does.
 
 A backup is a timestamped `.tar.gz` under `~/XLabs-backups` on Termux's
-own storage — outside the container, so a **Reset** cannot take it down too.
+own storage — outside Debian, so a **Reset** cannot take it down too.
 **Restore** replaces `/home/admin` with the archive's contents; the home it
-replaces is kept as `/home/admin.bak` inside the container rather than
+replaces is kept as `/home/admin.bak` inside Debian rather than
 deleted, in case the wrong archive gets picked.
 
 The natural pairing is Backup before **Reset**: back up, wipe and reinstall
-the container, then Restore once it is back up.
+Debian, then Restore once it is back up.
 
 ### Reset and Cache
 
-**Reset** deletes the container and pulls a fresh image. **Cache** drops
-downloaded OCI layers and keeps the container. Both go through a confirmation
+**Reset** deletes Debian and pulls a fresh image. **Cache** drops
+downloaded OCI layers and keeps Debian. Both go through a confirmation
 that spells out what is lost.
 
 ### Copying anything
@@ -561,7 +561,7 @@ established Termux + proot + XFCE recipe and adds nothing beyond a browser:
 | 🧱 Base | `ca-certificates`, `locales`, `sudo` |
 
 Installed **with** recommends, as every published guide does. An earlier image
-used `--no-install-recommends` throughout and produced a container where
+used `--no-install-recommends` throughout and produced a Debian where
 `xfce4-session` started but never launched `xfwm4` or `xfdesktop`.
 
 `xfce4`'s own Recommends — as opposed to the Depends that make up the session
@@ -594,7 +594,7 @@ renderer and takes the first one that exists:
 | ANGLE `vulkan` backend | `$PREFIX/opt/angle-android/vulkan` exists |
 | none | falls back to software rendering |
 
-The container ships Mesa userspace (`libgl1-mesa-dri`, `libglx-mesa0`,
+Debian ships Mesa userspace (`libgl1-mesa-dri`, `libglx-mesa0`,
 `mesa-utils`) so OpenGL works either way.
 
 ---
@@ -624,21 +624,21 @@ XLabs/
 
 ---
 
-## 🔁 Termux and the container overlap
+## 🔁 Termux and Debian overlap
 
 This is by design, and worth knowing before it confuses you. proot-distro binds
-the Termux `$PREFIX` into the container at its original path and **appends**
+the Termux `$PREFIX` into Debian at its original path and **appends**
 `$PREFIX/bin` to the guest's `PATH`, so Termux's own binaries are reachable
 from inside Debian.
 
 Because the append puts Termux last, a tool present in both resolves to the
 Debian copy. The Termux one only runs when Debian lacks the tool — which is
 precisely when you would not expect it. `--shared-tmp` extends the same overlap
-to `/tmp`: the container's `/tmp` *is* the Termux temp directory.
+to `/tmp`: Debian's `/tmp` *is* the Termux temp directory.
 
 `Doctor → Dupes` lists tools installed on both sides and can uninstall the
-Termux copies, on the assumption that the container is where you work. It only
-offers packages the container is confirmed to provide, and it will not touch
+Termux copies, on the assumption that Debian is where you work. It only
+offers packages Debian is confirmed to provide, and it will not touch
 anything XLabs itself needs — Python, git, proot-distro, Termux:X11,
 PulseAudio or the graphics packages are not candidates.
 
@@ -668,7 +668,7 @@ running rootless Podman straight in Termux/proot-distro, with no XLabs
 involved at all.
 
 proot's own trick is `ptrace`-based syscall interception — exactly what lets
-this project's Debian container run without root in the first place. It
+this project's Debian install run without root in the first place. It
 doesn't extend to Docker/Podman's namespace and cgroup calls: `ptrace` can
 fake a `chdir`, not manufacture a real isolated PID/mount/network namespace.
 Rootless mode doesn't sidestep this — it still asks the kernel for the same
