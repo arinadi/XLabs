@@ -425,6 +425,30 @@ confirmed to provide are offered, nothing arinanoLabs itself needs is ever a
 candidate, and it is deliberately not part of **Fix** — removing packages from
 your Termux is a decision, not a repair.
 
+### Backup
+
+<!-- screenshot: backup -->
+
+Archives and restores `/home/admin` — dotfiles, the Firefox profile, editor
+settings, the XFCE panel layout, anything installed or configured as the
+regular user. Not apt packages: those come back with a normal install, and
+re-archiving them would just be a slower way to redo what apt already does.
+
+Both directions run `tar` **through the container**, not as a host-side file
+copy. proot fakes ownership and backs some files with a hardlink-emulation
+store (`rootfs/.l2s`) that a raw copy of the underlying files would not
+reproduce — `tar` running inside a proot login sees the same logical
+filesystem any other program in the container does.
+
+A backup is a timestamped `.tar.gz` under `~/arinanoLabs-backups` on Termux's
+own storage — outside the container, so a **Reset** cannot take it down too.
+**Restore** replaces `/home/admin` with the archive's contents; the home it
+replaces is kept as `/home/admin.bak` inside the container rather than
+deleted, in case the wrong archive gets picked.
+
+The natural pairing is Backup before **Reset**: back up, wipe and reinstall
+the container, then Restore once it is back up.
+
 ### Reset and Cache
 
 **Reset** deletes the container and pulls a fresh image. **Cache** drops
@@ -474,6 +498,16 @@ established Termux + proot + XFCE recipe and adds nothing beyond a browser:
 Installed **with** recommends, as every published guide does. An earlier image
 used `--no-install-recommends` throughout and produced a container where
 `xfce4-session` started but never launched `xfwm4` or `xfdesktop`.
+
+`xfce4`'s own Recommends — as opposed to the Depends that make up the session
+itself — are `desktop-base`, `mate-polkit`, `tango-icon-theme`,
+`thunar-volman` and `xfce4-notifyd`. Two are excluded: `desktop-base`
+(Debian's splash/wallpaper artwork, purely cosmetic) and `thunar-volman`
+(auto-mounts removable media — nothing to mount here). The other three stay:
+they are either visible (notifications, panel/file-manager icons, the
+privilege-elevation dialog) or close enough to the recommends that fixed the
+launch bug above that trimming them needs a real device test, not a guess
+from a dependency list.
 
 The dev toolchain, Zsh, on-screen keyboard, theming and the pre-baked panel
 layout were removed to get back to a build of known-good shape. They are in git

@@ -24,3 +24,8 @@ LAUNCHER_SRC = os.path.join(REPO_DIR, "alabs")
 # Termux writes here; TMPDIR is set in a normal Termux session but not always
 # in the environment a launcher inherits, so fall back explicitly.
 TMPDIR = os.environ.get("TMPDIR", f"{TERMUX_PREFIX}/tmp")
+
+# Home-directory backups, next to REPO_DIR on Termux's own storage — outside
+# the container, so a Reset (which deletes the whole rootfs) cannot take a
+# backup down with it.
+BACKUP_DIR = os.path.expanduser("~/arinanoLabs-backups")

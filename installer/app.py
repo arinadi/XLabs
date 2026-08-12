@@ -30,7 +30,7 @@ from textual.widgets import (
     Static,
 )
 
-from . import audio, bench, doctor, packages
+from . import audio, backup, bench, doctor, packages
 from . import start as desktop
 from .const import CACHE_DIR, CONTAINER_NAME, IMAGE_REF, REPO_DIR
 from .preflight import run_all_checks
@@ -449,6 +449,7 @@ class MainScreen(Screen):
         "tools": "Search and install packages in the container",
         "status": "Environment checks and versions",
         "doctor": "Diagnose and repair the environment",
+        "backup": "Back up or restore your home directory",
         "reset": "Delete the container and reinstall it",
         "cache": "Delete downloaded image layers",
     }
@@ -472,8 +473,10 @@ class MainScreen(Screen):
                 yield Button("Update", id="update")
                 yield Button("Tools", id="tools")
                 yield Button("Status", id="status")
-            with Grid(classes="row3"):
+            with Grid(classes="row2"):
                 yield Button("Doctor", id="doctor")
+                yield Button("Backup", id="backup")
+            with Grid(classes="row2"):
                 yield Button("Reset", id="reset", variant="error")
                 yield Button("Cache", id="cache")
         yield Footer()
@@ -513,6 +516,10 @@ class MainScreen(Screen):
     def _doctor(self) -> None:
         self.app.push_screen(DoctorScreen())
 
+    @on(Button.Pressed, "#backup")
+    def _backup(self) -> None:
+        self.app.push_screen(BackupScreen())
+
     @on(Button.Pressed, "#reset")
     def _reset(self) -> None:
         self.app.push_screen(
@@ -520,7 +527,8 @@ class MainScreen(Screen):
                 "Reset (Clean Install)",
                 "This deletes the entire container and pulls a fresh image.\n\n"
                 "Every file, setting, and package inside the container is lost "
-                "permanently. Your Termux home is untouched.",
+                "permanently. Your Termux home is untouched. Back up first from "
+                "the Backup screen if you want to keep your files.",
                 confirm_label="Delete and reinstall",
             ),
             when_confirmed(self.app, lambda: ActionScreen("Reset", run_reset)),
@@ -537,6 +545,156 @@ class MainScreen(Screen):
             ),
             when_confirmed(self.app, lambda: ActionScreen("Clean Image Cache", run_clean_cache)),
         )
+
+
+class BackupScreen(CopyableScreen):
+    """Back up and restore the container's home directory.
+
+    This is the user's own files and settings — not apt packages, which a
+    plain Reset already reinstalls on its own.
+    """
+
+    BINDINGS = [("escape", "back", "Back")]
+
+    NOTE = (
+        f"Archives {backup.HOME_IN_CONTAINER} — files, the Firefox profile, "
+        "editor settings, the panel layout. Not apt packages; those come "
+        "back with a normal install."
+    )
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Label("Backup", classes="screen-title")
+        yield Static(self.NOTE, id="backup-note")
+        yield DataTable(id="backup-table", cursor_type="row", zebra_stripes=True)
+        with Grid(classes="row3"):
+            yield Button("Backup now", id="create", variant="success")
+            yield Button("Restore", id="restore")
+            yield Button("Delete", id="delete", variant="error")
+        with Grid(classes="row2"):
+            yield Button("C", id="copy")
+            yield Button("Back", id="back", variant="primary")
+        yield Footer()
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._backups: list[backup.Backup] = []
+        # Kept alongside the widget: Static does not expose its text back.
+        self.status_text = self.NOTE
+
+    def _note(self, message: str) -> None:
+        self.status_text = message
+        self.query_one("#backup-note", Static).update(message)
+
+    def on_mount(self) -> None:
+        self.query_one("#backup-table", DataTable).add_columns("Name", "Size", "Created")
+        self.query_one("#copy", Button).tooltip = "Copy this list"
+        self._fill()
+
+    def on_screen_resume(self) -> None:
+        self._fill()
+
+    def _fill(self) -> None:
+        self._backups = backup.list_backups()
+        table = self.query_one("#backup-table", DataTable)
+        table.clear()
+        for b in self._backups:
+            table.add_row(b.name, backup.human_size(b.size_bytes), b.created.strftime("%Y-%m-%d %H:%M"))
+        # The list just changed shape, so any earlier highlight no longer
+        # points at what it used to.
+        self._note(self.NOTE)
+
+    def _selected(self) -> backup.Backup | None:
+        row = self.query_one("#backup-table", DataTable).cursor_row
+        if row is None or not (0 <= row < len(self._backups)):
+            return None
+        return self._backups[row]
+
+    @on(DataTable.RowHighlighted, "#backup-table")
+    def _row_highlighted(self) -> None:
+        # Reuses the note line rather than adding a row for this: on a
+        # phone-height screen there is no free row to spare, and a table
+        # row is thin enough to mistap, so naming the pick here — not only
+        # inside the confirm dialog — catches that before Restore/Delete is
+        # even pressed. Restore is the one that can undo real work if it
+        # lands on the wrong archive.
+        b = self._selected()
+        if b is not None:
+            self._note(f"Selected: {b.name} ({backup.human_size(b.size_bytes)})")
+
+    def copy_payload(self) -> str:
+        lines = [f"arinanoLabs backups - {get_version()}", ""]
+        lines += [
+            f"{b.created.strftime('%Y-%m-%d %H:%M')}  {backup.human_size(b.size_bytes):>8}  {b.name}"
+            for b in self._backups
+        ]
+        return "\n".join(lines)
+
+    @on(Button.Pressed, "#create")
+    def _create(self) -> None:
+        if not is_installed():
+            self.notify("No container to back up.", severity="warning")
+            return
+
+        def run(log) -> None:
+            backup.create_backup(log)
+
+        self.app.push_screen(
+            ConfirmScreen(
+                "Back up home",
+                f"Archives {backup.HOME_IN_CONTAINER} to {backup.BACKUP_DIR} on "
+                "Termux's own storage.\n\n"
+                "Can take a while for a large Firefox cache or node_modules.",
+                confirm_label="Back up",
+            ),
+            when_confirmed(self.app, lambda: ActionScreen("Backup", run)),
+        )
+
+    @on(Button.Pressed, "#restore")
+    def _restore(self) -> None:
+        b = self._selected()
+        if b is None:
+            self.notify("Highlight a backup first.", severity="warning")
+            return
+
+        def run(log) -> None:
+            backup.restore_backup(b, log)
+
+        self.app.push_screen(
+            ConfirmScreen(
+                f"Restore {b.name}",
+                f"Replaces {backup.HOME_IN_CONTAINER} with this backup's contents.\n\n"
+                "The current home is kept as a .bak inside the container "
+                "rather than deleted, in case this turns out to be the wrong "
+                "pick.",
+                confirm_label="Restore",
+            ),
+            when_confirmed(self.app, lambda: ActionScreen(f"Restore {b.name}", run)),
+        )
+
+    @on(Button.Pressed, "#delete")
+    def _delete(self) -> None:
+        b = self._selected()
+        if b is None:
+            self.notify("Highlight a backup first.", severity="warning")
+            return
+
+        def run(log) -> None:
+            backup.delete_backup(b, log)
+
+        self.app.push_screen(
+            ConfirmScreen(
+                f"Delete {b.name}",
+                "This only removes the saved archive — it does not touch the "
+                "container.",
+                confirm_label="Delete",
+            ),
+            when_confirmed(self.app, lambda: ActionScreen(f"Delete {b.name}", run)),
+        )
+
+    @on(Button.Pressed, "#back")
+    def action_back(self) -> None:
+        self.app.pop_screen()
 
 
 class DoctorScreen(CopyableScreen):

@@ -62,6 +62,21 @@ RUN apt-get update && \
         xserver-xorg-legacy- initramfs-tools- && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# xfce4's own Recommends (not its Depends — those are the session itself,
+# untouched) are desktop-base, mate-polkit, tango-icon-theme, thunar-volman
+# and xfce4-notifyd. Two of those are excluded here:
+#
+#   desktop-base   — Debian's splash/wallpaper artwork. Cosmetic only; XFCE
+#     falls back to a plain background without it.
+#   thunar-volman  — auto-mounts removable media on insertion. There is no
+#     real block device to insert here.
+#
+# mate-polkit, tango-icon-theme and xfce4-notifyd stay: the bug that made
+# xfwm4/xfdesktop never launch (see above) came from disabling recommends
+# broadly, and these three are visible or fallback-relevant enough — a
+# privilege dialog, panel/file-manager icons, desktop notifications — that
+# trimming them needs a real device test to confirm the session still
+# comes up, not just a guess from a dependency list.
 RUN apt-get update && \
     apt-get install -y \
         xfce4 \
@@ -69,7 +84,8 @@ RUN apt-get update && \
         dbus-x11 \
         xorg- xserver-xorg- xserver-xorg-core- \
         xserver-xorg-video-all- xserver-xorg-input-all- \
-        xserver-xorg-legacy- initramfs-tools- && \
+        xserver-xorg-legacy- initramfs-tools- \
+        desktop-base- thunar-volman- && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ── X11 client tools, GL userspace, audio client ───────────────
