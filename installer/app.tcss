@@ -165,15 +165,6 @@ ConfirmScreen {
     color: $success;
 }
 
-/* Raw command output on the Store screen, so a failed search can be read. */
-#store-log {
-    height: 8;
-    margin: 0 2 1 2;
-    padding: 0 1;
-    border: round $primary;
-    background: $surface-darken-1;
-}
-
 /* Add Repository form */
 #add-repo-note {
     margin: 1 2 0 2;

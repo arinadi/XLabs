@@ -1082,9 +1082,6 @@ class StoreScreen(CopyableScreen):
         yield Input(placeholder="Search packages, e.g. neovim", id="query")
         yield Static("", id="store-status")
         yield ScrollableTable(id="store-table", cursor_type="row", zebra_stripes=True)
-        # The command and its raw output. A search that finds nothing and one
-        # that failed look identical without this.
-        yield RichLog(id="store-log", markup=True, wrap=True, auto_scroll=True)
         with Grid(classes="row3"):
             yield Button("Mirror", id="mirror")
             yield Button("Repos", id="repos")
@@ -1135,13 +1132,7 @@ class StoreScreen(CopyableScreen):
 
     @work(thread=True)
     def run_search(self, term: str) -> None:
-        pane = self.query_one("#store-log", RichLog)
-        self.app.call_from_thread(pane.clear)
-
-        def log(message: str) -> None:
-            self.app.call_from_thread(pane.write, message)
-
-        results, error = packages.search(term, log)
+        results, error = packages.search(term)
         self.app.call_from_thread(self._show, results, error)
 
     def _show(
@@ -1160,6 +1151,7 @@ class StoreScreen(CopyableScreen):
 
         if error:
             self._status(error)
+            self.notify(error, title="Store", severity="error")
         elif kind == "curated":
             installed = sum(1 for p in results if p.installed)
             self._status(

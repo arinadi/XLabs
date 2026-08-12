@@ -289,8 +289,8 @@ ships without them — every Dockerfile layer ends with
 `rm -rf /var/lib/apt/lists/*` to keep the download small — so without this
 every search would match nothing and read as "no such package".
 
-An output pane below the results shows the command and its raw output, because
-a failed search and an empty one otherwise look identical.
+A failed search and an empty one otherwise look identical, so a failure also
+raises a toast notification on top of the status line.
 
 **Mirror** switches which Debian mirror the container fetches from. Debian
 13's `debian.sources` carries the main archive and security as two separate
