@@ -27,6 +27,7 @@ from textual.widgets import (
     Input,
     Label,
     RichLog,
+    Select,
     Static,
 )
 
@@ -337,6 +338,8 @@ def run_reset(log) -> None:
 
     log("")
     ok = pull_image(log)
+    if ok:
+        packages.reapply_saved_mirror(log)
 
     log("")
     if ok:
@@ -377,6 +380,7 @@ class MainScreen(Screen):
     TOOLTIPS = {
         "update": "Pull the latest arinanoLabs",
         "tools": "Search and install packages in the container",
+        "settings": "Per-device preferences, saved to .env",
         "doctor": "Diagnose and repair the environment",
         "backup": "Back up or restore your home directory",
         "reset": "Delete the container and reinstall it",
@@ -398,9 +402,10 @@ class MainScreen(Screen):
             with Grid(classes="row2"):
                 yield Button("Start Desktop", id="start", variant="success")
                 yield Button("Stop Desktop", id="stop", variant="warning")
-            with Grid(classes="row2"):
+            with Grid(classes="row3"):
                 yield Button("Update", id="update")
                 yield Button("Tools", id="tools")
+                yield Button("Settings", id="settings")
             with Grid(classes="row2"):
                 yield Button("Doctor", id="doctor")
                 yield Button("Backup", id="backup")
@@ -437,6 +442,10 @@ class MainScreen(Screen):
     def _tools(self) -> None:
         self.app.push_screen(ToolsScreen())
 
+    @on(Button.Pressed, "#settings")
+    def _settings(self) -> None:
+        self.app.push_screen(SettingsScreen())
+
     @on(Button.Pressed, "#doctor")
     def _doctor(self) -> None:
         self.app.push_screen(DoctorScreen())
@@ -470,6 +479,139 @@ class MainScreen(Screen):
             ),
             when_confirmed(self.app, lambda: ActionScreen("Clean Image Cache", run_clean_cache)),
         )
+
+
+class SettingsScreen(CopyableScreen):
+    """Per-device preferences, stored in .env.
+
+    Each value is owned by whatever module actually uses it — audio.py,
+    bench.py, start.py, packages.py — this screen only reads and writes
+    them through those modules' own functions. Mirror is shown but not
+    edited here: Tools -> Mirror already measures candidates and picking
+    one there saves it the same way, so a second editable copy here would
+    just be two places that could disagree.
+    """
+
+    BINDINGS = [("escape", "back", "Back")]
+
+    DRAW_PATH_OPTIONS = [
+        ("Normal", "normal"),
+        ("Legacy drawing (fixes some black screens)", "legacy-drawing"),
+        ("Force BGRA (fixes swapped colors)", "force-bgra"),
+        ("Legacy drawing + force BGRA", "legacy-drawing+force-bgra"),
+    ]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.status_text = ""
+        # Last value _refresh() itself set, per Select — Select.Changed is
+        # a posted message, dispatched after _refresh() has already
+        # returned, so a "loading" flag reset at the end of _refresh()
+        # cannot reliably guard against it. Comparing against what was
+        # just assigned works regardless of when the message lands.
+        self._last_audio = ""
+        self._last_gpu = ""
+        self._last_x11 = ""
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Label("Settings", classes="screen-title")
+        with VerticalScroll(id="settings-form"):
+            yield Static(
+                "Per-device preferences, saved to .env. Restart the desktop "
+                "for a change to take effect.",
+                id="settings-note",
+            )
+            yield Label("Debian mirror (change from Tools → Mirror)")
+            yield Static("", id="settings-mirror")
+            yield Label("Audio method")
+            yield Select(
+                [(m.description, m.name) for m in audio.METHODS],
+                id="settings-audio",
+                allow_blank=False,
+            )
+            yield Label("GPU profile")
+            yield Select(
+                [(p.description, p.name) for p in bench.PRESETS],
+                id="settings-gpu",
+                allow_blank=False,
+            )
+            yield Label("termux-x11 rendering")
+            yield Select(self.DRAW_PATH_OPTIONS, id="settings-x11", allow_blank=False)
+            yield Static("", id="settings-status")
+        with Grid(classes="row2"):
+            yield Button("C", id="copy")
+            yield Button("Back", id="back", variant="primary")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one("#copy", Button).tooltip = "Copy these settings"
+        self._refresh()
+
+    def on_screen_resume(self) -> None:
+        self._refresh()
+
+    def _refresh(self) -> None:
+        self.query_one("#settings-mirror", Static).update(
+            packages.current_mirror() or "No sources file in the container"
+        )
+        self._last_audio = audio.load_method().name
+        self.query_one("#settings-audio", Select).value = self._last_audio
+        # No benchmark has necessarily run yet, unlike audio/X11 which
+        # always have a real default — fall back to the same baseline
+        # Bench itself would rather than leave the select blank.
+        self._last_gpu = (bench.load_profile() or bench.PRESETS[0]).name
+        self.query_one("#settings-gpu", Select).value = self._last_gpu
+        self._last_x11 = desktop.load_draw_path()
+        self.query_one("#settings-x11", Select).value = self._last_x11
+
+    def _status(self, message: str) -> None:
+        self.status_text = message
+        self.query_one("#settings-status", Static).update(message)
+
+    @on(Select.Changed, "#settings-audio")
+    def _audio_changed(self, event: Select.Changed) -> None:
+        if str(event.value) == self._last_audio:
+            return
+        method = audio.method_by_name(str(event.value))
+        if method is not None:
+            self._last_audio = method.name
+            audio.save_method(method)
+            self._status(f"Audio method set to {method.name}.")
+
+    @on(Select.Changed, "#settings-gpu")
+    def _gpu_changed(self, event: Select.Changed) -> None:
+        if str(event.value) == self._last_gpu:
+            return
+        preset = bench.preset_by_name(str(event.value))
+        if preset is not None:
+            self._last_gpu = preset.name
+            bench.set_profile_manually(preset)
+            self._status(f"GPU profile set to {preset.name}.")
+
+    @on(Select.Changed, "#settings-x11")
+    def _x11_changed(self, event: Select.Changed) -> None:
+        if str(event.value) == self._last_x11:
+            return
+        self._last_x11 = str(event.value)
+        desktop.save_draw_path(self._last_x11)
+        self._status("termux-x11 rendering mode saved.")
+
+    def copy_payload(self) -> str:
+        return "\n".join(
+            [
+                f"arinanoLabs settings - {get_version()}",
+                "",
+                f"Mirror:  {packages.current_mirror() or 'unknown'}",
+                f"Audio:   {audio.load_method().name}",
+                f"GPU:     {(bench.load_profile() or bench.PRESETS[0]).name}",
+                f"X11:     {desktop.load_draw_path()}",
+            ]
+        )
+
+    @on(Button.Pressed, "#back")
+    def action_back(self) -> None:
+        self.app.pop_screen()
 
 
 class BackupScreen(CopyableScreen):

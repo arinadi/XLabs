@@ -25,7 +25,7 @@ import traceback
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from textual.widgets import Button, DataTable, Input, RichLog
+from textual.widgets import Button, DataTable, Input, RichLog, Select
 
 from installer import app as app_module
 from installer import audio, backup, doctor, packages, system
@@ -40,6 +40,7 @@ from installer.app import (
     MainScreen,
     MirrorScreen,
     ReposScreen,
+    SettingsScreen,
     ToolsScreen,
 )
 from installer.preflight import run_all_checks
@@ -284,6 +285,34 @@ def test_config_roundtrip(tmp_key: str = "ARINANOLABS_TEST_KEY") -> None:
         check(config.get(key) == value, f"the test disturbed {key}")
 
 
+def test_draw_path_roundtrip() -> None:
+    """termux-x11's rendering flags (Settings) are picked from a fixed
+    set; an unknown or missing .env value must fall back to normal rather
+    than reach start_x11() and break the launch command."""
+    from installer import config, start
+
+    original = config.get(start.DRAW_PATH_KEY)
+    try:
+        check(start.load_draw_path() in start.DRAW_PATHS, "default draw path is not a known one")
+
+        check(start.save_draw_path("force-bgra"), "could not save a known draw path")
+        check(start.load_draw_path() == "force-bgra", "did not round-trip")
+
+        check(not start.save_draw_path("not-a-real-path"), "accepted an unknown draw path")
+        check(start.load_draw_path() == "force-bgra", "an invalid save changed the saved value")
+
+        config.set_value(start.DRAW_PATH_KEY, "garbage")
+        check(
+            start.load_draw_path() == start.DEFAULT_DRAW_PATH,
+            "a corrupted .env value was not caught by load_draw_path",
+        )
+    finally:
+        if original is None:
+            config.unset(start.DRAW_PATH_KEY)
+        else:
+            config.set_value(start.DRAW_PATH_KEY, original)
+
+
 def _sample_sources(security_uri: str = "https://security.debian.org/debian-security") -> str:
     return (
         "Types: deb\n"
@@ -395,6 +424,71 @@ def test_set_mirror_protects_security() -> None:
     finally:
         packages.container_path = original_container_path
         packages.update_lists = original_update_lists
+
+
+def test_mirror_reapplied_after_container_install() -> None:
+    """A Reset reinstalls the image, which reverts sources.list to
+    DEFAULT_MIRROR — a previously measured mirror choice (Settings) must
+    come back on its own rather than silently reverting every time."""
+    from installer import config
+
+    fake_root = tempfile.mkdtemp()
+    target = os.path.join(fake_root, "etc", "apt", "sources.list.d", "debian.sources")
+    os.makedirs(os.path.dirname(target))
+
+    original_container_path = packages.container_path
+    original_update_lists = packages.update_lists
+    original_mirror_key = config.get(packages.MIRROR_KEY)
+    packages.container_path = lambda p: os.path.join(fake_root, p.lstrip("/"))
+    packages.update_lists = lambda log: True
+
+    def write(content: str) -> None:
+        with open(target, "w", newline="\n") as f:
+            f.write(content)
+
+    try:
+        config.unset(packages.MIRROR_KEY)
+        write(_sample_sources())
+        check(
+            packages.reapply_saved_mirror(lambda m: None),
+            "a no-op reapply (nothing saved yet) reported failure",
+        )
+        check(
+            packages.current_mirror() == "http://deb.debian.org/debian/",
+            "a no-op reapply touched the sources file",
+        )
+
+        fast_mirror = "http://kartolo.sby.datautama.net.id/debian/"
+        check(
+            packages.set_mirror(fast_mirror, lambda m: None),
+            "set_mirror reported failure on a working update",
+        )
+        check(
+            config.get(packages.MIRROR_KEY) == fast_mirror,
+            "set_mirror did not remember the choice for later",
+        )
+
+        # A fresh container image always starts back at the default mirror.
+        write(_sample_sources())
+        check(
+            packages.current_mirror() == "http://deb.debian.org/debian/",
+            "test setup did not reproduce a freshly reinstalled container",
+        )
+        check(
+            packages.reapply_saved_mirror(lambda m: None),
+            "reapply reported failure",
+        )
+        check(
+            packages.current_mirror() == fast_mirror,
+            "the saved mirror was not reapplied after reinstall",
+        )
+    finally:
+        packages.container_path = original_container_path
+        packages.update_lists = original_update_lists
+        if original_mirror_key is None:
+            config.unset(packages.MIRROR_KEY)
+        else:
+            config.set_value(packages.MIRROR_KEY, original_mirror_key)
 
 
 def test_doctor_reports_security_archive() -> None:
@@ -667,6 +761,67 @@ async def test_backup_screen() -> None:
         backup.BACKUP_DIR = original_dir
 
 
+async def test_settings_screen() -> None:
+    """Settings edits must be saved through each owning module (audio.py,
+    bench.py, start.py) rather than duplicating their logic, and opening
+    the screen must not itself count as an edit — Select.value is set
+    programmatically on every visit to show the current pick, which would
+    otherwise read back as a user changing it."""
+    from installer import audio, bench, config, start
+
+    keys = (audio.METHOD_KEY, bench.PROFILE_KEY, bench.SCORE_KEY, start.DRAW_PATH_KEY)
+    original = {k: config.get(k) for k in keys}
+
+    app = ArinanoLabsApp()
+    try:
+        async with app.run_test(size=(80, 40)) as pilot:
+            await pilot.pause()
+            await pilot.click("#settings")
+            await pilot.pause()
+            check(isinstance(app.screen, SettingsScreen), f"got {app.screen!r}")
+
+            check(
+                config.get(audio.METHOD_KEY) == original[audio.METHOD_KEY],
+                "opening Settings wrote the audio method",
+            )
+            check(
+                config.get(start.DRAW_PATH_KEY) == original[start.DRAW_PATH_KEY],
+                "opening Settings wrote the draw path",
+            )
+            check(app.screen.status_text == "", "a status message appeared before any edit")
+
+            select = app.screen.query_one("#settings-x11", Select)
+            check(
+                select.value == start.load_draw_path(),
+                "the X11 select did not show the currently saved value",
+            )
+
+            select.value = "force-bgra"
+            await pilot.pause()
+            check(start.load_draw_path() == "force-bgra", "changing the select did not save")
+            check(
+                "saved" in app.screen.status_text.lower(),
+                f"no confirmation shown after an edit: {app.screen.status_text!r}",
+            )
+
+            payload = app.screen.copy_payload()
+            check("force-bgra" in payload, f"copy payload missed the change: {payload!r}")
+            # Raises OutOfBounds if the button is not on screen — every
+            # other CopyableScreen has one; this one shipped without it.
+            await pilot.click("#copy")
+            await pilot.pause()
+
+            await pilot.click("#back")
+            await pilot.pause()
+            check(isinstance(app.screen, MainScreen), "back from Settings did not return")
+    finally:
+        for key, value in original.items():
+            if value is None:
+                config.unset(key)
+            else:
+                config.set_value(key, value)
+
+
 def test_bench_presets_are_coherent() -> None:
     """Every preset must be runnable and its result storable."""
     from installer import bench
@@ -686,6 +841,32 @@ def test_bench_presets_are_coherent() -> None:
         bench.preset_by_name("nonexistent") is None,
         "an unknown preset name resolved to something",
     )
+
+
+def test_bench_set_profile_manually_clears_score() -> None:
+    """A Settings override (set_profile_manually) has no measured score —
+    leaving a stale one from an earlier benchmark would misreport the
+    override as something Bench actually measured."""
+    from installer import bench, config
+
+    original_profile = config.get(bench.PROFILE_KEY)
+    original_score = config.get(bench.SCORE_KEY)
+    try:
+        check(bench.save_profile(bench.PRESETS[0], 42), "could not save a measured profile")
+        check(config.get(bench.SCORE_KEY) == "42", "score did not round-trip")
+
+        check(bench.set_profile_manually(bench.PRESETS[1]), "manual override reported failure")
+        check(bench.load_profile() is bench.PRESETS[1], "manual override did not stick")
+        check(config.get(bench.SCORE_KEY) is None, "a stale score survived a manual override")
+    finally:
+        for key, value in (
+            (bench.PROFILE_KEY, original_profile),
+            (bench.SCORE_KEY, original_score),
+        ):
+            if value is None:
+                config.unset(key)
+            else:
+                config.set_value(key, value)
 
 
 def test_audio_test_tone_is_valid() -> None:
@@ -899,6 +1080,19 @@ async def test_narrow_terminal_layout() -> None:
             check(
                 isinstance(app.screen, MainScreen),
                 f"Doctor did not return at {width} columns",
+            )
+
+            # Raises OutOfBounds if Settings or its Back button is not
+            # reachable — three Select widgets stacked in a VerticalScroll,
+            # the same shape that pushed Back off screen on Repos once.
+            await pilot.click("#settings")
+            await pilot.pause()
+            check(isinstance(app.screen, SettingsScreen), f"got {app.screen!r}")
+            await pilot.click("#back")
+            await pilot.pause()
+            check(
+                isinstance(app.screen, MainScreen),
+                f"Settings did not return at {width} columns",
             )
 
 
@@ -1299,7 +1493,9 @@ def main() -> int:
         test_doctor_scan_shape,
         test_firefox_prefs_are_defaults_not_locks,
         test_config_roundtrip,
+        test_draw_path_roundtrip,
         test_set_mirror_protects_security,
+        test_mirror_reapplied_after_container_install,
         test_doctor_reports_security_archive,
         test_electron_sandbox_detection_and_fix,
         test_resolv_conf_check_and_fix,
@@ -1307,7 +1503,9 @@ def main() -> int:
         test_storage_check_and_cleanup_guard,
         test_backup_list_and_human_size,
         test_backup_screen,
+        test_settings_screen,
         test_bench_presets_are_coherent,
+        test_bench_set_profile_manually_clears_score,
         test_audio_test_tone_is_valid,
         test_doctor_reports_audio,
         test_tui_navigation,

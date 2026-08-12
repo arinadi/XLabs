@@ -94,14 +94,14 @@ Then open a new terminal session:
 alabs                  # Launch the TUI
 ```
 
-The menu is four rows of buttons, sized for a thumb:
+The menu is sized for a thumb:
 
-| | |
-|---|---|
-| **Start Desktop** | **Stop Desktop** |
-| Update | Tools |
-| Doctor | Backup |
-| Reset | Cache |
+| | | |
+|---|---|---|
+| **Start Desktop** | **Stop Desktop** | |
+| Update | Tools | Settings |
+| Doctor | Backup | |
+| Reset | Cache | |
 
 Everything is tappable — Termux delivers touches as mouse events. Full
 reference below in [The TUI, screen by screen](#-the-tui-screen-by-screen).
@@ -154,6 +154,7 @@ stateDiagram-v2
     MainScreen --> DoctorScreen: Doctor
     MainScreen --> ToolsScreen: Tools
     MainScreen --> BackupScreen: Backup
+    MainScreen --> SettingsScreen: Settings
     MainScreen --> ConfirmScreen: Reset · Cache
 
     ToolsScreen --> ConfirmScreen: Install
@@ -170,6 +171,7 @@ stateDiagram-v2
     DoctorScreen --> MainScreen: Back
     DupesScreen --> DoctorScreen: Back
     BackupScreen --> MainScreen: Back
+    SettingsScreen --> MainScreen: Back
     ActionScreen --> MainScreen: Back, once idle
 ```
 
@@ -459,6 +461,30 @@ confirmed to provide are offered, nothing arinanoLabs itself needs is ever a
 candidate, and it is deliberately not part of **Fix** — removing packages from
 your Termux is a decision, not a repair.
 
+### Settings
+
+<!-- screenshot: settings -->
+
+Per-device preferences, saved to `.env`. Each value is owned by whatever
+module actually uses it — this screen only reads and writes them through
+that module's own functions, so there is exactly one place that knows what
+a value means.
+
+| Setting | What it changes |
+|---------|------------------|
+| Debian mirror | Shown, not edited — pick one from Tools → Mirror. Shown here so it does not need to be two places that could disagree. |
+| Audio method | Overrides what Doctor → Audio measured (`unix` / `unix-shm` / `tcp` / `tcp-shm`), for when auto-detection picked wrong or a method stops working after a Termux/Android update. |
+| GPU profile | Overrides what Doctor → Bench measured. Picking one manually clears the recorded benchmark score — a score from a *different* profile would misreport the override as measured. |
+| termux-x11 rendering | `-legacy-drawing` and `-force-bgra`, normally invisible to this app entirely. Some devices show a black screen (fixed by legacy drawing, which skips the modern Android hardware-buffer path) or swapped color channels (fixed by force-BGRA); neither is detectable from software, only by looking at the screen. |
+
+**Mirror** gets special treatment beyond just being shown: choosing one from
+Tools → Mirror now saves it, and it is automatically reapplied right after
+any fresh container install — Reset would otherwise silently revert to the
+default mirror and throw away a measured choice every time.
+
+Every change here needs a desktop restart to take effect — none of these
+are read while a session is already running.
+
 ### Backup
 
 <!-- screenshot: backup -->
@@ -491,7 +517,7 @@ that spells out what is lost.
 
 ### Copying anything
 
-Every screen that produces output — logs, Doctor, Dupes, Tools, Backup — has a
+Every screen that produces output — logs, Doctor, Dupes, Tools, Backup, Settings — has a
 **C** button and a `c` key. It tries the Android clipboard via
 `termux-clipboard-set`, then the terminal's own OSC 52, and **always mirrors
 the text to a file** as well, because the usual reason to copy a failure is to

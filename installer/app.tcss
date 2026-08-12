@@ -206,3 +206,29 @@ AddRepoScreen Input {
 #add-repo-form {
     height: 1fr;
 }
+
+/* Settings form */
+#settings-form {
+    height: 1fr;
+}
+
+#settings-note {
+    margin: 1 2 0 2;
+    padding: 1;
+    border: round $primary;
+}
+
+#settings-mirror,
+#settings-status {
+    margin: 0 2;
+    padding: 0 1;
+    color: $text-muted;
+}
+
+SettingsScreen Label {
+    margin: 1 2 0 2;
+}
+
+SettingsScreen Select {
+    margin: 0 2;
+}

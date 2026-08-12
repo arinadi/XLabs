@@ -94,7 +94,10 @@ def _pkg_fix(label: str, packages: list[str], with_x11_repo: bool = False):
 
 def _fix_container(log: Log) -> bool:
     log("  pulling the image — this takes a few minutes")
-    return pull_image(log)
+    ok = pull_image(log)
+    if ok:
+        packages.reapply_saved_mirror(log)
+    return ok
 
 
 def _fix_stale_sockets(log: Log) -> bool:

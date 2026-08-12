@@ -9,13 +9,39 @@ import socket as sock
 import subprocess
 import time
 
-from . import audio, bench
+from . import audio, bench, config
 from .const import ADMIN_USER, CONTAINER_NAME, PROOT_DIR, REPO_DIR, TMPDIR
 from .system import container_command, run_cmd, write_container_script
 
 ANGLE_DIR = "/data/data/com.termux/files/usr/opt/angle-android"
 XFCE_LOG = os.path.join(REPO_DIR, "xfce4.log")
 VIRGL_LOG = os.path.join(REPO_DIR, "virgl.log")
+
+# termux-x11's own draw path. Some devices show a black screen (fixed by
+# -legacy-drawing, which skips the modern Android hardware-buffer path) or
+# swapped color channels (fixed by -force-bgra, when the device's native
+# buffer format differs from what the X server assumes) — both reported
+# upstream, both device-specific, and neither detectable from here: nothing
+# short of a person looking at the screen can tell which one a device needs.
+DRAW_PATH_KEY = "TERMUX_X11_DRAW_PATH"
+DRAW_PATHS = {
+    "normal": "",
+    "legacy-drawing": "-legacy-drawing",
+    "force-bgra": "-force-bgra",
+    "legacy-drawing+force-bgra": "-legacy-drawing -force-bgra",
+}
+DEFAULT_DRAW_PATH = "normal"
+
+
+def load_draw_path() -> str:
+    name = config.get(DRAW_PATH_KEY)
+    return name if name in DRAW_PATHS else DEFAULT_DRAW_PATH
+
+
+def save_draw_path(name: str) -> bool:
+    if name not in DRAW_PATHS:
+        return False
+    return config.set_value(DRAW_PATH_KEY, name)
 
 # Set inside the container when a virgl server is actually up. Accelerating
 # GL needs both halves: the server in Termux and these on the client side.
@@ -249,8 +275,9 @@ def prepare_ice_dir(log=_noop) -> bool:
 def start_x11(log=_noop) -> bool:
     # No kill or lock-file cleanup here either: stop_desktop owns that, and
     # it has already removed the socket directory and the .X0-lock.
+    flags = DRAW_PATHS[load_draw_path()]
     subprocess.Popen(
-        "termux-x11 :0 -ac", shell=True,
+        f"termux-x11 :0 -ac {flags}".strip(), shell=True,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
     time.sleep(3)

@@ -110,6 +110,13 @@ def save_profile(preset: Preset, score: int) -> bool:
     )
 
 
+def set_profile_manually(preset: Preset) -> bool:
+    """A Settings override rather than a measured result — clears the score
+    rather than leaving a stale one from whatever preset was measured
+    before, which would misreport this pick as benchmarked."""
+    return config.set_value(PROFILE_KEY, preset.name) and config.unset(SCORE_KEY)
+
+
 def client_exports(preset: Preset) -> str:
     """The preset's client environment, as shell export lines."""
     return "\n".join(f"export {k}={v}" for k, v in preset.client_env.items())

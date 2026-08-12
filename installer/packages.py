@@ -12,6 +12,7 @@ import os
 import re
 from typing import Callable, NamedTuple
 
+from . import config
 from .system import (
     container_command,
     container_path,
@@ -179,6 +180,10 @@ SOURCES_DEB822 = "/etc/apt/sources.list.d/debian.sources"
 SOURCES_LEGACY = "/etc/apt/sources.list"
 
 DEFAULT_MIRROR = "http://deb.debian.org/debian/"
+
+# Remembered so a Reset can put it back — the fresh image otherwise reverts
+# to DEFAULT_MIRROR and silently throws away a measured choice.
+MIRROR_KEY = "MIRROR_URI"
 
 # Debian publishes a deb822 mirror masterlist, and netselect-apt exists to
 # pick from it. Neither is used directly here: netselect-apt writes the old
@@ -533,6 +538,7 @@ def set_mirror(uri: str, log: Log) -> bool:
     log("")
 
     if update_lists(log):
+        config.set_value(MIRROR_KEY, uri)
         return True
 
     log("")
@@ -541,6 +547,17 @@ def set_mirror(uri: str, log: Log) -> bool:
     if write(original):
         update_lists(log)
     return False
+
+
+def reapply_saved_mirror(log: Log) -> bool:
+    """Put back whatever mirror was chosen last time. Meant to run right
+    after a fresh container install — a plain Reset otherwise reverts
+    silently to DEFAULT_MIRROR."""
+    uri = config.get(MIRROR_KEY)
+    if not uri or uri == DEFAULT_MIRROR:
+        return True
+    log(f"Reapplying the saved mirror: {uri}")
+    return set_mirror(uri, log)
 
 
 # ── Third-party repositories ───────────────────────────────
