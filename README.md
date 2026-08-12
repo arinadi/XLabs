@@ -274,18 +274,22 @@ Layout holds down to a 36-column terminal.
 ## 📦 What's Included
 
 The image is a **vanilla baseline** on purpose — the standard Termux + proot
-+ XFCE recipe, plus a browser:
++ XFCE recipe, plus a browser and a default theme:
 
 | Category | Packages |
 |----------|----------|
 | 🖥️ Desktop | `xfce4`, `xfce4-terminal`, `dbus-x11` |
+| 🎨 Theme | `orchis-gtk-theme` (Orchis-Dark-Compact-xhdpi), `papirus-icon-theme` (Papirus-Dark) |
 | 🌐 Browser | `firefox-esr` |
 | 🎮 Graphics | Mesa userspace, `x11-xserver-utils`, `mesa-utils` |
 | 🔊 Audio | `pulseaudio-utils` (client; server runs in Termux) |
 | 🧱 Base | `ca-certificates`, `locales`, `sudo` |
 
 Installed **with** recommends — trimming them broke `xfwm4`/`xfdesktop` in
-an earlier build. Anything else is a search away in [Store](#store).
+an earlier build. Dark theme, dark icons and a touch-target CSS bump (bigger
+buttons, same Window Scaling) are the default from first boot — see
+[image/Dockerfile](image/Dockerfile) for the exact setup. Anything else is a
+search away in [Store](#store).
 
 ---
 

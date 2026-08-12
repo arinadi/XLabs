@@ -25,10 +25,12 @@ FROM debian:13
 #     too — the latter would otherwise fight the client-only PulseAudio
 #     setup this image is built around (see installer/const.py).
 #
-#  2. No baked-in user configuration. The panel layout, xsettings,
-#     onboard autostart and battery monitor are gone; XFCE creates its
-#     own defaults on first run. They are recoverable from git history
-#     if they turn out to be wanted again.
+#  2. No baked-in user configuration, with one narrow exception: a
+#     default dark theme + icon set + touch-target CSS (below), added
+#     on request. Panel layout, onboard autostart and the battery
+#     monitor stay out — those are what the "no baked-in config" rule
+#     above was written to avoid repeating, not theme/icon defaults,
+#     which don't touch session startup.
 # ═══════════════════════════════════════════════════════════════
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -113,6 +115,56 @@ RUN apt-get update && \
     apt-get install -y \
         firefox-esr && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# ── Theme ──────────────────────────────────────────────────────
+# Dark, flat, and scaled for a high-density phone screen without
+# touching Window Scaling or Xft.dpi — both resize everything
+# (icons, spacing, text) by the same factor, when what was actually
+# wanted was bigger click targets, not a bigger desktop.
+#
+# orchis-gtk-theme's Debian package only ships the "Compact" size
+# variant (not the roomier default), and the -xhdpi build scales
+# that back up rather than starting from full size — so xfwm4's
+# titlebar buttons (close/minimize/maximize) may end up smaller than
+# ideal. That part isn't CSS-fixable: xfwm4 draws its own decorations
+# from the theme's pixmaps, separately from GTK. In-app buttons are
+# unaffected either way, since the gtk.css rule below overrides
+# whatever size the theme's own CSS specifies.
+RUN apt-get update && \
+    apt-get install -y \
+        orchis-gtk-theme papirus-icon-theme && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Same theme for window borders (xfwm4) as for app content, so
+# titlebars match instead of falling back to XFCE's plain grey.
+# Written to /etc/skel so `useradd -m` below copies it into the new
+# user's home — xfconf has no daemon running yet to set it any other
+# way at build time.
+RUN mkdir -p /etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml \
+             /etc/skel/.config/gtk-3.0 && \
+    printf '%s\n' \
+        '<?xml version="1.0" encoding="UTF-8"?>' \
+        '<channel name="xsettings" version="1.0">' \
+        '  <property name="Net" type="empty">' \
+        '    <property name="ThemeName" type="string" value="Orchis-Dark-Compact-xhdpi"/>' \
+        '    <property name="IconThemeName" type="string" value="Papirus-Dark"/>' \
+        '  </property>' \
+        '</channel>' \
+        > /etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml && \
+    printf '%s\n' \
+        '<?xml version="1.0" encoding="UTF-8"?>' \
+        '<channel name="xfwm4" version="1.0">' \
+        '  <property name="general" type="empty">' \
+        '    <property name="theme" type="string" value="Orchis-Dark-Compact-xhdpi"/>' \
+        '  </property>' \
+        '</channel>' \
+        > /etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml && \
+    printf '%s\n' \
+        'button, .button, entry, menuitem, notebook tab {' \
+        '  min-height: 40px;' \
+        '  padding: 8px 10px;' \
+        '}' \
+        > /etc/skel/.config/gtk-3.0/gtk.css
 
 # ── User ───────────────────────────────────────────────────────
 RUN useradd -m -s /bin/bash admin && \
