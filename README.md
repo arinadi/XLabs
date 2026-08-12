@@ -16,8 +16,8 @@
 
   <img src="docs/arinanox-screenshot.jpg" alt="XLabs desktop" width="360" style="border-radius:12px;">
   <p>
-    Debian 13 &nbsp;·&nbsp; Xfce4 &nbsp;·&nbsp; Firefox ESR &nbsp;·&nbsp; Dev tools<br>
-    <small>TermuX → X11 → LinuX → Trixie → Xfce4</small>
+    Stable, usable and Linux as Portable Service & Dev Tools<br>
+    <small>Termu<strong>X</strong>&nbsp;&nbsp;·&nbsp;&nbsp;Debian Tri<strong>X</strong>ie&nbsp;&nbsp;·&nbsp;&nbsp;<strong>X</strong>fce&nbsp;&nbsp;·&nbsp;&nbsp;<strong>X</strong>11&nbsp;&nbsp;·&nbsp;&nbsp;Te<strong>X</strong>tual</small>
   </p>
 </div>
 
@@ -483,6 +483,12 @@ default mirror and throw away a measured choice every time.
 
 Every change here needs a desktop restart to take effect — none of these
 are read while a session is already running.
+
+**Uninstall XLabs**, at the bottom, is gated behind the same confirm popup
+as Reset and Cache. It stops the desktop, removes the container and cached
+image layers, and unlinks the `xlabs` launcher from PATH. It does not touch
+`~/XLabs` (the repo this app runs from) or `~/XLabs-backups` — those are
+left for you to remove by hand if you want them gone too.
 
 ### Backup
 

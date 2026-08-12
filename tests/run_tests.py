@@ -941,6 +941,21 @@ async def test_destructive_actions_are_gated() -> None:
             check(isinstance(app.screen, MainScreen), f"cancel on {button} did not return")
 
 
+async def test_uninstall_is_gated() -> None:
+    app = XLabsApp()
+    async with app.run_test(size=(80, 40)) as pilot:
+        await pilot.pause()
+        await pilot.click("#settings")
+        await pilot.pause()
+
+        await pilot.click("#uninstall")
+        await pilot.pause()
+        check(isinstance(app.screen, ConfirmScreen), "#uninstall skipped confirmation")
+        await pilot.click("#cancel")
+        await pilot.pause()
+        check(isinstance(app.screen, SettingsScreen), "cancel on #uninstall did not return")
+
+
 async def test_escape_cannot_leave_running_action() -> None:
     """Regression: escape used to walk out of a screen whose Back was disabled.
 
@@ -1510,6 +1525,7 @@ def main() -> int:
         test_doctor_reports_audio,
         test_tui_navigation,
         test_destructive_actions_are_gated,
+        test_uninstall_is_gated,
         test_escape_cannot_leave_running_action,
         test_copy_buttons_export_output,
         test_narrow_terminal_layout,

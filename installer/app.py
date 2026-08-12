@@ -34,7 +34,14 @@ from textual.widgets import (
 from . import audio, backup, bench, doctor, packages
 from . import start as desktop
 from .const import CACHE_DIR, CONTAINER_NAME, REPO_DIR
-from .system import get_version, human_size, is_installed, pull_image, stream_cmd
+from .system import (
+    get_version,
+    human_size,
+    is_installed,
+    pull_image,
+    stream_cmd,
+    unlink_launcher,
+)
 
 # ── Copying output ─────────────────────────────────────────
 
@@ -348,6 +355,40 @@ def run_reset(log) -> None:
         log("[bold red]Install failed.[/bold red] Check your connection and try again.")
 
 
+def run_uninstall(log) -> None:
+    # Same teardown as Reset, minus the reinstall, plus the launcher — Reset
+    # leaves `xlabs` on PATH because it always reinstalls; uninstall does not.
+    log("Stopping the desktop...")
+    desktop.stop_desktop(log)
+    log("")
+
+    log("Removing container...")
+    rc = stream_cmd(f"proot-distro remove {CONTAINER_NAME}", log, timeout=300)
+    if rc != 0:
+        log("[yellow]Container could not be removed cleanly; continuing.[/yellow]")
+    log("")
+
+    if os.path.exists(CACHE_DIR):
+        log("Removing cached image layers...")
+        try:
+            shutil.rmtree(CACHE_DIR)
+        except OSError as e:
+            log(f"[yellow]Could not remove cache: {e}[/yellow]")
+    log("")
+
+    log("Removing launcher...")
+    removed = unlink_launcher()
+    for link in removed:
+        log(f"  removed {link}")
+    if not removed:
+        log("  nothing on PATH to remove")
+
+    log("")
+    log("[bold green]Uninstalled.[/bold green] The container, cache, and "
+        f"launcher are gone. {REPO_DIR} was left in place — remove it "
+        "yourself with `rm -rf ~/XLabs` if you want it gone too.")
+
+
 def run_clean_cache(log) -> None:
     if not os.path.exists(CACHE_DIR):
         log("No cache directory — nothing to clean.")
@@ -539,6 +580,7 @@ class SettingsScreen(CopyableScreen):
             yield Label("termux-x11 rendering")
             yield Select(self.DRAW_PATH_OPTIONS, id="settings-x11", allow_blank=False)
             yield Static("", id="settings-status")
+            yield Button("Uninstall XLabs", id="uninstall", variant="error")
         with Grid(classes="row2"):
             yield Button("C", id="copy")
             yield Button("Back", id="back", variant="primary")
@@ -546,6 +588,9 @@ class SettingsScreen(CopyableScreen):
 
     def on_mount(self) -> None:
         self.query_one("#copy", Button).tooltip = "Copy these settings"
+        self.query_one("#uninstall", Button).tooltip = (
+            "Remove the container, cache, and xlabs launcher"
+        )
         self._refresh()
 
     def on_screen_resume(self) -> None:
@@ -607,6 +652,22 @@ class SettingsScreen(CopyableScreen):
                 f"GPU:     {(bench.load_profile() or bench.PRESETS[0]).name}",
                 f"X11:     {desktop.load_draw_path()}",
             ]
+        )
+
+    @on(Button.Pressed, "#uninstall")
+    def _uninstall(self) -> None:
+        self.app.push_screen(
+            ConfirmScreen(
+                "Uninstall XLabs",
+                "This deletes the container and its cached image layers, and "
+                "removes the xlabs launcher from PATH.\n\n"
+                f"{REPO_DIR} and any backups in ~/XLabs-backups are left in "
+                "place. Every file, setting, and package inside the "
+                "container is lost permanently — back up first from the "
+                "Backup screen if you want to keep your files.",
+                confirm_label="Uninstall",
+            ),
+            when_confirmed(self.app, lambda: ActionScreen("Uninstall", run_uninstall)),
         )
 
     @on(Button.Pressed, "#back")

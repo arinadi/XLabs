@@ -258,6 +258,23 @@ def link_launcher() -> tuple[bool, str]:
     return False, "no writable directory on PATH"
 
 
+def unlink_launcher() -> list[str]:
+    """Remove the `xlabs` launcher from every directory link_launcher used.
+
+    Leaves any `export PATH=...` line ensure_home_bin_on_path added in rc
+    files alone — a stray PATH entry pointing at nothing is harmless, and
+    rewriting shell startup files back out is its own source of breakage.
+    """
+    removed = []
+    for directory in (PREFIX_BIN, HOME_BIN):
+        link = os.path.join(directory, "xlabs")
+        if os.path.islink(link) or os.path.exists(link):
+            with contextlib.suppress(OSError):
+                os.remove(link)
+                removed.append(link)
+    return removed
+
+
 def ensure_home_bin_on_path() -> list[str]:
     """Add ~/bin to PATH in both login and interactive startup files.
 
