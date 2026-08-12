@@ -1071,8 +1071,9 @@ class ToolsScreen(CopyableScreen):
         with Grid(classes="row3"):
             yield Button("Mirror", id="mirror")
             yield Button("Repos", id="repos")
+            yield Button("Installed", id="installed")
+        with Grid(classes="row3"):
             yield Button("Install", id="install", variant="success", disabled=True)
-        with Grid(classes="row2"):
             yield Button("C", id="copy")
             yield Button("Back", id="back", variant="primary")
         yield Footer()
@@ -1081,6 +1082,7 @@ class ToolsScreen(CopyableScreen):
         self.query_one("#tools-table", DataTable).add_columns("", "Package", "Description")
         self.query_one("#copy", Button).tooltip = "Copy these results"
         self.query_one("#install", Button).tooltip = "Install the highlighted package"
+        self.query_one("#installed", Button).tooltip = "List everything installed"
         self.query_one("#query", Input).focus()
         self._status("Loading curated tools...")
         self.load_curated()
@@ -1099,10 +1101,20 @@ class ToolsScreen(CopyableScreen):
         self._status(f"Searching for '{term}'...")
         self.run_search(term)
 
+    @on(Button.Pressed, "#installed")
+    def _show_installed(self) -> None:
+        self._status("Loading installed packages...")
+        self.load_installed()
+
     @work(thread=True)
     def load_curated(self) -> None:
         results, error = packages.curated()
-        self.app.call_from_thread(self._show, results, error, curated=True)
+        self.app.call_from_thread(self._show, results, error, kind="curated")
+
+    @work(thread=True)
+    def load_installed(self) -> None:
+        results, error = packages.installed()
+        self.app.call_from_thread(self._show, results, error, kind="installed")
 
     @work(thread=True)
     def run_search(self, term: str) -> None:
@@ -1116,7 +1128,7 @@ class ToolsScreen(CopyableScreen):
         self.app.call_from_thread(self._show, results, error)
 
     def _show(
-        self, results: list[packages.Package], error: str | None, curated: bool = False
+        self, results: list[packages.Package], error: str | None, kind: str = "search"
     ) -> None:
         self._results = results
         table = self.query_one("#tools-table", DataTable)
@@ -1131,12 +1143,14 @@ class ToolsScreen(CopyableScreen):
 
         if error:
             self._status(error)
-        elif curated:
+        elif kind == "curated":
             installed = sum(1 for p in results if p.installed)
             self._status(
                 f"{len(results)} curated tool(s), {installed} already installed "
                 "(marked I). Search to find more, or highlight one and press Install."
             )
+        elif kind == "installed":
+            self._status(f"{len(results)} package(s) installed in the container.")
         else:
             installed = sum(1 for p in results if p.installed)
             self._status(

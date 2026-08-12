@@ -79,8 +79,18 @@ INSTALLED_SCRIPT = """#!/bin/bash
 dpkg-query -W -f='${Package}\\n' 2>/dev/null
 """
 
+# $1 = summary field to use — binary:Summary exists on the dpkg shipped with
+# Debian 12+; falling back would need parsing the multi-line Description
+# field, which is not worth it for a container that always ships current
+# dpkg. Output: <name>|<summary>
+INSTALLED_LIST_SCRIPT = """#!/bin/bash
+dpkg-query -W -f='${Package}|${binary:Summary}\\n' 2>/dev/null | sort
+"""
+
 # Shown before a search is typed, so an empty query is not just a blank
-# table. Dev tools come first — this is a dev-focused container.
+# table. Dev tools come first — this is a dev-focused container — followed
+# by a few simple GUI programs (this ships an XFCE desktop), then general
+# CLI utilities.
 CURATED_PACKAGES: tuple[tuple[str, str], ...] = (
     ("git", "Distributed version control"),
     ("build-essential", "GCC, make and friends — C/C++ toolchain"),
@@ -97,6 +107,16 @@ CURATED_PACKAGES: tuple[tuple[str, str], ...] = (
     ("gdb", "GNU debugger"),
     ("sqlite3", "SQLite command-line shell"),
     ("ripgrep", "Fast recursive search (rg)"),
+    # Simple GUI programs
+    ("geany", "Lightweight GUI code editor/IDE"),
+    ("mousepad", "Simple GUI text editor (XFCE)"),
+    ("git-gui", "Git GUI — stage, commit, browse"),
+    ("gitk", "Git commit history viewer (GUI)"),
+    ("meld", "Visual diff and merge tool (GUI)"),
+    ("xarchiver", "GUI archive manager (7z/zip/tar)"),
+    ("ristretto", "Lightweight image viewer (XFCE)"),
+    ("galculator", "GTK calculator (GUI)"),
+    # General utilities
     ("p7zip-full", "7-Zip archiver (7z)"),
     ("unzip", "Extract .zip archives"),
     ("zip", "Create .zip archives"),
@@ -128,6 +148,35 @@ def curated(log: Log = _noop) -> tuple[list[Package], str | None]:
     installed = set(out.split()) if rc == 0 else set()
 
     return [Package(name, desc, name in installed) for name, desc in CURATED_PACKAGES], None
+
+
+def installed(log: Log = _noop) -> tuple[list[Package], str | None]:
+    """Every package installed in the container, name and one-line summary.
+
+    Reads dpkg's own database directly rather than apt-cache, so — like
+    curated() — this needs no package lists to have been fetched.
+    """
+    if not is_installed():
+        return [], "No container yet — install it from the menu first."
+
+    if not write_container_script("xlabs-installed-list.sh", INSTALLED_LIST_SCRIPT):
+        return [], "Could not write the installed-list script."
+
+    rc, out = run_cmd(container_command("xlabs-installed-list.sh"), timeout=30)
+    log(f"exit {rc}, {len(out.splitlines())} installed package(s)")
+    if rc != 0:
+        return [], "The container could not be queried — see the output below."
+
+    results = []
+    for line in out.splitlines():
+        name, _, summary = line.partition("|")
+        if not name:
+            continue
+        results.append(Package(name, summary.strip(), True))
+
+    if not results:
+        return [], "No packages found."
+    return results, None
 
 
 def lists_present() -> bool:
