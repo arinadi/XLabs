@@ -71,6 +71,10 @@ def valid_term(term: str) -> bool:
     return bool(SAFE_TERM.match(term.strip().lower()))
 
 
+def _noop(_message: str) -> None:
+    pass
+
+
 INSTALLED_SCRIPT = """#!/bin/bash
 dpkg-query -W -f='${Package}\\n' 2>/dev/null
 """
@@ -124,10 +128,6 @@ def curated(log: Log = _noop) -> tuple[list[Package], str | None]:
     installed = set(out.split()) if rc == 0 else set()
 
     return [Package(name, desc, name in installed) for name, desc in CURATED_PACKAGES], None
-
-
-def _noop(_message: str) -> None:
-    pass
 
 
 def lists_present() -> bool:
