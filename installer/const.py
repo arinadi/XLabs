@@ -6,7 +6,16 @@ TERMUX_PREFIX = "/data/data/com.termux/files/usr"
 
 CONTAINER_NAME = "arinanolabs"
 ADMIN_USER = "admin"
+
+# GHCR first: no pull-rate limit for a public package, which matters more
+# than raw speed here — most installs happen over mobile data behind
+# carrier-grade NAT, where a Docker Hub anonymous-pull limit (10/hour per
+# IP as of 2026) is shared with every other subscriber on the same IP, not
+# just this tool's own pulls. Docker Hub is faster for some ISPs (ghcr.io
+# routes through Fastly's AnyCast CDN, which some ISPs peer with poorly),
+# so it stays as an automatic fallback rather than being dropped.
 IMAGE_REF = "ghcr.io/arinadi/arinanolabs:latest"
+IMAGE_REF_FALLBACK = "arinadi/arinanolabs:latest"
 
 PROOT_ROOT = f"{TERMUX_PREFIX}/var/lib/proot-distro"
 PROOT_DIR = f"{PROOT_ROOT}/containers/{CONTAINER_NAME}"

@@ -21,6 +21,7 @@ try:
         CONTAINER_NAME,
         HOME_BIN,
         IMAGE_REF,
+        IMAGE_REF_FALLBACK,
         LAUNCHER_SRC,
         PROOT_DIR,
         REPO_DIR,
@@ -217,9 +218,18 @@ def install_container() -> None:
         fail("container", "proot-distro is not available")
         return
 
-    print(f"{DIM}  Pulling {IMAGE_REF} — this takes a few minutes.{NC}")
-    if run(f"proot-distro install {IMAGE_REF} --name {CONTAINER_NAME}", timeout=1800) != 0:
-        fail("container", "image pull failed")
+    # GHCR first (no pull-rate limit for a public package), Docker Hub as
+    # the fallback for ISPs where ghcr.io's CDN routes badly — see
+    # installer/const.py for why it stays a fallback rather than the default.
+    for attempt, ref in enumerate((IMAGE_REF, IMAGE_REF_FALLBACK)):
+        if attempt > 0:
+            print(f"{DIM}  {IMAGE_REF} did not work — trying {ref} instead.{NC}")
+            run(f"proot-distro remove {CONTAINER_NAME}", timeout=60)
+        print(f"{DIM}  Pulling {ref} — this takes a few minutes.{NC}")
+        if run(f"proot-distro install {ref} --name {CONTAINER_NAME}", timeout=1800) == 0:
+            break
+    else:
+        fail("container", "image pull failed from both registries")
         return
 
     if not container_exists():

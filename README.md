@@ -114,6 +114,15 @@ CI, published to `ghcr.io/arinadi/arinanolabs`. The **user layer** is whatever
 you install inside the running container; it survives across desktop restarts,
 but a Reset wipes it.
 
+Every pull tries GHCR first and falls back to Docker Hub automatically if
+that fails. GHCR has no rate limit for a public package, which matters more
+than raw speed: most installs happen over mobile data behind carrier-grade
+NAT, where Docker Hub's anonymous-pull limit (10/hour as of 2026) is shared
+with every other subscriber on the same IP, not just this install. Docker
+Hub is genuinely faster for some ISPs — ghcr.io routes through Fastly's
+AnyCast CDN, which some ISPs peer with badly — so it stays as a fallback
+rather than being dropped.
+
 Starting the desktop is a chain, and each link is cleaned up in reverse on stop:
 
 ```mermaid

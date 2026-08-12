@@ -15,8 +15,6 @@ from typing import Callable, NamedTuple
 from . import audio, packages
 from . import start as desktop
 from .const import (
-    CONTAINER_NAME,
-    IMAGE_REF,
     LAUNCHER_SRC,
     PREFIX_BIN,
     REPO_DIR,
@@ -29,6 +27,7 @@ from .system import (
     ensure_home_bin_on_path,
     is_installed,
     link_launcher,
+    pull_image,
     run_cmd,
     stream_cmd,
     write_container_script,
@@ -94,11 +93,8 @@ def _pkg_fix(label: str, packages: list[str], with_x11_repo: bool = False):
 
 
 def _fix_container(log: Log) -> bool:
-    log(f"  pulling {IMAGE_REF} — this takes a few minutes")
-    rc = stream_cmd(
-        f"proot-distro install {IMAGE_REF} --name {CONTAINER_NAME}", log, timeout=1800
-    )
-    return rc == 0 and is_installed()
+    log("  pulling the image — this takes a few minutes")
+    return pull_image(log)
 
 
 def _fix_stale_sockets(log: Log) -> bool:

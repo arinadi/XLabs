@@ -32,9 +32,9 @@ from textual.widgets import (
 
 from . import audio, backup, bench, doctor, packages
 from . import start as desktop
-from .const import CACHE_DIR, CONTAINER_NAME, IMAGE_REF, REPO_DIR
+from .const import CACHE_DIR, CONTAINER_NAME, REPO_DIR
 from .preflight import run_all_checks
-from .system import get_version, human_size, is_installed, stream_cmd
+from .system import get_version, human_size, is_installed, pull_image, stream_cmd
 
 # ── Copying output ─────────────────────────────────────────
 
@@ -403,13 +403,10 @@ def run_reset(log) -> None:
         log("[yellow]Container could not be removed cleanly; continuing.[/yellow]")
 
     log("")
-    log(f"Pulling {IMAGE_REF} — this takes a few minutes...")
-    rc = stream_cmd(
-        f"proot-distro install {IMAGE_REF} --name {CONTAINER_NAME}", log, timeout=1800
-    )
+    ok = pull_image(log)
 
     log("")
-    if rc == 0 and is_installed():
+    if ok:
         log("[bold green]Reset complete.[/bold green] Start the desktop from the menu.")
     else:
         log("[bold red]Install failed.[/bold red] Check your connection and try again.")
@@ -488,7 +485,8 @@ class MainScreen(Screen):
                 ConfirmScreen(
                     "Container not installed",
                     "No Debian container found. Pull it now?\n\n"
-                    f"This downloads {IMAGE_REF} and takes a few minutes.",
+                    "This downloads the container image and takes a few "
+                    "minutes.",
                     confirm_label="Install",
                 ),
                 when_confirmed(self.app, lambda: ActionScreen("Install", run_reset)),

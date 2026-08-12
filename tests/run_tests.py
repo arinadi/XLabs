@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from textual.widgets import Button, DataTable, Input, RichLog
 
 from installer import app as app_module
-from installer import audio, backup, doctor, packages
+from installer import audio, backup, doctor, packages, system
 from installer.app import (
     ActionScreen,
     AddRepoScreen,
@@ -130,6 +130,71 @@ def test_stream_cmd_shows_carriage_return_progress() -> None:
     check(len(plain) < 6, f"the throttled path flooded the log: {plain}")
 
     os.remove(script)
+
+
+def test_pull_image_falls_back_to_docker_hub() -> None:
+    """GHCR has no pull-rate limit for a public package, but some ISPs route
+    its Fastly-backed CDN badly. Docker Hub is faster there but rate-limits
+    anonymous pulls per IP — shared with every other subscriber behind the
+    same carrier-grade NAT on mobile data. pull_image() must try GHCR
+    first and only fall back to Docker Hub if that genuinely failed."""
+    original_stream_cmd = system.stream_cmd
+    original_run_cmd = system.run_cmd
+    original_is_installed = system.is_installed
+    calls: list[str] = []
+
+    def fake_run_cmd(cmd: str, timeout: int = 60):
+        calls.append(cmd)
+        return 0, ""
+
+    try:
+        # Primary works: no fallback attempted at all.
+        system.stream_cmd = lambda cmd, log, timeout=1800: calls.append(cmd) or 0
+        system.run_cmd = fake_run_cmd
+        system.is_installed = lambda: True
+        calls.clear()
+        lines: list[str] = []
+        check(system.pull_image(lines.append), "reported failure when the primary pull worked")
+        # Exactly one attempt — the fallback ref is a substring of the
+        # primary one ("arinadi/arinanolabs" inside "ghcr.io/arinadi/..."),
+        # so a call count is the only unambiguous way to prove no retry.
+        check(len(calls) == 1, f"fell back when the primary pull already worked: {calls}")
+
+        # Primary fails, fallback works: the partial container must be
+        # removed before retrying, and the fallback registry gets a turn.
+        attempts = {"n": 0}
+
+        def stream_then_succeed(cmd: str, log, timeout=1800):
+            calls.append(cmd)
+            attempts["n"] += 1
+            return 1 if attempts["n"] == 1 else 0
+
+        system.stream_cmd = stream_then_succeed
+        calls.clear()
+        lines2: list[str] = []
+        check(system.pull_image(lines2.append), "did not recover via the fallback registry")
+        check(
+            any(c.startswith("proot-distro remove") for c in calls),
+            f"did not clean up the partial container before retrying: {calls}",
+        )
+        installs = [c for c in calls if c.startswith("proot-distro install")]
+        check(len(installs) == 2, f"expected a second install attempt, got: {installs}")
+        check(
+            installs[0] != installs[1],
+            f"the second attempt used the same command as the first: {installs}",
+        )
+
+        # Both fail: must report failure rather than claim success.
+        system.stream_cmd = lambda cmd, log, timeout=1800: calls.append(cmd) or 1
+        system.is_installed = lambda: False
+        calls.clear()
+        lines3: list[str] = []
+        check(not system.pull_image(lines3.append), "claimed success when both registries failed")
+        check(lines3, "the failure was not explained")
+    finally:
+        system.stream_cmd = original_stream_cmd
+        system.run_cmd = original_run_cmd
+        system.is_installed = original_is_installed
 
 
 def test_preflight_shape() -> None:
@@ -1232,6 +1297,7 @@ def main() -> int:
         test_stream_cmd_timeout_kills_silent_process,
         test_stream_cmd_returns_output_and_code,
         test_stream_cmd_shows_carriage_return_progress,
+        test_pull_image_falls_back_to_docker_hub,
         test_preflight_shape,
         test_doctor_scan_shape,
         test_firefox_prefs_are_defaults_not_locks,

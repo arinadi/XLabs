@@ -16,6 +16,8 @@ from datetime import datetime, timezone
 from .const import (
     CONTAINER_NAME,
     HOME_BIN,
+    IMAGE_REF,
+    IMAGE_REF_FALLBACK,
     LAUNCHER_SRC,
     PREFIX_BIN,
     PROOT_DIR,
@@ -174,6 +176,34 @@ def stream_cmd(cmd: str, log, timeout: int = 900) -> int:
 def is_installed() -> bool:
     """True when the proot container rootfs exists."""
     return os.path.isdir(os.path.join(PROOT_DIR, "rootfs"))
+
+
+def pull_image(log, timeout: int = 1800) -> bool:
+    """Install the container, trying IMAGE_REF then IMAGE_REF_FALLBACK.
+
+    GHCR first: it has no pull-rate limit for a public package, and most
+    installs happen over mobile data behind carrier-grade NAT, where
+    Docker Hub's anonymous limit is shared with every other subscriber on
+    the same IP, not just this tool's own pulls. Docker Hub stays as the
+    fallback for the ISPs where ghcr.io's Fastly-backed CDN routes badly —
+    a real, reported failure mode, just not the one to default to.
+    """
+    for attempt, ref in enumerate((IMAGE_REF, IMAGE_REF_FALLBACK)):
+        if attempt > 0:
+            log(f"[yellow]{IMAGE_REF} did not work — trying {ref} instead.[/yellow]")
+            # A failed install can leave a partial container behind, which
+            # would fail the retry with "already exists" rather than
+            # actually retrying it against the fallback registry.
+            run_cmd(f"proot-distro remove {CONTAINER_NAME}", timeout=60)
+        log(f"Pulling {ref}...")
+        rc = stream_cmd(
+            f"proot-distro install {ref} --name {CONTAINER_NAME}", log, timeout=timeout
+        )
+        if rc == 0 and is_installed():
+            return True
+
+    log("[red]Could not pull the image from either registry.[/red]")
+    return False
 
 
 def get_version() -> str:
