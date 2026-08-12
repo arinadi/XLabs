@@ -35,7 +35,7 @@ jobs:
         run: |
           bash -n install.sh
           bash -n uninstall.sh
-          bash -n alabs
+          bash -n xlabs
 
       - name: Headless TUI tests
         run: python tests/run_tests.py

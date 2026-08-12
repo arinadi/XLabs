@@ -1,4 +1,4 @@
-"""arinanoLabs TUI.
+"""XLabs TUI.
 
 Textual app. Every menu entry runs its work in a thread worker and streams
 output into a log pane, so the UI stays responsive while apt or proot-distro
@@ -41,7 +41,7 @@ from .system import get_version, human_size, is_installed, pull_image, stream_cm
 # A copy is always mirrored to a file, so the text survives even when no
 # clipboard is reachable — the usual reason to copy this is to paste it
 # somewhere else for help.
-EXPORT_NAME = "arinanolabs-last-output.txt"
+EXPORT_NAME = "xlabs-last-output.txt"
 
 
 def _to_clipboard(app, text: str) -> str | None:
@@ -222,7 +222,7 @@ class ActionScreen(CopyableScreen):
         self._log = self.query_one("#log", RichLog)
         self.query_one("#copy", Button).tooltip = "Copy this log"
         if self._offer_restart:
-            self.query_one("#restart", Button).tooltip = "Relaunch alabs on the new code"
+            self.query_one("#restart", Button).tooltip = "Relaunch xlabs on the new code"
         self.run_task()
 
     def copy_payload(self) -> str:
@@ -269,7 +269,7 @@ class ActionScreen(CopyableScreen):
             return
         # Narrowed rather than assumed: this screen is generic and only this
         # app knows how to relaunch itself.
-        if isinstance(self.app, ArinanoLabsApp):
+        if isinstance(self.app, XLabsApp):
             self.app.request_restart()
 
     @on(Button.Pressed, "#back")
@@ -378,7 +378,7 @@ class MainScreen(Screen):
 
     # Short labels keep three to a row; the full meaning lives in the tooltip.
     TOOLTIPS = {
-        "update": "Pull the latest arinanoLabs",
+        "update": "Pull the latest XLabs",
         "tools": "Search and install packages in the container",
         "settings": "Per-device preferences, saved to .env",
         "doctor": "Diagnose and repair the environment",
@@ -600,7 +600,7 @@ class SettingsScreen(CopyableScreen):
     def copy_payload(self) -> str:
         return "\n".join(
             [
-                f"arinanoLabs settings - {get_version()}",
+                f"XLabs settings - {get_version()}",
                 "",
                 f"Mirror:  {packages.current_mirror() or 'unknown'}",
                 f"Audio:   {audio.load_method().name}",
@@ -690,7 +690,7 @@ class BackupScreen(CopyableScreen):
             self._note(f"Selected: {b.name} ({backup.human_size(b.size_bytes)})")
 
     def copy_payload(self) -> str:
-        lines = [f"arinanoLabs backups - {get_version()}", ""]
+        lines = [f"XLabs backups - {get_version()}", ""]
         lines += [
             f"{b.created.strftime('%Y-%m-%d %H:%M')}  {backup.human_size(b.size_bytes):>8}  {b.name}"
             for b in self._backups
@@ -799,7 +799,7 @@ class DoctorScreen(CopyableScreen):
         self.query_one("#copy", Button).tooltip = "Copy this report"
 
     def copy_payload(self) -> str:
-        lines = [f"arinanoLabs doctor — {get_version()}", self._info, ""]
+        lines = [f"XLabs doctor — {get_version()}", self._info, ""]
         for issue in self._issues:
             if issue.ok:
                 mark = "ok "
@@ -946,7 +946,7 @@ class DupesScreen(CopyableScreen):
         button.label = f"Remove ({len(dupes)})" if dupes else "Remove"
 
     def copy_payload(self) -> str:
-        lines = [f"arinanoLabs Termux duplicates — {get_version()}", ""]
+        lines = [f"XLabs Termux duplicates — {get_version()}", ""]
         if not self._dupes:
             lines.append("(none)")
         lines += [f"{d.package:<14} -> container has {d.binary}" for d in self._dupes]
@@ -1115,7 +1115,7 @@ class ToolsScreen(CopyableScreen):
         )
 
     def copy_payload(self) -> str:
-        lines = [f"arinanoLabs package search — {get_version()}", ""]
+        lines = [f"XLabs package search — {get_version()}", ""]
         lines.append(self.status_text)
         lines.append("")
         if not self._results:
@@ -1267,7 +1267,7 @@ class MirrorScreen(CopyableScreen):
         )
 
     def copy_payload(self) -> str:
-        lines = [f"arinanoLabs mirrors - {get_version()}", ""]
+        lines = [f"XLabs mirrors - {get_version()}", ""]
         lines.append(f"current: {packages.current_mirror()}")
         lines.append("")
         for name, where, uri in self._mirrors:
@@ -1379,7 +1379,7 @@ class ReposScreen(CopyableScreen):
             self._note(f"Selected: {repo.name} ({state})")
 
     def copy_payload(self) -> str:
-        lines = [f"arinanoLabs repositories - {get_version()}", ""]
+        lines = [f"XLabs repositories - {get_version()}", ""]
         lines += [
             f"{'on ' if packages.repo_enabled(r) else '   '} {r.name:<12} {r.description}"
             for r in self._repos
@@ -1520,9 +1520,9 @@ class AddRepoScreen(Screen):
         self.app.pop_screen()
 
 
-class ArinanoLabsApp(App):
+class XLabsApp(App):
     CSS_PATH = "app.tcss"
-    TITLE = "arinanoLabs"
+    TITLE = "XLabs"
 
     def __init__(self) -> None:
         super().__init__()
@@ -1544,7 +1544,7 @@ class ArinanoLabsApp(App):
 
 
 def main() -> None:
-    app = ArinanoLabsApp()
+    app = XLabsApp()
     app.run()
 
     if not app.restart_requested:
@@ -1556,7 +1556,7 @@ def main() -> None:
         os.execv(sys.executable, [sys.executable, "-m", "installer.app"])
     except OSError as e:
         print(f"Could not restart automatically ({e}).")
-        print("Run alabs again to pick up the update.")
+        print("Run xlabs again to pick up the update.")
 
 
 if __name__ == "__main__":

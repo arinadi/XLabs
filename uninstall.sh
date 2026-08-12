@@ -1,17 +1,17 @@
 #!/data/data/com.termux/files/usr/bin/bash
 set -euo pipefail
 
-# uninstall.sh — Clean uninstall of arinanoLabs
+# uninstall.sh — Clean uninstall of XLabs
 # Removes: proot container, generated scripts, configs
 
 echo "╔═══════════════════════════════════╗"
-echo "║  🗑️  arinanoLabs Uninstaller      ║"
+echo "║  🗑️  XLabs Uninstaller      ║"
 echo "╠═══════════════════════════════════╣"
 echo ""
 echo "This will remove:"
-echo "  • proot container (arinanolabs)"
-echo "  • ~/bin/alabs launcher"
-echo "  • ~/arinanoLabs (git repo)"
+echo "  • proot container (xlabs)"
+echo "  • ~/bin/xlabs launcher"
+echo "  • ~/XLabs (git repo)"
 echo ""
 echo "This will NOT remove:"
 echo "  • ~/storage/ (Android storage)"
@@ -38,7 +38,7 @@ if [ -f "$REPO_DIR/installer/start.py" ] && command -v python3 >/dev/null 2>&1; 
         || echo "  [-] stop reported a problem, continuing"
 else
     echo "  [-] repo or python3 missing, falling back to a scoped kill"
-    pkill -f "proot.*arinanolabs" 2>/dev/null && echo "  [x] container stopped" || true
+    pkill -f "proot.*xlabs" 2>/dev/null && echo "  [x] container stopped" || true
     pkill -f "termux-x11" 2>/dev/null && echo "  [x] X11 stopped" || true
     pulseaudio --kill 2>/dev/null && echo "  [x] PulseAudio stopped" || true
     termux-wake-unlock 2>/dev/null || true
@@ -48,21 +48,21 @@ sleep 1
 # 2. Remove proot container
 echo ""
 echo ">>> Removing proot container..."
-if proot-distro list 2>/dev/null | grep -q "arinanolabs"; then
-    proot-distro remove arinanolabs 2>&1 && echo "  [x] arinanolabs removed" || echo "  [-] Failed to remove"
+if proot-distro list 2>/dev/null | grep -q "xlabs"; then
+    proot-distro remove xlabs 2>&1 && echo "  [x] xlabs removed" || echo "  [-] Failed to remove"
 fi
 
-# 3. Remove alabs launcher
+# 3. Remove xlabs launcher
 echo ""
-echo ">>> Removing alabs launcher..."
-rm -f ~/bin/alabs
-echo "  [x] ~/bin/alabs removed"
+echo ">>> Removing xlabs launcher..."
+rm -f ~/bin/xlabs
+echo "  [x] ~/bin/xlabs removed"
 
 # 4. Remove git repo
 echo ""
-echo ">>> Removing ~/arinanoLabs..."
-rm -rf ~/arinanoLabs
-echo "  [x] ~/arinanoLabs removed"
+echo ">>> Removing ~/XLabs..."
+rm -rf ~/XLabs
+echo "  [x] ~/XLabs removed"
 
 # 6. Clean Termux tmp
 echo ""
@@ -75,7 +75,7 @@ echo "  [x] Temp files cleaned"
 
 echo ""
 echo "╔═══════════════════════════════════╗"
-echo "║  ✅ arinanoLabs uninstalled       ║"
+echo "║  ✅ XLabs uninstalled       ║"
 echo "╠═══════════════════════════════════╣"
 echo "║                                   ║"
 echo "║  To reinstall:                    ║"

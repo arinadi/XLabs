@@ -40,8 +40,8 @@ METHOD_KEY = "AUDIO_METHOD"
 
 PULSE_SOCKET = f"{TMPDIR}/pulse-socket"
 CLIENT_CONF = "/etc/pulse/client.conf"
-TEST_TONE_NAME = "arinanolabs-test-tone.wav"
-PROBE_SCRIPT_NAME = "arinanolabs-audio.sh"
+TEST_TONE_NAME = "xlabs-test-tone.wav"
+PROBE_SCRIPT_NAME = "xlabs-audio.sh"
 
 
 class Method(NamedTuple):
@@ -107,7 +107,7 @@ def sinks() -> list[str]:
 
 def client_conf_body(method: Method) -> str:
     shm = "yes" if method.shm else "no"
-    return f"""# arinanoLabs — PulseAudio client settings for proot.
+    return f"""# XLabs — PulseAudio client settings for proot.
 # Written by the audio test for method "{method.name}".
 #
 # autospawn is off because there is no daemon in the container and none

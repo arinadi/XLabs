@@ -1,7 +1,7 @@
 FROM debian:13
 
 # ═══════════════════════════════════════════════════════════════
-#  arinanoLabs — vanilla baseline
+#  XLabs — vanilla baseline
 #
 #  Phase 1: match the established Termux + proot + XFCE recipe as
 #  closely as possible, and nothing else. The previous image carried a

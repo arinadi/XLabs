@@ -16,7 +16,7 @@ from .const import REPO_DIR
 
 CONFIG_PATH = os.path.join(REPO_DIR, ".env")
 
-HEADER = """# arinanoLabs — per-device settings.
+HEADER = """# XLabs — per-device settings.
 #
 # Written by the app and safe to edit by hand. Not tracked by git: these
 # values describe this device and would be wrong on another.

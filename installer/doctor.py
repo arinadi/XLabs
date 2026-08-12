@@ -119,10 +119,10 @@ def _fix_storage(log: Log) -> bool:
     if not is_installed():
         log("  no container to clean up")
         return False
-    if not write_container_script("arinanolabs-clean.sh", CLEAN_SCRIPT):
+    if not write_container_script("xlabs-clean.sh", CLEAN_SCRIPT):
         log("  could not write the cleanup script")
         return False
-    rc = stream_cmd(container_command("arinanolabs-clean.sh"), log, timeout=300)
+    rc = stream_cmd(container_command("xlabs-clean.sh"), log, timeout=300)
     return rc == 0
 
 
@@ -185,7 +185,7 @@ def diagnose() -> list[Issue]:
     )
 
     # Launcher on PATH.
-    found = shutil.which("alabs")
+    found = shutil.which("xlabs")
     if found:
         target = os.path.realpath(found)
         correct = target == os.path.realpath(LAUNCHER_SRC)
@@ -199,7 +199,7 @@ def diagnose() -> list[Issue]:
         )
     else:
         issues.append(
-            Issue("Launcher", False, "alabs is not on PATH", _fix_launcher)
+            Issue("Launcher", False, "xlabs is not on PATH", _fix_launcher)
         )
 
     # Python libraries.
@@ -492,9 +492,9 @@ def _fix_timezone(log: Log) -> bool:
 # can still be changed in about:config.
 FIREFOX_BIN = "/usr/bin/firefox-esr"
 FIREFOX_PREFS_DIR = "/usr/lib/firefox-esr/browser/defaults/preferences"
-FIREFOX_PREFS_FILE = f"{FIREFOX_PREFS_DIR}/arinanolabs-video.js"
+FIREFOX_PREFS_FILE = f"{FIREFOX_PREFS_DIR}/xlabs-video.js"
 
-FIREFOX_PREFS = """// arinanoLabs — video defaults for proot on Android.
+FIREFOX_PREFS = """// XLabs — video defaults for proot on Android.
 //
 // YouTube serves VP9 or AV1 by default. Neither can be hardware decoded in
 // this stack: there is no VA-API through proot, so both are decoded on the
@@ -674,7 +674,7 @@ def _fix_electron_sandbox(log: Log) -> bool:
 # when it is confusing.
 #
 # Only these are ever offered for removal, and only after the container is
-# confirmed to provide the tool. Everything arinanoLabs itself runs on —
+# confirmed to provide the tool. Everything XLabs itself runs on —
 # python, git, proot-distro, termux-x11-nightly, pulseaudio, the graphics
 # packages — is absent from this list on purpose and must stay that way.
 TERMUX_DUPLICATES = {
@@ -716,11 +716,11 @@ def _container_provides(binaries: set[str]) -> set[str]:
     script = "#!/bin/bash\n" + "".join(
         f'command -v {b} >/dev/null 2>&1 && echo {b}\n' for b in sorted(binaries)
     )
-    if not write_container_script("arinanolabs-which.sh", script):
+    if not write_container_script("xlabs-which.sh", script):
         return set()
 
     rc, out = run_cmd(
-        container_command("arinanolabs-which.sh"),
+        container_command("xlabs-which.sh"),
         timeout=120,
     )
     if rc != 0:

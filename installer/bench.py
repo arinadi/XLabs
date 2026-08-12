@@ -91,7 +91,7 @@ PRESETS = (
     ),
 )
 
-BENCH_SCRIPT_NAME = "arinanolabs-bench.sh"
+BENCH_SCRIPT_NAME = "xlabs-bench.sh"
 
 
 def preset_by_name(name: str) -> Preset | None:
@@ -175,11 +175,11 @@ def install_glmark2(log: Log) -> bool:
         "apt-get update\n"
         "apt-get install -y glmark2\n"
     )
-    if not write_container_script("arinanolabs-glmark2.sh", script):
+    if not write_container_script("xlabs-glmark2.sh", script):
         log("[red]Could not write the install script.[/red]")
         return False
     rc = stream_cmd(
-        container_command("arinanolabs-glmark2.sh"),
+        container_command("xlabs-glmark2.sh"),
         log,
         timeout=1800,
     )

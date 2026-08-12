@@ -1,1 +1,1 @@
-"""arinanoLabs installer package."""
+"""XLabs installer package."""

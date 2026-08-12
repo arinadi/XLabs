@@ -361,7 +361,7 @@ fi
 echo "session exited with status $?"
 """
 
-SESSION_SCRIPT_NAME = "arinanolabs-session.sh"
+SESSION_SCRIPT_NAME = "xlabs-session.sh"
 
 
 def start_xfce4(log=_noop) -> bool:
@@ -444,11 +444,11 @@ export XDG_RUNTIME_DIR=/tmp/runtime-probe
 mkdir -p $XDG_RUNTIME_DIR
 chmod 0700 $XDG_RUNTIME_DIR
 timeout 8 dbus-launch --exit-with-session xfce4-session
-' >/tmp/arinanolabs-session.out 2>&1
+' >/tmp/xlabs-session.out 2>&1
 # Capture the session's own status, not sed's: piping straight into head
 # reported the pipeline's exit code and always said 0.
 status=$?
-head -25 /tmp/arinanolabs-session.out | sed 's/^/  /'
+head -25 /tmp/xlabs-session.out | sed 's/^/  /'
 echo "--- exit: $status (124 = still alive when the 8s timeout fired) ---"
 """
 
@@ -461,11 +461,11 @@ def _run_container_probe() -> tuple[int, str]:
     without sharing the X socket at all and duly reported "unable to open
     display" — indistinguishable from the failure it exists to explain.
     """
-    if not write_container_script("arinanolabs-probe.sh", CONTAINER_PROBE):
+    if not write_container_script("xlabs-probe.sh", CONTAINER_PROBE):
         return 1, "could not write the probe script"
 
     return run_cmd(
-        container_command("arinanolabs-probe.sh"),
+        container_command("xlabs-probe.sh"),
         timeout=120,
     )
 

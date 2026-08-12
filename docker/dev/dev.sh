@@ -1,13 +1,13 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # ═══════════════════════════════════════════════════════════════
-# arinanoLabs Dev — Docker development wrapper
+# XLabs Dev — Docker development wrapper
 #  Usage: dev.sh [setup|start|shell|stop|status]
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
 PROOT_DISTRO="debian"
 ADMIN="admin"
-PROJECT_DIR="/data/data/com.termux/files/home/arinanoLabs"
+PROJECT_DIR="/data/data/com.termux/files/home/XLabs"
 
 # ── Helpers ──────────────────────────────────────────────────
 proot_exec() {
@@ -21,11 +21,11 @@ proot_exec_root() {
 # ── Commands ─────────────────────────────────────────────────
 cmd_setup() {
     echo ">>> [1/4] Copying project into proot..."
-    proot_exec_root "mkdir -p /home/$ADMIN/arinanolabs"
-    proot_exec_root "rsync -a --exclude='.git' --exclude='node_modules' $PROJECT_DIR/ /home/$ADMIN/arinanolabs/"
+    proot_exec_root "mkdir -p /home/$ADMIN/xlabs"
+    proot_exec_root "rsync -a --exclude='.git' --exclude='node_modules' $PROJECT_DIR/ /home/$ADMIN/xlabs/"
 
     echo ">>> [2/4] Setting permissions..."
-    proot_exec_root "chown -R $ADMIN:$ADMIN /home/$ADMIN/arinanolabs"
+    proot_exec_root "chown -R $ADMIN:$ADMIN /home/$ADMIN/xlabs"
 
     echo ">>> [3/4] Installing locale..."
     proot_exec_root "sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && locale-gen" 2>/dev/null || true

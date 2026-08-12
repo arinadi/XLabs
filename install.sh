@@ -1,7 +1,7 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════
-#  arinanoLabs — bootstrap entry point
-#  Usage: curl -sL https://raw.githubusercontent.com/arinadi/arinanoLabs/main/install.sh | bash
+#  XLabs — bootstrap entry point
+#  Usage: curl -sL https://raw.githubusercontent.com/arinadi/XLabs/main/install.sh | bash
 #
 #  Gets git and Python onto the machine and the repo onto disk, then
 #  hands over to install.py for the actual install. Keep this file
@@ -9,8 +9,8 @@
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
-REPO_URL="https://github.com/arinadi/arinanoLabs.git"
-REPO_DIR="$HOME/arinanoLabs"
+REPO_URL="https://github.com/arinadi/XLabs.git"
+REPO_DIR="$HOME/XLabs"
 
 CYAN='\033[0;36m'; GREEN='\033[0;32m'; RED='\033[0;31m'; NC='\033[0m'
 info() { echo -e "${CYAN}>>>${NC} $1"; }
@@ -75,7 +75,7 @@ sync_repo() {
 main() {
     echo
     echo -e "${CYAN}===========================================${NC}"
-    echo -e "${CYAN}  arinanoLabs Bootstrap${NC}"
+    echo -e "${CYAN}  XLabs Bootstrap${NC}"
     echo -e "${CYAN}===========================================${NC}"
     echo
     ensure_git

@@ -1,4 +1,4 @@
-name: Build arinanoLabs Image
+name: Build XLabs Image
 
 on:
   push:
@@ -51,11 +51,11 @@ jobs:
         run: |
           {
             echo "tags<<EOF"
-            echo "ghcr.io/${{ github.repository_owner }}/arinanolabs:latest"
-            echo "ghcr.io/${{ github.repository_owner }}/arinanolabs:${{ steps.tag.outputs.tag }}"
+            echo "ghcr.io/${{ github.repository_owner }}/xlabs:latest"
+            echo "ghcr.io/${{ github.repository_owner }}/xlabs:${{ steps.tag.outputs.tag }}"
             if [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
-              echo "${{ github.repository_owner }}/arinanolabs:latest"
-              echo "${{ github.repository_owner }}/arinanolabs:${{ steps.tag.outputs.tag }}"
+              echo "${{ github.repository_owner }}/xlabs:latest"
+              echo "${{ github.repository_owner }}/xlabs:${{ steps.tag.outputs.tag }}"
             fi
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
@@ -73,5 +73,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh api --method PATCH \
-            repos/${{ github.repository_owner }}/arinanoLabs/packages/container/arinanolabs \
+            repos/${{ github.repository_owner }}/XLabs/packages/container/xlabs \
             -f visibility=public || echo "Package may already be public"

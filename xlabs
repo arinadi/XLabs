@@ -1,6 +1,6 @@
 #!/bin/bash
-# arinanoLabs TUI launcher.
-# readlink -f resolves $PREFIX/bin/alabs back to the repo, so this works from
+# XLabs TUI launcher.
+# readlink -f resolves $PREFIX/bin/xlabs back to the repo, so this works from
 # anywhere and keeps working after a git pull.
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 
@@ -11,7 +11,7 @@ if command -v python3 >/dev/null 2>&1; then
 elif command -v python >/dev/null 2>&1; then
     PYTHON=python
 else
-    echo "alabs: no Python interpreter found. Re-run install.sh." >&2
+    echo "xlabs: no Python interpreter found. Re-run install.sh." >&2
     exit 1
 fi
 

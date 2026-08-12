@@ -1,20 +1,20 @@
 <div align="center">
-  <h1>📱 arinanoLabs</h1>
+  <h1>📱 XLabs</h1>
   <p><strong>Your phone is a Linux workstation — ~30s to a working desktop, not 30 minutes of apt.</strong></p>
   <p>A full Debian 13 + XFCE desktop inside Termux, no root — installed and
   driven from a touch-friendly TUI, not a wall of shell scripts.</p>
   <p>
-    <a href="https://github.com/arinadi/arinanoLabs/actions"><img src="https://img.shields.io/github/actions/workflow/status/arinadi/arinanoLabs/build-image.yml?label=build"></a>
-    <a href="https://github.com/arinadi/arinanoLabs/blob/main/LICENSE"><img src="https://img.shields.io/github/license/arinadi/arinanoLabs"></a>
-    <a href="https://github.com/arinadi/arinanoLabs/commits/main"><img src="https://img.shields.io/github/last-commit/arinadi/arinanoLabs"></a>
-    <a href="https://github.com/arinadi/arinanoLabs/stargazers"><img src="https://img.shields.io/github/stars/arinadi/arinanoLabs"></a>
+    <a href="https://github.com/arinadi/XLabs/actions"><img src="https://img.shields.io/github/actions/workflow/status/arinadi/XLabs/build-image.yml?label=build"></a>
+    <a href="https://github.com/arinadi/XLabs/blob/main/LICENSE"><img src="https://img.shields.io/github/license/arinadi/XLabs"></a>
+    <a href="https://github.com/arinadi/XLabs/commits/main"><img src="https://img.shields.io/github/last-commit/arinadi/XLabs"></a>
+    <a href="https://github.com/arinadi/XLabs/stargazers"><img src="https://img.shields.io/github/stars/arinadi/XLabs"></a>
   </p>
 
   ```bash
-  curl -sL https://raw.githubusercontent.com/arinadi/arinanoLabs/main/install.sh | bash
+  curl -sL https://raw.githubusercontent.com/arinadi/XLabs/main/install.sh | bash
   ```
 
-  <img src="docs/arinanox-screenshot.jpg" alt="arinanoLabs desktop" width="360" style="border-radius:12px;">
+  <img src="docs/arinanox-screenshot.jpg" alt="XLabs desktop" width="360" style="border-radius:12px;">
   <p>
     Debian 13 &nbsp;·&nbsp; Xfce4 &nbsp;·&nbsp; Firefox ESR &nbsp;·&nbsp; Dev tools<br>
     <small>TermuX → X11 → LinuX → Trixie → Xfce4</small>
@@ -25,9 +25,9 @@
 
 ## ⚡ Why
 
-Your Android phone is a pocket PC with 8GB+ RAM and an ARM64 CPU — it deserves a real desktop. If you've already fought your way through a manual proot install, you know where the pain is. arinanoLabs fixes it declaratively:
+Your Android phone is a pocket PC with 8GB+ RAM and an ARM64 CPU — it deserves a real desktop. If you've already fought your way through a manual proot install, you know where the pain is. XLabs fixes it declaratively:
 
-| Problem | arinanoLabs Solution |
+| Problem | XLabs Solution |
 |---------|----------------------|
 | Chrome sleeps tabs | Firefox ESR desktop browser — stays alive |
 | No glibc apps | Debian 13 proot — standard glibc |
@@ -39,10 +39,9 @@ Your Android phone is a pocket PC with 8GB+ RAM and an ARM64 CPU — it deserves
 
 ---
 
-## 🌱 Where this came from
+## 🌱 Design
 
-arinanoLabs started as a fork of [DroidDesk](https://github.com/orailnoor/DroidDesk)
-and has since diverged completely. The install path is a from-scratch Python
+The install path is a from-scratch Python
 [Textual](https://github.com/Textualize/textual) TUI instead of shell scripts —
 idempotent, resumable, with [more than 30 automated tests](tests/run_tests.py)
 run on every push. The system image is declarative: a `Dockerfile`, built and
@@ -53,7 +52,7 @@ under proot, per-device GPU and audio method selection — rather than leaving
 you to re-run an install script and hope.
 
 DroidDesk covers more ground: a choice of desktop environment, Adreno-specific
-GPU paths, monitor/VNC bridging. arinanoLabs deliberately narrows to one path —
+GPU paths, monitor/VNC bridging. XLabs deliberately narrows to one path —
 Debian 13 and XFCE4 — and puts the effort into that path working reliably
 instead. Both are GPLv3; credit and thanks to DroidDesk for the idea and the
 starting point.
@@ -65,16 +64,16 @@ starting point.
 ### Install (one-time)
 
 ```bash
-curl -sL https://raw.githubusercontent.com/arinadi/arinanoLabs/main/install.sh | bash
+curl -sL https://raw.githubusercontent.com/arinadi/XLabs/main/install.sh | bash
 ```
 
 `install.sh` is deliberately thin — it gets git, Python, and this repo onto the
-machine, then hands over to `~/arinanoLabs/install.py`, which does the rest:
+machine, then hands over to `~/XLabs/install.py`, which does the rest:
 Python libraries, Termux packages (proot-distro, Termux:X11, PulseAudio,
-graphics), the Debian container, and the `alabs` launcher.
+graphics), the Debian container, and the `xlabs` launcher.
 
 The launcher is symlinked into `$PREFIX/bin`, which is Termux's entire default
-PATH — so `alabs` works immediately, in the session that ran the installer, with
+PATH — so `xlabs` works immediately, in the session that ran the installer, with
 no shell startup file touched. Off Termux it falls back to `~/bin` and adds that
 to PATH in both `.bashrc` and `.profile`.
 
@@ -91,7 +90,7 @@ Then open a new terminal session:
 ### Daily Use
 
 ```bash
-alabs                  # Launch the TUI
+xlabs                  # Launch the TUI
 ```
 
 The menu is sized for a thumb:
@@ -111,7 +110,7 @@ reference below in [The TUI, screen by screen](#-the-tui-screen-by-screen).
 ## 🏗️ How It Works
 
 Two layers. The **core** is declarative — defined by `image/Dockerfile`, built in
-CI, published to `ghcr.io/arinadi/arinanolabs`. The **user layer** is whatever
+CI, published to `ghcr.io/arinadi/xlabs`. The **user layer** is whatever
 you install inside the running container; it survives across desktop restarts,
 but a Reset wipes it.
 
@@ -221,7 +220,7 @@ character cells, not pixels. At Termux's default font size a 3-row button
 comfortably clears the 44-48dp minimum most mobile guidelines recommend; below
 roughly **10sp** it starts getting tight. If buttons feel small enough to
 mistap, that is what to raise — pinch-to-zoom in the terminal, or Termux's
-Style menu — not something arinanoLabs can fix from the Python side.
+Style menu — not something XLabs can fix from the Python side.
 
 ### Start Desktop
 
@@ -271,7 +270,7 @@ printing "Stopped" regardless.
 
 `git pull --ff-only`, falling back to a hard reset on `origin/main` when the
 fast-forward is refused. When it finishes, a **Restart** button relaunches
-`alabs` on the code that was just pulled — pulling into a running process
+`xlabs` on the code that was just pulled — pulling into a running process
 otherwise does nothing, since the old modules are already loaded.
 
 ### Tools
@@ -331,7 +330,7 @@ the signature simply would not match. Every field is validated before
 anything is written: the name cannot collide with a built-in repo or one
 already added, and none of the fields may contain a newline, which could
 otherwise smuggle a second directive into the stanza. Repos added by an
-earlier session, or by hand under the `arinanolabs-` naming convention, show
+earlier session, or by hand under the `xlabs-` naming convention, show
 up in the list too.
 
 Search terms and package names are validated against the Debian package-name
@@ -457,7 +456,7 @@ to reading it.
 
 **Dupes** lists tools present on both sides and can uninstall the Termux
 copies, treating the container as primary. Only packages the container is
-confirmed to provide are offered, nothing arinanoLabs itself needs is ever a
+confirmed to provide are offered, nothing XLabs itself needs is ever a
 candidate, and it is deliberately not part of **Fix** — removing packages from
 your Termux is a decision, not a repair.
 
@@ -500,7 +499,7 @@ store (`rootfs/.l2s`) that a raw copy of the underlying files would not
 reproduce — `tar` running inside a proot login sees the same logical
 filesystem any other program in the container does.
 
-A backup is a timestamped `.tar.gz` under `~/arinanoLabs-backups` on Termux's
+A backup is a timestamped `.tar.gz` under `~/XLabs-backups` on Termux's
 own storage — outside the container, so a **Reset** cannot take it down too.
 **Restore** replaces `/home/admin` with the archive's contents; the home it
 replaces is kept as `/home/admin.bak` inside the container rather than
@@ -597,10 +596,10 @@ The container ships Mesa userspace (`libgl1-mesa-dri`, `libglx-mesa0`,
 ## 📂 Structure
 
 ```
-arinanoLabs/
+XLabs/
 ├── install.sh          ← Bootstrap: git, Python, repo checkout
 ├── install.py          ← Full installer
-├── alabs               ← TUI launcher
+├── xlabs               ← TUI launcher
 ├── installer/          ← TUI package
 │   ├── app.py          ←   Textual app: screens, runners
 │   ├── app.tcss        ←   Styling
@@ -634,7 +633,7 @@ to `/tmp`: the container's `/tmp` *is* the Termux temp directory.
 `Doctor → Dupes` lists tools installed on both sides and can uninstall the
 Termux copies, on the assumption that the container is where you work. It only
 offers packages the container is confirmed to provide, and it will not touch
-anything arinanoLabs itself needs — Python, git, proot-distro, Termux:X11,
+anything XLabs itself needs — Python, git, proot-distro, Termux:X11,
 PulseAudio or the graphics packages are not candidates.
 
 ---

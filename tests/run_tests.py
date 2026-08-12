@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Headless tests for the arinanoLabs TUI and helpers.
+"""Headless tests for the XLabs TUI and helpers.
 
 Plain script rather than pytest so CI needs no test dependency beyond what
 the app already requires. Run from the repo root:
@@ -32,7 +32,7 @@ from installer import audio, backup, doctor, packages, system
 from installer.app import (
     ActionScreen,
     AddRepoScreen,
-    ArinanoLabsApp,
+    XLabsApp,
     BackupScreen,
     ConfirmScreen,
     DoctorScreen,
@@ -97,7 +97,7 @@ def test_stream_cmd_shows_carriage_return_progress() -> None:
         "    time.sleep(0.05)",
         "sys.stdout.write(chr(10) + 'Done' + chr(10))",
     ])
-    script = os.path.join(tempfile.gettempdir(), "arinanolabs-progress-probe.py")
+    script = os.path.join(tempfile.gettempdir(), "xlabs-progress-probe.py")
     with open(script, "w", encoding="utf-8") as f:
         f.write(probe)
 
@@ -156,7 +156,7 @@ def test_pull_image_falls_back_to_docker_hub() -> None:
         lines: list[str] = []
         check(system.pull_image(lines.append), "reported failure when the primary pull worked")
         # Exactly one attempt — the fallback ref is a substring of the
-        # primary one ("arinadi/arinanolabs" inside "ghcr.io/arinadi/..."),
+        # primary one ("arinadi/xlabs" inside "ghcr.io/arinadi/..."),
         # so a call count is the only unambiguous way to prove no retry.
         check(len(calls) == 1, f"fell back when the primary pull already worked: {calls}")
 
@@ -261,7 +261,7 @@ def test_firefox_prefs_are_defaults_not_locks() -> None:
         check(lines, "the repair explained nothing")
 
 
-def test_config_roundtrip(tmp_key: str = "ARINANOLABS_TEST_KEY") -> None:
+def test_config_roundtrip(tmp_key: str = "XLABS_TEST_KEY") -> None:
     """The .env holds per-device settings, so writing one key must not lose
     the others."""
     from installer import config
@@ -271,14 +271,14 @@ def test_config_roundtrip(tmp_key: str = "ARINANOLABS_TEST_KEY") -> None:
         check(config.set_value(tmp_key, "one"), "could not write the config")
         check(config.get(tmp_key) == "one", "value did not round-trip")
 
-        check(config.set_value("ARINANOLABS_TEST_OTHER", "two"), "second write failed")
+        check(config.set_value("XLABS_TEST_OTHER", "two"), "second write failed")
         check(config.get(tmp_key) == "one", "writing one key dropped another")
 
         # Comments and blank lines must not become keys.
         check("#" not in "".join(config.load()), "a comment was parsed as a key")
     finally:
         config.unset(tmp_key)
-        config.unset("ARINANOLABS_TEST_OTHER")
+        config.unset("XLABS_TEST_OTHER")
 
     check(config.get(tmp_key) is None, "unset left the key behind")
     for key, value in original.items():
@@ -716,7 +716,7 @@ async def test_backup_screen() -> None:
     original_dir = backup.BACKUP_DIR
     backup.BACKUP_DIR = fake_dir
     try:
-        app = ArinanoLabsApp()
+        app = XLabsApp()
         async with app.run_test(size=(80, 40)) as pilot:
             await pilot.pause()
             await pilot.click("#backup")
@@ -772,7 +772,7 @@ async def test_settings_screen() -> None:
     keys = (audio.METHOD_KEY, bench.PROFILE_KEY, bench.SCORE_KEY, start.DRAW_PATH_KEY)
     original = {k: config.get(k) for k in keys}
 
-    app = ArinanoLabsApp()
+    app = XLabsApp()
     try:
         async with app.run_test(size=(80, 40)) as pilot:
             await pilot.pause()
@@ -873,7 +873,7 @@ def test_audio_test_tone_is_valid() -> None:
     """The tone is generated rather than shipped, so it must be a real WAV."""
     import wave
 
-    path = os.path.join(tempfile.gettempdir(), "arinanolabs-tone-probe.wav")
+    path = os.path.join(tempfile.gettempdir(), "xlabs-tone-probe.wav")
     check(audio.write_test_tone(path, seconds=0.2), "the tone was not written")
     with wave.open(path) as handle:
         check(handle.getnchannels() == 1, "expected mono")
@@ -889,7 +889,7 @@ def test_doctor_reports_audio() -> None:
 
 
 async def test_tui_navigation() -> None:
-    app = ArinanoLabsApp()
+    app = XLabsApp()
     async with app.run_test(size=(80, 40)) as pilot:
         await pilot.pause()
         check(isinstance(app.screen, MainScreen), f"got {app.screen!r}")
@@ -928,7 +928,7 @@ async def test_tui_navigation() -> None:
 
 
 async def test_destructive_actions_are_gated() -> None:
-    app = ArinanoLabsApp()
+    app = XLabsApp()
     async with app.run_test(size=(80, 40)) as pilot:
         await pilot.pause()
 
@@ -960,7 +960,7 @@ async def test_escape_cannot_leave_running_action() -> None:
     original = app_module.run_clean_cache
     app_module.run_clean_cache = blocking
 
-    app = ArinanoLabsApp()
+    app = XLabsApp()
     try:
         async with app.run_test(size=(80, 40)) as pilot:
             await pilot.pause()
@@ -1009,7 +1009,7 @@ async def test_escape_cannot_leave_running_action() -> None:
 
 async def test_copy_buttons_export_output() -> None:
     """The diagnostic screen must be able to hand its text back out."""
-    app = ArinanoLabsApp()
+    app = XLabsApp()
     async with app.run_test(size=(80, 40)) as pilot:
         await pilot.pause()
 
@@ -1021,7 +1021,7 @@ async def test_copy_buttons_export_output() -> None:
         screen.query_one("#copy", Button)
         payload = screen.copy_payload()
         check(payload.strip(), "Doctor produced an empty copy payload")
-        check("arinanoLabs" in payload, f"Doctor payload has no header: {payload[:40]!r}")
+        check("XLabs" in payload, f"Doctor payload has no header: {payload[:40]!r}")
 
         await pilot.click("#copy")
         await pilot.pause()
@@ -1042,7 +1042,7 @@ async def test_narrow_terminal_layout() -> None:
     surfaced as an OutOfBounds click at 80 columns — a real phone is narrower.
     """
     for width in (40, 45, 60):
-        app = ArinanoLabsApp()
+        app = XLabsApp()
         async with app.run_test(size=(width, 30)) as pilot:
             await pilot.pause()
 
@@ -1112,7 +1112,7 @@ async def test_update_offers_restart() -> None:
     original = app_module.run_update
     app_module.run_update = blocking
 
-    app = ArinanoLabsApp()
+    app = XLabsApp()
     try:
         async with app.run_test(size=(60, 30)) as pilot:
             await pilot.pause()
@@ -1260,7 +1260,7 @@ def test_validate_custom_repo() -> None:
     ).stanza
     check("URIs: https://apt.syncthing.net/" in stanza, "URI missing from the built stanza")
     check(
-        "Signed-By: /etc/apt/keyrings/arinanolabs-syncthing.asc" in stanza,
+        "Signed-By: /etc/apt/keyrings/xlabs-syncthing.asc" in stanza,
         "the stanza does not point at the fetched key",
     )
 
@@ -1275,7 +1275,7 @@ async def test_add_repo_screen() -> None:
     delay was added, so this is not papering over a real bug.
     """
     for width, height in ((80, 40), (45, 30), (40, 24)):
-        app = ArinanoLabsApp()
+        app = XLabsApp()
         async with app.run_test(size=(width, height)) as pilot:
             await pilot.pause()
             await pilot.click("#tools")
@@ -1332,7 +1332,7 @@ async def test_add_repo_screen() -> None:
 
 
 async def test_tools_screen_searches() -> None:
-    app = ArinanoLabsApp()
+    app = XLabsApp()
     async with app.run_test(size=(80, 40)) as pilot:
         await pilot.pause()
         await pilot.click("#tools")
@@ -1373,7 +1373,7 @@ async def test_row_selection_shows_before_confirm() -> None:
     both have real data without a container, so highlighting a row there
     must update the status line before any button is pressed, not only
     inside the confirm dialog that follows it."""
-    app = ArinanoLabsApp()
+    app = XLabsApp()
     async with app.run_test(size=(80, 40)) as pilot:
         await pilot.pause()
         await pilot.click("#tools")
@@ -1460,7 +1460,7 @@ def test_termux_duplicates_are_safe() -> None:
 
 
 def test_export_never_creates_a_repo_directory() -> None:
-    """Copying must not conjure ~/arinanoLabs on a machine without a checkout."""
+    """Copying must not conjure ~/XLabs on a machine without a checkout."""
     if os.path.isdir(app_module.REPO_DIR):
         return  # nothing to prove on a real checkout
     app_module._write_export("probe")

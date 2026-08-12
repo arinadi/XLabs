@@ -1,6 +1,6 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════
-#  arinanoLabs TUI Test Script (Podman)
+#  XLabs TUI Test Script (Podman)
 #
 #  Purpose: Test TUI locally on PC using Podman
 #  Usage: bash test-tui.sh
@@ -21,7 +21,7 @@
 # ═══════════════════════════════════════════════════════════════
 set -e
 
-IMAGE="arinanolabs-dev"
+IMAGE="xlabs-dev"
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # On Windows (Git Bash / MSYS), convert to Windows path for Podman
@@ -31,7 +31,7 @@ fi
 
 echo ""
 echo "═══════════════════════════════════════════"
-echo "  arinanoLabs TUI Test (Podman)"
+echo "  XLabs TUI Test (Podman)"
 echo "═══════════════════════════════════════════"
 echo ""
 
@@ -53,14 +53,14 @@ podman build -t "$IMAGE" -f docker/dev/Dockerfile docker/dev
 
 echo ""
 echo ">>> Running TUI test..."
-echo "    (Project mounted at /data/data/com.termux/files/home/arinanoLabs)"
+echo "    (Project mounted at /data/data/com.termux/files/home/XLabs)"
 echo "    Press Ctrl+C to exit"
 echo ""
 
 podman run -it --rm \
-    -v "${PROJECT_DIR}:/data/data/com.termux/files/home/arinanoLabs" \
+    -v "${PROJECT_DIR}:/data/data/com.termux/files/home/XLabs" \
     "$IMAGE" bash -c "
-        cd /data/data/com.termux/files/home/arinanoLabs
+        cd /data/data/com.termux/files/home/XLabs
         pip install rich requests --quiet --break-system-packages 2>/dev/null || \
         pip install rich requests --quiet --user 2>/dev/null || true
         python install.py

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""arinanoLabs installer.
+"""XLabs installer.
 
 install.sh gets git, Python, and this repo onto the machine; everything else
 happens here — Python libraries, Termux packages, the Debian container, and
-the alabs launcher.
+the xlabs launcher.
 
 Runs unattended: it reports problems and keeps going rather than prompting,
 because the usual entry point is `curl ... | bash`, where stdin is not a
@@ -39,7 +39,7 @@ except ImportError:
     sys.exit(
         "install.py must be run from inside the repository.\n"
         "Use the bootstrapper instead:\n"
-        "  curl -sL https://raw.githubusercontent.com/arinadi/arinanoLabs/main/install.sh | bash"
+        "  curl -sL https://raw.githubusercontent.com/arinadi/XLabs/main/install.sh | bash"
     )
 
 CYAN, GREEN, YELLOW, RED, DIM, NC = (
@@ -267,7 +267,7 @@ def install_launcher() -> None:
     ok(f"{where} -> {LAUNCHER_SRC}")
 
     # $PREFIX/bin is already on PATH; only the ~/bin fallback needs a shell
-    # startup entry, and then alabs is available in the next session.
+    # startup entry, and then xlabs is available in the next session.
     if where.startswith(HOME_BIN):
         touched = ensure_home_bin_on_path()
         if touched:
@@ -281,7 +281,7 @@ def install_launcher() -> None:
 def main() -> int:
     print()
     print(f"{CYAN}===========================================")
-    print("  arinanoLabs Installer")
+    print("  XLabs Installer")
     print(f"==========================================={NC}")
     print()
 
@@ -304,7 +304,7 @@ def main() -> int:
     print(f"{GREEN}Installation complete.{NC}")
     _print_manual()
     print()
-    print("  Open a new terminal session, then run:  alabs")
+    print("  Open a new terminal session, then run:  xlabs")
     print()
     return 0
 

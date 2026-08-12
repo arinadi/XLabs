@@ -88,7 +88,7 @@ def create_backup(log: Log) -> bool:
     if not is_installed():
         log("[red]No container to back up.[/red]")
         return False
-    if not write_container_script("arinanolabs-backup.sh", BACKUP_SCRIPT):
+    if not write_container_script("xlabs-backup.sh", BACKUP_SCRIPT):
         log("[red]Could not write the backup script.[/red]")
         return False
 
@@ -103,7 +103,7 @@ def create_backup(log: Log) -> bool:
 
     log(f"Archiving {HOME_IN_CONTAINER}...")
     rc = stream_cmd(
-        f"{container_command('arinanolabs-backup.sh')} /tmp/{name}", log, timeout=1800
+        f"{container_command('xlabs-backup.sh')} /tmp/{name}", log, timeout=1800
     )
     if rc != 0:
         log("[red]tar failed — see the output above.[/red]")
@@ -128,7 +128,7 @@ def restore_backup(backup: Backup, log: Log) -> bool:
     if not is_installed():
         log("[red]No container to restore into.[/red]")
         return False
-    if not write_container_script("arinanolabs-restore.sh", RESTORE_SCRIPT):
+    if not write_container_script("xlabs-restore.sh", RESTORE_SCRIPT):
         log("[red]Could not write the restore script.[/red]")
         return False
 
@@ -142,7 +142,7 @@ def restore_backup(backup: Backup, log: Log) -> bool:
 
     log(f"Restoring {backup.name} into {HOME_IN_CONTAINER}...")
     rc = stream_cmd(
-        f"{container_command('arinanolabs-restore.sh')} /tmp/{backup.name}", log, timeout=1800
+        f"{container_command('xlabs-restore.sh')} /tmp/{backup.name}", log, timeout=1800
     )
     with contextlib.suppress(OSError):
         os.remove(host_tmp)

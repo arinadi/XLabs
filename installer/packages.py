@@ -34,19 +34,19 @@ SEARCH_LIMIT = 60
 SEARCH_SCRIPT = f"""#!/bin/bash
 # $1 = search term. Output: <mark>|<name>|<description>
 apt-cache search --names-only "$1" 2>/dev/null | head -{SEARCH_LIMIT} \\
-    > /tmp/arinanolabs-search.out
+    > /tmp/xlabs-search.out
 dpkg-query -W -f='${{Package}}\\n' 2>/dev/null | sort -u \\
-    > /tmp/arinanolabs-installed.out
+    > /tmp/xlabs-installed.out
 
 while IFS= read -r line; do
     name="${{line%% - *}}"
     desc="${{line#* - }}"
-    if grep -qxF "$name" /tmp/arinanolabs-installed.out; then
+    if grep -qxF "$name" /tmp/xlabs-installed.out; then
         printf 'I|%s|%s\\n' "$name" "$desc"
     else
         printf ' |%s|%s\\n' "$name" "$desc"
     fi
-done < /tmp/arinanolabs-search.out
+done < /tmp/xlabs-search.out
 """
 
 UPDATE_SCRIPT = """#!/bin/bash
@@ -93,11 +93,11 @@ def lists_present() -> bool:
 
 def update_lists(log: Log) -> bool:
     """Fetch the package lists. Slow, so it streams."""
-    if not write_container_script("arinanolabs-update.sh", UPDATE_SCRIPT):
+    if not write_container_script("xlabs-update.sh", UPDATE_SCRIPT):
         log("Could not write the update script.")
         return False
     log("Fetching package lists (the image ships without them)...")
-    rc = stream_cmd(container_command("arinanolabs-update.sh"), log, timeout=900)
+    rc = stream_cmd(container_command("xlabs-update.sh"), log, timeout=900)
     log(f"apt-get update exit {rc}")
     return rc == 0
 
@@ -120,10 +120,10 @@ def search(term: str, log: Log = _noop) -> tuple[list[Package], str | None]:
     if not lists_present() and not update_lists(log):
         return [], "Could not fetch the package lists — see the output below."
 
-    if not write_container_script("arinanolabs-search.sh", SEARCH_SCRIPT):
+    if not write_container_script("xlabs-search.sh", SEARCH_SCRIPT):
         return [], "Could not write the search script."
 
-    command = f"{container_command('arinanolabs-search.sh')} {term}"
+    command = f"{container_command('xlabs-search.sh')} {term}"
     log(f"$ {command}")
     rc, out = run_cmd(command, timeout=120)
     log(f"exit {rc}, {len(out.splitlines())} line(s)")
@@ -158,14 +158,14 @@ def install(names: list[str], log: Log) -> bool:
         log("Nothing selected.")
         return True
 
-    if not write_container_script("arinanolabs-install.sh", INSTALL_SCRIPT):
+    if not write_container_script("xlabs-install.sh", INSTALL_SCRIPT):
         log("[red]Could not write the install script.[/red]")
         return False
 
     log(f"Installing into the container: {', '.join(names)}")
     log("")
     rc = stream_cmd(
-        f"{container_command('arinanolabs-install.sh')} {' '.join(names)}",
+        f"{container_command('xlabs-install.sh')} {' '.join(names)}",
         log,
         timeout=1800,
     )
@@ -575,11 +575,11 @@ class Repo(NamedTuple):
 
 
 def _repo_file(repo: Repo) -> str:
-    return f"/etc/apt/sources.list.d/arinanolabs-{repo.name}.sources"
+    return f"/etc/apt/sources.list.d/xlabs-{repo.name}.sources"
 
 
 def _key_file(repo: Repo) -> str:
-    return f"{KEYRING_DIR}/arinanolabs-{repo.name}.asc"
+    return f"{KEYRING_DIR}/xlabs-{repo.name}.asc"
 
 
 REPOS = (
@@ -599,7 +599,7 @@ REPOS = (
         "URIs: https://packages.mozilla.org/apt\n"
         "Suites: mozilla\n"
         "Components: main\n"
-        f"Signed-By: {KEYRING_DIR}/arinanolabs-mozilla.asc\n",
+        f"Signed-By: {KEYRING_DIR}/xlabs-mozilla.asc\n",
         "https://packages.mozilla.org/apt/repo-signing-key.gpg",
     ),
     Repo(
@@ -609,7 +609,7 @@ REPOS = (
         "URIs: https://packages.microsoft.com/repos/code\n"
         "Suites: stable\n"
         "Components: main\n"
-        f"Signed-By: {KEYRING_DIR}/arinanolabs-vscode.asc\n",
+        f"Signed-By: {KEYRING_DIR}/xlabs-vscode.asc\n",
         "https://packages.microsoft.com/keys/microsoft.asc",
     ),
 )
@@ -631,7 +631,7 @@ def repo_enabled(repo: Repo) -> bool:
 SAFE_URI = re.compile(r"^https?://[^\s]+$")
 SAFE_WORDS = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9.+~_-]*(\s[a-zA-Z0-9][a-zA-Z0-9.+~_-]*)*$")
 
-CUSTOM_PREFIX = "arinanolabs-"
+CUSTOM_PREFIX = "xlabs-"
 CUSTOM_SUFFIX = ".sources"
 
 
@@ -687,7 +687,7 @@ def build_custom_repo(name: str, uri: str, suites: str, components: str, key_url
 
 
 def discovered_custom_names() -> list[str]:
-    """Names of arinanolabs-managed repos in the container beyond REPOS.
+    """Names of xlabs-managed repos in the container beyond REPOS.
 
     Covers a repo added by an earlier run of this feature, or added by hand
     following the same naming convention.

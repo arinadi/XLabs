@@ -223,7 +223,7 @@ def get_version() -> str:
 
 
 def link_launcher() -> tuple[bool, str]:
-    """Put `alabs` on PATH. Returns (ok, message).
+    """Put `xlabs` on PATH. Returns (ok, message).
 
     Prefers $PREFIX/bin because that is Termux's entire default PATH — no
     shell startup file has to be edited, and the command works immediately in
@@ -241,7 +241,7 @@ def link_launcher() -> tuple[bool, str]:
             continue
         try:
             os.makedirs(directory, exist_ok=True)
-            link = os.path.join(directory, "alabs")
+            link = os.path.join(directory, "xlabs")
             if os.path.islink(link) or os.path.exists(link):
                 os.remove(link)
             try:
@@ -274,7 +274,7 @@ def ensure_home_bin_on_path() -> list[str]:
             continue
         try:
             with open(rc, "a") as f:
-                f.write('\n# arinanoLabs\nexport PATH="$HOME/bin:$PATH"\n')
+                f.write('\n# XLabs\nexport PATH="$HOME/bin:$PATH"\n')
             touched.append(rc)
         except OSError:
             continue

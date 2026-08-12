@@ -1,16 +1,16 @@
 services:
-  arinanolabs-dev:
+  xlabs-dev:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: arinanolabs-dev
-    hostname: arinanolabs-dev
+    container_name: xlabs-dev
+    hostname: xlabs-dev
     stdin_open: true
     tty: true
 
     volumes:
       # Live project mount
-      - ../../:/data/data/com.termux/files/home/arinanoLabs
+      - ../../:/data/data/com.termux/files/home/XLabs
       # Persist proot container data
       - proot-root:/data/data/com.termux/files/usr/var/lib/proot-distro
       # WSLg X11 socket
