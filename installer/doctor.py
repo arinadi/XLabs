@@ -20,7 +20,6 @@ from .const import (
     LAUNCHER_SRC,
     PREFIX_BIN,
     REPO_DIR,
-    SWAP_FILE,
     TMPDIR,
 )
 from .preflight import X11_APK_URL, check_storage, check_x11_app
@@ -377,20 +376,6 @@ def diagnose() -> list[Issue]:
         )
     )
 
-    # Swap. No `fix` — see the module docstring by SWAP_RAM_CEILING_MB for
-    # why this is never something Fix All runs unattended. Reported only
-    # once RAM is actually tight and nothing is already swapping.
-    ram_mb, has_swap = swap_status()
-    if ram_mb is not None and ram_mb < SWAP_RAM_CEILING_MB and not has_swap:
-        issues.append(
-            Issue(
-                "Swap",
-                False,
-                f"{ram_mb} MB RAM, no swap active — XFCE plus an Electron "
-                "app or two can exceed this; enable it from the Swap screen",
-            )
-        )
-
     return issues
 
 
@@ -488,117 +473,6 @@ def _fix_timezone(log: Log) -> bool:
         return False
 
     log(f"  container timezone set to {android_tz}")
-    return True
-
-
-# ── Swap ───────────────────────────────────────────────────
-
-# XFCE plus an Electron app or two comfortably exceeds 4-6 GB of RAM, and
-# Android does not guarantee zram. A swap file is the standard fix, but
-# creating one writes real storage, costs some flash wear, and needs the
-# device's kernel to allow an unprivileged swapon — not universal, and one
-# device out there reportedly could not undo an accidental one. None of that
-# belongs in an unattended Fix All, so this Issue never carries a `fix`; the
-# actual create_swap()/remove_swap() calls only ever run from a dedicated,
-# confirmed action in the UI.
-SWAP_RAM_CEILING_MB = 6144
-SWAP_SIZE_MB = 2048
-
-
-def _ram_total_mb() -> int | None:
-    try:
-        with open("/proc/meminfo", encoding="utf-8") as f:
-            for line in f:
-                if line.startswith("MemTotal:"):
-                    return int(line.split()[1]) // 1024
-    except (OSError, ValueError, IndexError):
-        return None
-    return None
-
-
-def _swap_active() -> bool:
-    try:
-        with open("/proc/swaps", encoding="utf-8") as f:
-            lines = f.read().splitlines()
-    except OSError:
-        return False
-    return len(lines) > 1
-
-
-def swap_status() -> tuple[int | None, bool]:
-    """(total RAM in MB, whether swap is already active)."""
-    return _ram_total_mb(), _swap_active()
-
-
-def _ensure_swap_tools(log: Log) -> bool:
-    """mkswap/swapon come from util-linux, which is not part of Termux's
-    default bootstrap — a fresh install genuinely does not have them yet,
-    which is exactly what "mkswap not found" from a real device turned out
-    to mean, not a broken PATH."""
-    if shutil.which("mkswap") and shutil.which("swapon"):
-        return True
-    log("  mkswap/swapon not found — installing util-linux")
-    if stream_cmd("pkg install -y util-linux", log, timeout=300) != 0:
-        log("  could not install util-linux")
-        return False
-    if not (shutil.which("mkswap") and shutil.which("swapon")):
-        log("  util-linux installed but mkswap/swapon are still missing")
-        return False
-    return True
-
-
-def create_swap(log: Log) -> bool:
-    """Create (if needed) and enable SWAP_FILE. Only call this after the
-    user has explicitly confirmed — see the module docstring above."""
-    if not _ensure_swap_tools(log):
-        return False
-
-    if os.path.exists(SWAP_FILE):
-        log(f"  {SWAP_FILE} already exists")
-    else:
-        free_gb = shutil.disk_usage(os.path.dirname(SWAP_FILE) or os.sep).free / (1024**3)
-        if free_gb * 1024 < SWAP_SIZE_MB * 2:
-            log(f"  only {free_gb:.1f} GB free — not enough headroom for a "
-                f"{SWAP_SIZE_MB} MB swap file")
-            return False
-        log(f"  creating {SWAP_FILE} ({SWAP_SIZE_MB} MB)")
-        rc, out = run_cmd(
-            f'fallocate -l {SWAP_SIZE_MB}M "{SWAP_FILE}" 2>/dev/null || '
-            f'dd if=/dev/zero of="{SWAP_FILE}" bs=1M count={SWAP_SIZE_MB}',
-            timeout=180,
-        )
-        if rc != 0 or not os.path.exists(SWAP_FILE):
-            log(f"  could not allocate the file: {out.strip()}")
-            return False
-        os.chmod(SWAP_FILE, 0o600)
-
-    rc, out = run_cmd(f'mkswap "{SWAP_FILE}"', timeout=60)
-    if rc != 0:
-        log(f"  mkswap failed: {out.strip()}")
-        return False
-
-    rc, out = run_cmd(f'swapon "{SWAP_FILE}"', timeout=30)
-    if rc != 0:
-        log(f"  swapon failed — this device's kernel may not allow it "
-            f"without root: {out.strip()}")
-        return False
-
-    log(f"  swap active: {SWAP_FILE}")
-    return True
-
-
-def remove_swap(log: Log) -> bool:
-    """Undo create_swap(): turn swap off and delete the file."""
-    rc, out = run_cmd(f'swapoff "{SWAP_FILE}"', timeout=30)
-    if rc != 0 and os.path.exists(SWAP_FILE):
-        log(f"  swapoff reported: {out.strip()}")
-    if os.path.exists(SWAP_FILE):
-        try:
-            os.remove(SWAP_FILE)
-        except OSError as e:
-            log(f"  could not delete {SWAP_FILE}: {e}")
-            return False
-    log("  swap disabled and file removed")
     return True
 
 

@@ -40,7 +40,6 @@ from installer.app import (
     MirrorScreen,
     ReposScreen,
     StatusScreen,
-    SwapScreen,
     ToolsScreen,
 )
 from installer.preflight import run_all_checks
@@ -514,82 +513,6 @@ def test_storage_check_and_cleanup_guard() -> None:
         check(storage.fix is expected_fix, "Storage repair offered without a container to clean")
 
 
-def test_swap_never_auto_fixable() -> None:
-    """Enabling swap writes multiple GB and turns on kernel swap for the
-    rest of the session — it must never be something Fix All can trigger
-    unattended, so a Swap Issue must never carry a `fix`."""
-    ram_mb, active = doctor.swap_status()
-    check(ram_mb is None or isinstance(ram_mb, int), f"unexpected RAM reading: {ram_mb!r}")
-    check(isinstance(active, bool), f"unexpected swap-active reading: {active!r}")
-
-    for issue in doctor.diagnose():
-        if issue.name == "Swap":
-            check(issue.fix is None, "Swap must never carry an automatic fix")
-
-
-def test_swap_ensures_tools_before_mkswap() -> None:
-    """Regression, reported from a device: mkswap/swapon come from
-    util-linux, which is not part of Termux's default bootstrap, so a
-    fresh install genuinely lacks them — create_swap() used to call
-    mkswap directly and fail with "not found" instead of installing it
-    first."""
-    original_which = doctor.shutil.which
-    original_stream_cmd = doctor.stream_cmd
-    calls: list[str] = []
-    state = {"installed": False}
-
-    def fake_which(name: str):
-        if name not in ("mkswap", "swapon"):
-            return original_which(name)
-        return f"/usr/bin/{name}" if state["installed"] else None
-
-    def fake_stream_cmd(cmd: str, log, timeout: int = 60) -> int:
-        calls.append(cmd)
-        return 0
-
-    try:
-        # Already present: no install attempted.
-        state["installed"] = True
-        doctor.shutil.which = fake_which
-        doctor.stream_cmd = fake_stream_cmd
-        check(doctor._ensure_swap_tools(lambda m: None), "reported missing when present")
-        check(not calls, "installed util-linux when the tools were already there")
-
-        # Missing, then appear once "installed" — the install must run and
-        # the tools must be re-checked afterward rather than assumed.
-        state["installed"] = False
-
-        def install_then_appear(cmd: str, log, timeout: int = 60) -> int:
-            calls.append(cmd)
-            state["installed"] = True
-            return 0
-
-        doctor.stream_cmd = install_then_appear
-        lines: list[str] = []
-        check(doctor._ensure_swap_tools(lines.append), "did not recover after installing")
-        check(any("util-linux" in c for c in calls), "did not install util-linux")
-
-        # Missing, and the install itself fails: must not claim success.
-        state["installed"] = False
-        calls.clear()
-        doctor.stream_cmd = fake_stream_cmd  # returns 0 but never flips "installed"
-
-        def failing_stream_cmd(cmd: str, log, timeout: int = 60) -> int:
-            calls.append(cmd)
-            return 1
-
-        doctor.stream_cmd = failing_stream_cmd
-        lines2: list[str] = []
-        check(
-            not doctor._ensure_swap_tools(lines2.append),
-            "claimed success when installing util-linux failed",
-        )
-        check(lines2, "the failure was not explained")
-    finally:
-        doctor.shutil.which = original_which
-        doctor.stream_cmd = original_stream_cmd
-
-
 def test_bench_presets_are_coherent() -> None:
     """Every preset must be runnable and its result storable."""
     from installer import bench
@@ -818,16 +741,6 @@ async def test_narrow_terminal_layout() -> None:
                     await pilot.click("#back")
                     await pilot.pause()
                     check(isinstance(app.screen, DoctorScreen), "dupes did not return")
-
-                    # Raises OutOfBounds if Swap is not on screen — this is
-                    # the fourth button on that row, added after the fifth-
-                    # button regression above, so it needs the same guard.
-                    await pilot.click("#swap")
-                    await pilot.pause()
-                    check(isinstance(app.screen, SwapScreen), f"got {app.screen!r}")
-                    await pilot.click("#back")
-                    await pilot.pause()
-                    check(isinstance(app.screen, DoctorScreen), "swap did not return")
 
                 await pilot.click("#back")
                 await pilot.pause()
@@ -1239,8 +1152,6 @@ def main() -> int:
         test_resolv_conf_check_and_fix,
         test_timezone_check_and_fix,
         test_storage_check_and_cleanup_guard,
-        test_swap_never_auto_fixable,
-        test_swap_ensures_tools_before_mkswap,
         test_bench_presets_are_coherent,
         test_audio_test_tone_is_valid,
         test_doctor_reports_audio,

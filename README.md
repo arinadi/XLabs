@@ -318,7 +318,7 @@ Querying installed Android apps is unreliable from Termux, and reporting
 Repository checkout, launcher target, Textual, proot-distro, PulseAudio,
 Termux:X11, the GPU renderer, the X11 app, the container, storage, DNS,
 timezone, audio, the security archive, Electron apps' sandbox, Firefox's
-video defaults, swap, and stale X11 sockets.
+video defaults, and stale X11 sockets.
 
 **GPU renderer** is `virglrenderer-android`. Without it the desktop runs on
 llvmpipe — everything is drawn on the CPU.
@@ -358,15 +358,6 @@ are defaults rather than locks: `about:config` still wins.
 
 VirGL does not solve this. It accelerates OpenGL, and the cost of a video is in
 decoding it.
-
-**Swap** is reported, never auto-applied. XFCE plus an Electron app or two
-comfortably outgrows 4-6 GB of RAM, and Android does not guarantee zram — but
-creating a swap file writes real storage, costs some flash wear, needs the
-device's kernel to allow an unprivileged `swapon` at all, and at least one
-device out there has reportedly gotten one stuck. None of that belongs in an
-unattended Fix All, so this is the one Doctor check that never carries a
-repair — only a dedicated **Swap** screen, gated behind a confirmation, with
-its own Disable to undo it.
 
 **Audio** works the same way as Bench, because no single method works
 everywhere. Three have failed here already: TCP where the module loaded but
