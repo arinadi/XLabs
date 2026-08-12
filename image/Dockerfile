@@ -15,7 +15,15 @@ FROM debian:13
 #     packages with recommends enabled. Depends alone gave a container
 #     where xfce4-session started and never launched xfwm4 or
 #     xfdesktop, and a missing runtime recommendation fits that
-#     symptom. Size is a phase 2 concern.
+#     symptom. Recommends stay on; specific packages are excluded below
+#     instead, per docs/image-optimization.md — proot has no cgroups,
+#     no namespaces and no real hardware, so systemd, disk/session
+#     daemons (udisks2, upower, accountsservice), color management
+#     (colord, xiccd) and network discovery (avahi-daemon) can never
+#     do anything here. gvfs and a second audio server (pulseaudio or
+#     pipewire-pulse, pulled by xfce4-pulseaudio-plugin) are excluded
+#     too — the latter would otherwise fight the client-only PulseAudio
+#     setup this image is built around (see installer/const.py).
 #
 #  2. No baked-in user configuration. The panel layout, xsettings,
 #     onboard autostart and battery monitor are gone; XFCE creates its
@@ -59,7 +67,8 @@ RUN apt-get update && \
         xfwm4 xfce4-session xfce4-settings xfconf \
         xorg- xserver-xorg- xserver-xorg-core- \
         xserver-xorg-video-all- xserver-xorg-input-all- \
-        xserver-xorg-legacy- initramfs-tools- && \
+        xserver-xorg-legacy- initramfs-tools- \
+        systemd-sysv- systemd-timesyncd- upower- colord- xiccd- && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # xfce4's own Recommends (not its Depends — those are the session itself,
@@ -85,7 +94,10 @@ RUN apt-get update && \
         xorg- xserver-xorg- xserver-xorg-core- \
         xserver-xorg-video-all- xserver-xorg-input-all- \
         xserver-xorg-legacy- initramfs-tools- \
-        desktop-base- thunar-volman- && \
+        desktop-base- thunar-volman- \
+        systemd-sysv- systemd-timesyncd- upower- colord- xiccd- \
+        udisks2- gvfs- gvfs-daemons- avahi-daemon- \
+        pulseaudio- pipewire-pulse- accountsservice- && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ── X11 client tools, GL userspace, audio client ───────────────
