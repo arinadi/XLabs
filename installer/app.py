@@ -437,7 +437,7 @@ class MainScreen(Screen):
     # Short labels keep three to a row; the full meaning lives in the tooltip.
     TOOLTIPS = {
         "update": "Pull the latest XLabs",
-        "tools": "Search and install packages in the container",
+        "store": "Search and install packages in the container",
         "settings": "Per-device preferences, saved to .env",
         "doctor": "Diagnose and repair the environment",
         "backup": "Back up or restore your home directory",
@@ -462,7 +462,7 @@ class MainScreen(Screen):
                 yield Button("Stop Desktop", id="stop", variant="warning")
             with Grid(classes="row3"):
                 yield Button("Update", id="update")
-                yield Button("Tools", id="tools")
+                yield Button("Store", id="store")
                 yield Button("Settings", id="settings")
             with Grid(classes="row2"):
                 yield Button("Doctor", id="doctor")
@@ -496,9 +496,9 @@ class MainScreen(Screen):
     def _update(self) -> None:
         self.app.push_screen(ActionScreen("Update", run_update, offer_restart=True))
 
-    @on(Button.Pressed, "#tools")
-    def _tools(self) -> None:
-        self.app.push_screen(ToolsScreen())
+    @on(Button.Pressed, "#store")
+    def _store(self) -> None:
+        self.app.push_screen(StoreScreen())
 
     @on(Button.Pressed, "#settings")
     def _settings(self) -> None:
@@ -545,7 +545,7 @@ class SettingsScreen(CopyableScreen):
     Each value is owned by whatever module actually uses it — audio.py,
     bench.py, start.py, packages.py — this screen only reads and writes
     them through those modules' own functions. Mirror is shown but not
-    edited here: Tools -> Mirror already measures candidates and picking
+    edited here: Store -> Mirror already measures candidates and picking
     one there saves it the same way, so a second editable copy here would
     just be two places that could disagree.
     """
@@ -580,7 +580,7 @@ class SettingsScreen(CopyableScreen):
                 "for a change to take effect.",
                 id="settings-note",
             )
-            yield Label("Debian mirror (change from Tools → Mirror)")
+            yield Label("Debian mirror (change from Store → Mirror)")
             yield Static("", id="settings-mirror")
             yield Label("Audio method")
             yield Select(
@@ -1065,7 +1065,7 @@ class DupesScreen(CopyableScreen):
         self.app.pop_screen()
 
 
-class ToolsScreen(CopyableScreen):
+class StoreScreen(CopyableScreen):
     """Search the container's package lists and install from them."""
 
     BINDINGS = [("escape", "back", "Back")]
@@ -1078,13 +1078,13 @@ class ToolsScreen(CopyableScreen):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield Label("Extra Tools", classes="screen-title")
+        yield Label("Store", classes="screen-title")
         yield Input(placeholder="Search packages, e.g. neovim", id="query")
-        yield Static("", id="tools-status")
-        yield ScrollableTable(id="tools-table", cursor_type="row", zebra_stripes=True)
+        yield Static("", id="store-status")
+        yield ScrollableTable(id="store-table", cursor_type="row", zebra_stripes=True)
         # The command and its raw output. A search that finds nothing and one
         # that failed look identical without this.
-        yield RichLog(id="tools-log", markup=True, wrap=True, auto_scroll=True)
+        yield RichLog(id="store-log", markup=True, wrap=True, auto_scroll=True)
         with Grid(classes="row3"):
             yield Button("Mirror", id="mirror")
             yield Button("Repos", id="repos")
@@ -1096,7 +1096,7 @@ class ToolsScreen(CopyableScreen):
         yield Footer()
 
     def on_mount(self) -> None:
-        self.query_one("#tools-table", DataTable).add_columns("", "Package", "Description")
+        self.query_one("#store-table", DataTable).add_columns("", "Package", "Description")
         self.query_one("#copy", Button).tooltip = "Copy these results"
         self.query_one("#install", Button).tooltip = "Install the highlighted package"
         self.query_one("#installed", Button).tooltip = "List everything installed"
@@ -1106,7 +1106,7 @@ class ToolsScreen(CopyableScreen):
 
     def _status(self, message: str) -> None:
         self.status_text = message
-        self.query_one("#tools-status", Static).update(message)
+        self.query_one("#store-status", Static).update(message)
 
     @on(Input.Submitted, "#query")
     def _submitted(self, event: Input.Submitted) -> None:
@@ -1135,7 +1135,7 @@ class ToolsScreen(CopyableScreen):
 
     @work(thread=True)
     def run_search(self, term: str) -> None:
-        pane = self.query_one("#tools-log", RichLog)
+        pane = self.query_one("#store-log", RichLog)
         self.app.call_from_thread(pane.clear)
 
         def log(message: str) -> None:
@@ -1148,7 +1148,7 @@ class ToolsScreen(CopyableScreen):
         self, results: list[packages.Package], error: str | None, kind: str = "search"
     ) -> None:
         self._results = results
-        table = self.query_one("#tools-table", DataTable)
+        table = self.query_one("#store-table", DataTable)
         table.clear()
 
         for pkg in results:
@@ -1176,7 +1176,7 @@ class ToolsScreen(CopyableScreen):
             )
 
     def _selected(self) -> packages.Package | None:
-        table = self.query_one("#tools-table", DataTable)
+        table = self.query_one("#store-table", DataTable)
         if not self._results:
             return None
         row = table.cursor_row
@@ -1184,7 +1184,7 @@ class ToolsScreen(CopyableScreen):
             return None
         return self._results[row]
 
-    @on(DataTable.RowHighlighted, "#tools-table")
+    @on(DataTable.RowHighlighted, "#store-table")
     def _row_highlighted(self) -> None:
         # A table row is a thin touch target; naming the pick here — not
         # only inside the confirm dialog — catches a mistap before Install

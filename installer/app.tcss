@@ -93,13 +93,6 @@ Screen > .row3 {
     width: 7;
 }
 
-#tools-body {
-    height: 1fr;
-    margin: 1 2;
-    padding: 1;
-    border: round $primary;
-}
-
 /* The Back button on every sub-screen. */
 Screen > Button#back {
     width: 100%;
@@ -147,19 +140,19 @@ ConfirmScreen {
     margin: 0 1;
 }
 
-/* Extra Tools */
+/* Store */
 #query {
     margin: 1 2 0 2;
 }
 
-#tools-status,
+#store-status,
 #doctor-info {
     margin: 0 2;
     padding: 0 1;
     color: $text-muted;
 }
 
-#tools-table {
+#store-table {
     height: 1fr;
     margin: 1 2;
 }
@@ -172,8 +165,8 @@ ConfirmScreen {
     color: $success;
 }
 
-/* Raw command output on the Tools screen, so a failed search can be read. */
-#tools-log {
+/* Raw command output on the Store screen, so a failed search can be read. */
+#store-log {
     height: 8;
     margin: 0 2 1 2;
     padding: 0 1;

@@ -98,7 +98,7 @@ The menu is sized for a thumb:
 | | | |
 |---|---|---|
 | **Start Desktop** | **Stop Desktop** | |
-| Update | Tools | Settings |
+| Update | Store | Settings |
 | Doctor | Backup | |
 | Reset | Cache | |
 
@@ -151,12 +151,12 @@ stateDiagram-v2
 
     MainScreen --> ActionScreen: Start · Stop · Update
     MainScreen --> DoctorScreen: Doctor
-    MainScreen --> ToolsScreen: Tools
+    MainScreen --> StoreScreen: Store
     MainScreen --> BackupScreen: Backup
     MainScreen --> SettingsScreen: Settings
     MainScreen --> ConfirmScreen: Reset · Cache
 
-    ToolsScreen --> ConfirmScreen: Install
+    StoreScreen --> ConfirmScreen: Install
     DoctorScreen --> DupesScreen: Dupes
     DupesScreen --> ConfirmScreen: Remove
     BackupScreen --> ConfirmScreen: Backup now · Restore · Delete
@@ -166,7 +166,7 @@ stateDiagram-v2
 
     DoctorScreen --> ActionScreen: Fix · Diagnose
 
-    ToolsScreen --> MainScreen: Back
+    StoreScreen --> MainScreen: Back
     DoctorScreen --> MainScreen: Back
     DupesScreen --> DoctorScreen: Back
     BackupScreen --> MainScreen: Back
@@ -273,9 +273,9 @@ fast-forward is refused. When it finishes, a **Restart** button relaunches
 `xlabs` on the code that was just pulled — pulling into a running process
 otherwise does nothing, since the old modules are already loaded.
 
-### Tools
+### Store
 
-<!-- screenshot: tools search -->
+<!-- screenshot: store search -->
 
 A package browser for the container.
 
@@ -471,13 +471,13 @@ a value means.
 
 | Setting | What it changes |
 |---------|------------------|
-| Debian mirror | Shown, not edited — pick one from Tools → Mirror. Shown here so it does not need to be two places that could disagree. |
+| Debian mirror | Shown, not edited — pick one from Store → Mirror. Shown here so it does not need to be two places that could disagree. |
 | Audio method | Overrides what Doctor → Audio measured (`unix` / `unix-shm` / `tcp` / `tcp-shm`), for when auto-detection picked wrong or a method stops working after a Termux/Android update. |
 | GPU profile | Overrides what Doctor → Bench measured. Picking one manually clears the recorded benchmark score — a score from a *different* profile would misreport the override as measured. |
 | termux-x11 rendering | `-legacy-drawing` and `-force-bgra`, normally invisible to this app entirely. Some devices show a black screen (fixed by legacy drawing, which skips the modern Android hardware-buffer path) or swapped color channels (fixed by force-BGRA); neither is detectable from software, only by looking at the screen. |
 
 **Mirror** gets special treatment beyond just being shown: choosing one from
-Tools → Mirror now saves it, and it is automatically reapplied right after
+Store → Mirror now saves it, and it is automatically reapplied right after
 any fresh container install — Reset would otherwise silently revert to the
 default mirror and throw away a measured choice every time.
 
@@ -522,7 +522,7 @@ that spells out what is lost.
 
 ### Copying anything
 
-Every screen that produces output — logs, Doctor, Dupes, Tools, Backup, Settings — has a
+Every screen that produces output — logs, Doctor, Dupes, Store, Backup, Settings — has a
 **C** button and a `c` key. It tries the Android clipboard via
 `termux-clipboard-set`, then the terminal's own OSC 52, and **always mirrors
 the text to a file** as well, because the usual reason to copy a failure is to
@@ -538,7 +538,7 @@ relied on to have one.
 | `q` | Quit, from the menu |
 | `Escape` | Back — refused while an action is still running |
 | `c` | Copy the screen's output |
-| `Enter` | Run the search, in Tools |
+| `Enter` | Run the search, in Store |
 
 The layout holds down to a 36-column terminal, well under a typical Termux
 portrait width. A test drives every screen at 40, 45 and 60 columns.
@@ -578,7 +578,7 @@ The dev toolchain, Zsh, on-screen keyboard, theming and the pre-baked panel
 layout were removed to get back to a build of known-good shape. They are in git
 history and come back once the baseline is confirmed working.
 
-Anything else is a search away in [Tools](#tools).
+Anything else is a search away in [Store](#store).
 
 ---
 

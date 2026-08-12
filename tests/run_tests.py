@@ -40,7 +40,7 @@ from installer.app import (
     MirrorScreen,
     ReposScreen,
     SettingsScreen,
-    ToolsScreen,
+    StoreScreen,
     XLabsApp,
 )
 from installer.preflight import run_all_checks
@@ -894,9 +894,9 @@ async def test_tui_navigation() -> None:
         await pilot.pause()
         check(isinstance(app.screen, MainScreen), f"got {app.screen!r}")
 
-        await pilot.click("#tools")
+        await pilot.click("#store")
         await pilot.pause()
-        check(isinstance(app.screen, ToolsScreen), f"got {app.screen!r}")
+        check(isinstance(app.screen, StoreScreen), f"got {app.screen!r}")
         await pilot.click("#back")
         await pilot.pause()
 
@@ -1293,7 +1293,7 @@ async def test_add_repo_screen() -> None:
         app = XLabsApp()
         async with app.run_test(size=(width, height)) as pilot:
             await pilot.pause()
-            await pilot.click("#tools")
+            await pilot.click("#store")
             await pilot.pause()
             await pilot.click("#repos")
             await pilot.pause()
@@ -1343,16 +1343,16 @@ async def test_add_repo_screen() -> None:
             check(isinstance(app.screen, ReposScreen), "back from the form did not return")
             await pilot.click("#back")
             await pilot.pause()
-            check(isinstance(app.screen, ToolsScreen), "back from Repos did not return")
+            check(isinstance(app.screen, StoreScreen), "back from Repos did not return")
 
 
-async def test_tools_screen_searches() -> None:
+async def test_store_screen_searches() -> None:
     app = XLabsApp()
     async with app.run_test(size=(80, 40)) as pilot:
         await pilot.pause()
-        await pilot.click("#tools")
+        await pilot.click("#store")
         await pilot.pause()
-        check(isinstance(app.screen, ToolsScreen), f"got {app.screen!r}")
+        check(isinstance(app.screen, StoreScreen), f"got {app.screen!r}")
 
         check(
             app.screen.query_one("#install", Button).disabled,
@@ -1391,7 +1391,7 @@ async def test_row_selection_shows_before_confirm() -> None:
     app = XLabsApp()
     async with app.run_test(size=(80, 40)) as pilot:
         await pilot.pause()
-        await pilot.click("#tools")
+        await pilot.click("#store")
         await pilot.pause()
 
         await pilot.click("#repos")
@@ -1413,7 +1413,7 @@ async def test_row_selection_shows_before_confirm() -> None:
             )
         await pilot.click("#back")
         await pilot.pause()
-        check(isinstance(app.screen, ToolsScreen), "back from Repos did not return")
+        check(isinstance(app.screen, StoreScreen), "back from Repos did not return")
 
         await pilot.click("#mirror")
         await pilot.pause()
@@ -1535,7 +1535,7 @@ def main() -> int:
         test_search_notices_missing_package_lists,
         test_validate_custom_repo,
         test_add_repo_screen,
-        test_tools_screen_searches,
+        test_store_screen_searches,
         test_row_selection_shows_before_confirm,
         test_other_actions_do_not_offer_restart,
         test_export_never_creates_a_repo_directory,
