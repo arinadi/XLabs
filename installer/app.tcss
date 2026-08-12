@@ -152,7 +152,8 @@ ConfirmScreen {
     margin: 1 2 0 2;
 }
 
-#tools-status {
+#tools-status,
+#doctor-info {
     margin: 0 2;
     padding: 0 1;
     color: $text-muted;

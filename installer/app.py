@@ -33,7 +33,6 @@ from textual.widgets import (
 from . import audio, backup, bench, doctor, packages
 from . import start as desktop
 from .const import CACHE_DIR, CONTAINER_NAME, REPO_DIR
-from .preflight import run_all_checks
 from .system import get_version, human_size, is_installed, pull_image, stream_cmd
 
 # ── Copying output ─────────────────────────────────────────
@@ -284,72 +283,6 @@ class ActionScreen(CopyableScreen):
         self.app.pop_screen()
 
 
-# ── Status ─────────────────────────────────────────────────
-
-
-class StatusScreen(CopyableScreen):
-    BINDINGS = [("escape", "back", "Back")]
-
-    def compose(self) -> ComposeResult:
-        yield Header()
-        yield Label("Status", classes="screen-title")
-        yield DataTable(id="status-table", cursor_type="row", zebra_stripes=True)
-        with Horizontal(id="action-buttons"):
-            yield Button("C", id="copy")
-            yield Button("Back", id="back", variant="primary")
-        yield Footer()
-
-    def __init__(self) -> None:
-        super().__init__()
-        self._rows: list[tuple[str, str, str]] = []
-
-    def on_mount(self) -> None:
-        table = self.query_one("#status-table", DataTable)
-        table.add_columns("Check", "State", "Detail")
-        self.query_one("#copy", Button).tooltip = "Copy this report"
-        self.load_status()
-
-    def copy_payload(self) -> str:
-        marks = {"ok": "ok", "no": "--", "unknown": "??"}
-        lines = [f"arinanoLabs status — {get_version()}", ""]
-        lines += [
-            f"{marks.get(state, '  '):<3} {name:<14} {detail}"
-            for name, state, detail in self._rows
-        ]
-        return "\n".join(lines)
-
-    @work(thread=True)
-    def load_status(self) -> None:
-        rows = [
-            (
-                check.name,
-                "unknown" if check.unknown else ("ok" if check.ok else "no"),
-                check.message,
-            )
-            for check in run_all_checks()
-        ]
-        running = desktop.is_running()
-        rows.append(
-            ("Desktop", "ok" if running else "no", "Running" if running else "Not running")
-        )
-        rows.append(("Image cache", "-", human_size(CACHE_DIR)))
-        rows.append(("Version", "-", get_version()))
-        self.app.call_from_thread(self._fill, rows)
-
-    def _fill(self, rows: list[tuple[str, str, str]]) -> None:
-        self._rows = rows
-        table = self.query_one("#status-table", DataTable)
-        for name, state, detail in rows:
-            mark = {
-                "ok": "[green]●[/green]",
-                "no": "[red]○[/red]",
-                "unknown": "[yellow]?[/yellow]",
-            }.get(state, "[dim]·[/dim]")
-            table.add_row(name, mark, detail)
-
-    @on(Button.Pressed, "#back")
-    def action_back(self) -> None:
-        self.app.pop_screen()
 
 
 # ── Runners ────────────────────────────────────────────────
@@ -444,7 +377,6 @@ class MainScreen(Screen):
     TOOLTIPS = {
         "update": "Pull the latest arinanoLabs",
         "tools": "Search and install packages in the container",
-        "status": "Environment checks and versions",
         "doctor": "Diagnose and repair the environment",
         "backup": "Back up or restore your home directory",
         "reset": "Delete the container and reinstall it",
@@ -466,10 +398,9 @@ class MainScreen(Screen):
             with Grid(classes="row2"):
                 yield Button("Start Desktop", id="start", variant="success")
                 yield Button("Stop Desktop", id="stop", variant="warning")
-            with Grid(classes="row3"):
+            with Grid(classes="row2"):
                 yield Button("Update", id="update")
                 yield Button("Tools", id="tools")
-                yield Button("Status", id="status")
             with Grid(classes="row2"):
                 yield Button("Doctor", id="doctor")
                 yield Button("Backup", id="backup")
@@ -505,10 +436,6 @@ class MainScreen(Screen):
     @on(Button.Pressed, "#tools")
     def _tools(self) -> None:
         self.app.push_screen(ToolsScreen())
-
-    @on(Button.Pressed, "#status")
-    def _status(self) -> None:
-        self.app.push_screen(StatusScreen())
 
     @on(Button.Pressed, "#doctor")
     def _doctor(self) -> None:
@@ -703,10 +630,12 @@ class DoctorScreen(CopyableScreen):
     def __init__(self) -> None:
         super().__init__()
         self._issues: list[doctor.Issue] = []
+        self._info = ""
 
     def compose(self) -> ComposeResult:
         yield Header()
         yield Label("Doctor", classes="screen-title")
+        yield Static("", id="doctor-info")
         yield DataTable(id="doctor-table", cursor_type="row", zebra_stripes=True)
         # Three to a row, with Back on its own full-width row: it is the
         # most-used control and deserves the biggest target.
@@ -728,7 +657,7 @@ class DoctorScreen(CopyableScreen):
         self.query_one("#copy", Button).tooltip = "Copy this report"
 
     def copy_payload(self) -> str:
-        lines = [f"arinanoLabs doctor — {get_version()}", ""]
+        lines = [f"arinanoLabs doctor — {get_version()}", self._info, ""]
         for issue in self._issues:
             if issue.ok:
                 mark = "ok "
@@ -748,10 +677,18 @@ class DoctorScreen(CopyableScreen):
     @work(thread=True)
     def scan(self) -> None:
         issues = doctor.diagnose()
-        self.app.call_from_thread(self._show_issues, issues)
+        # Folded in from the old Status screen: not diagnosable problems,
+        # just facts worth having on the same screen as everything else.
+        info = (
+            f"Desktop: {'running' if desktop.is_running() else 'stopped'}"
+            f"  ·  Cache: {human_size(CACHE_DIR)}  ·  {get_version()}"
+        )
+        self.app.call_from_thread(self._show_issues, issues, info)
 
-    def _show_issues(self, issues: list[doctor.Issue]) -> None:
+    def _show_issues(self, issues: list[doctor.Issue], info: str) -> None:
         self._issues = issues
+        self._info = info
+        self.query_one("#doctor-info", Static).update(info)
         table = self.query_one("#doctor-table", DataTable)
         table.clear()
         for issue in issues:

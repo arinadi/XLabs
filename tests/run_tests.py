@@ -40,7 +40,6 @@ from installer.app import (
     MainScreen,
     MirrorScreen,
     ReposScreen,
-    StatusScreen,
     ToolsScreen,
 )
 from installer.preflight import run_all_checks
@@ -720,19 +719,21 @@ async def test_tui_navigation() -> None:
         await pilot.click("#back")
         await pilot.pause()
 
-        await pilot.click("#status")
-        await pilot.pause()
-        check(isinstance(app.screen, StatusScreen), f"got {app.screen!r}")
-        rows = await _wait_for_rows(pilot, app, "#status-table")
-        check(rows >= 7, f"expected >=7 status rows, got {rows}")
-        await pilot.click("#back")
-        await pilot.pause()
-
         await pilot.click("#doctor")
         await pilot.pause()
         check(isinstance(app.screen, DoctorScreen), f"got {app.screen!r}")
         rows = await _wait_for_rows(pilot, app, "#doctor-table")
-        check(rows >= 8, f"expected >=8 doctor rows, got {rows}")
+        # >=12 rather than the old >=8: Internet and Python are folded in
+        # from the removed Status screen as real Issues now.
+        check(rows >= 12, f"expected >=12 doctor rows, got {rows}")
+        check(
+            {"Internet", "Python"} <= {i.name for i in app.screen._issues},
+            "Internet/Python were not folded in from the old Status screen",
+        )
+        check(
+            "Desktop:" in app.screen._info and "Cache:" in app.screen._info,
+            f"Status's running/cache/version facts were not folded in: {app.screen._info!r}",
+        )
 
         fixable = [i for i in app.screen._issues if not i.ok and i.fix is not None]
         disabled = app.screen.query_one("#fix", Button).disabled
@@ -826,32 +827,31 @@ async def test_escape_cannot_leave_running_action() -> None:
 
 
 async def test_copy_buttons_export_output() -> None:
-    """Every diagnostic screen must be able to hand its text back out."""
+    """The diagnostic screen must be able to hand its text back out."""
     app = ArinanoLabsApp()
     async with app.run_test(size=(80, 40)) as pilot:
         await pilot.pause()
 
-        for entry, table in (("#status", "#status-table"), ("#doctor", "#doctor-table")):
-            await pilot.click(entry)
-            await pilot.pause()
-            await _wait_for_rows(pilot, app, table)
+        await pilot.click("#doctor")
+        await pilot.pause()
+        await _wait_for_rows(pilot, app, "#doctor-table")
 
-            screen = app.screen
-            screen.query_one("#copy", Button)
-            payload = screen.copy_payload()
-            check(payload.strip(), f"{entry} produced an empty copy payload")
-            check("arinanoLabs" in payload, f"{entry} payload has no header: {payload[:40]!r}")
+        screen = app.screen
+        screen.query_one("#copy", Button)
+        payload = screen.copy_payload()
+        check(payload.strip(), "Doctor produced an empty copy payload")
+        check("arinanoLabs" in payload, f"Doctor payload has no header: {payload[:40]!r}")
 
-            await pilot.click("#copy")
-            await pilot.pause()
-            check(
-                os.path.exists(_expected_export_path()),
-                "copy did not mirror the output to a file",
-            )
+        await pilot.click("#copy")
+        await pilot.pause()
+        check(
+            os.path.exists(_expected_export_path()),
+            "copy did not mirror the output to a file",
+        )
 
-            await pilot.click("#back")
-            await pilot.pause()
-            check(isinstance(app.screen, MainScreen), f"{entry} did not return to the menu")
+        await pilot.click("#back")
+        await pilot.pause()
+        check(isinstance(app.screen, MainScreen), "Doctor did not return to the menu")
 
 
 async def test_narrow_terminal_layout() -> None:
@@ -878,31 +878,28 @@ async def test_narrow_terminal_layout() -> None:
                     f"{button.region.width}-column button at {width} columns",
                 )
 
-            for entry, table in (("#status", "#status-table"), ("#doctor", "#doctor-table")):
-                await pilot.click(entry)
-                await pilot.pause()
-                await _wait_for_rows(pilot, app, table)
-                # Raises OutOfBounds if the control is not on screen.
-                await pilot.click("#copy")
-                await pilot.pause()
+            await pilot.click("#doctor")
+            await pilot.pause()
+            await _wait_for_rows(pilot, app, "#doctor-table")
+            # Raises OutOfBounds if the control is not on screen.
+            await pilot.click("#copy")
+            await pilot.pause()
 
-                if entry == "#doctor":
-                    # Reached through Doctor, so it needs checking at width too.
-                    await pilot.click("#dupes")
-                    await pilot.pause()
-                    check(isinstance(app.screen, DupesScreen), f"got {app.screen!r}")
-                    await pilot.click("#copy")
-                    await pilot.pause()
-                    await pilot.click("#back")
-                    await pilot.pause()
-                    check(isinstance(app.screen, DoctorScreen), "dupes did not return")
+            await pilot.click("#dupes")
+            await pilot.pause()
+            check(isinstance(app.screen, DupesScreen), f"got {app.screen!r}")
+            await pilot.click("#copy")
+            await pilot.pause()
+            await pilot.click("#back")
+            await pilot.pause()
+            check(isinstance(app.screen, DoctorScreen), "dupes did not return")
 
-                await pilot.click("#back")
-                await pilot.pause()
-                check(
-                    isinstance(app.screen, MainScreen),
-                    f"{entry} did not return at {width} columns",
-                )
+            await pilot.click("#back")
+            await pilot.pause()
+            check(
+                isinstance(app.screen, MainScreen),
+                f"Doctor did not return at {width} columns",
+            )
 
 
 async def test_update_offers_restart() -> None:

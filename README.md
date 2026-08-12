@@ -84,7 +84,7 @@ so a partial install can be resumed by running it again.
 **One thing it cannot do for you:** the desktop renders inside the
 [Termux:X11 Android app](https://github.com/termux/termux-x11/releases/tag/nightly),
 which has to be sideloaded — `pkg` only provides the Termux half. The installer
-checks for it and says so at the end if it is missing, and Status reports it too.
+checks for it and says so at the end if it is missing, and Doctor reports it too.
 
 Then open a new terminal session:
 
@@ -94,13 +94,14 @@ Then open a new terminal session:
 alabs                  # Launch the TUI
 ```
 
-The menu is two rows of buttons, sized for a thumb:
+The menu is four rows of buttons, sized for a thumb:
 
-| | | |
-|---|---|---|
-| **Start Desktop** | **Stop Desktop** | |
-| Update | Tools | Status |
-| Doctor | Reset | Cache |
+| | |
+|---|---|
+| **Start Desktop** | **Stop Desktop** |
+| Update | Tools |
+| Doctor | Backup |
+| Reset | Cache |
 
 Everything is tappable — Termux delivers touches as mouse events. Full
 reference below in [The TUI, screen by screen](#-the-tui-screen-by-screen).
@@ -150,24 +151,25 @@ stateDiagram-v2
     [*] --> MainScreen
 
     MainScreen --> ActionScreen: Start · Stop · Update
-    MainScreen --> StatusScreen: Status
     MainScreen --> DoctorScreen: Doctor
     MainScreen --> ToolsScreen: Tools
+    MainScreen --> BackupScreen: Backup
     MainScreen --> ConfirmScreen: Reset · Cache
 
     ToolsScreen --> ConfirmScreen: Install
     DoctorScreen --> DupesScreen: Dupes
     DupesScreen --> ConfirmScreen: Remove
+    BackupScreen --> ConfirmScreen: Backup now · Restore · Delete
 
     ConfirmScreen --> MainScreen: Cancel
     ConfirmScreen --> ActionScreen: Confirm
 
     DoctorScreen --> ActionScreen: Fix · Diagnose
 
-    StatusScreen --> MainScreen: Back
     ToolsScreen --> MainScreen: Back
     DoctorScreen --> MainScreen: Back
     DupesScreen --> DoctorScreen: Back
+    BackupScreen --> MainScreen: Back
     ActionScreen --> MainScreen: Back, once idle
 ```
 
@@ -333,26 +335,24 @@ up in the list too.
 Search terms and package names are validated against the Debian package-name
 shape and rejected rather than escaped — they end up in a shell command.
 
-### Status
-
-<!-- screenshot: status -->
-
-Internet, free storage, Python, proot-distro, the Termux:X11 package **and**
-the Android app, the container, whether the desktop is running, image cache
-size, and the version.
-
-Three states, not two: ● present, ○ missing, and **? for could not tell**.
-Querying installed Android apps is unreliable from Termux, and reporting
-"missing" when the honest answer is "unknown" sends you fixing the wrong thing.
-
 ### Doctor
 
 <!-- screenshot: doctor -->
 
-Repository checkout, launcher target, Textual, proot-distro, PulseAudio,
-Termux:X11, the GPU renderer, the X11 app, the container, storage, DNS,
-timezone, audio, the security archive, Electron apps' sandbox, Firefox's
-video defaults, and stale X11 sockets.
+There used to be a separate Status screen. It duplicated more than half of
+Doctor's own checks with none of the fixes, so it is gone — its facts are
+folded in here instead, alongside a Diagnose/Fix that Status never had.
+
+Internet, Python, repository checkout, launcher target, Textual, proot-distro,
+PulseAudio, Termux:X11, the GPU renderer, the X11 app, the container, storage,
+DNS, timezone, audio, the security archive, Electron apps' sandbox, Firefox's
+video defaults, and stale X11 sockets — plus a line up top with whatever does
+not fit the ok/broken shape of an Issue: whether the desktop is running, image
+cache size, and the version.
+
+Three states, not two: ● present, ○ missing, and **? for could not tell**.
+Querying installed Android apps is unreliable from Termux, and reporting
+"missing" when the honest answer is "unknown" sends you fixing the wrong thing.
 
 **GPU renderer** is `virglrenderer-android`. Without it the desktop runs on
 llvmpipe — everything is drawn on the CPU.
@@ -491,7 +491,7 @@ that spells out what is lost.
 
 ### Copying anything
 
-Every screen that produces output — logs, Status, Doctor, Dupes, Tools — has a
+Every screen that produces output — logs, Doctor, Dupes, Tools, Backup — has a
 **C** button and a `c` key. It tries the Android clipboard via
 `termux-clipboard-set`, then the terminal's own OSC 52, and **always mirrors
 the text to a file** as well, because the usual reason to copy a failure is to

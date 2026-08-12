@@ -20,7 +20,7 @@ from .const import (
     REPO_DIR,
     TMPDIR,
 )
-from .preflight import X11_APK_URL, check_storage, check_x11_app
+from .preflight import X11_APK_URL, check_internet, check_python, check_storage, check_x11_app
 from .system import (
     container_command,
     container_path,
@@ -157,6 +157,16 @@ def diagnose() -> list[Issue]:
             REPO_DIR if repo_ok else f"{REPO_DIR} is not a git checkout — re-run install.sh",
         )
     )
+
+    # Internet and Python — folded in from the old Status screen. Neither
+    # is fixable from here, so fix stays None; they still belong in one
+    # place with everything else rather than a separate read-only screen
+    # that duplicated half of this one.
+    internet = check_internet()
+    issues.append(Issue("Internet", internet.ok, internet.message))
+
+    python = check_python()
+    issues.append(Issue("Python", python.ok, python.message))
 
     # Storage. Only worth an auto-fix once there is a container to clean —
     # apt's cache is the only space a repair can free without deleting
