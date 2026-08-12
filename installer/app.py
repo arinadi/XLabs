@@ -1082,7 +1082,8 @@ class ToolsScreen(CopyableScreen):
         self.query_one("#copy", Button).tooltip = "Copy these results"
         self.query_one("#install", Button).tooltip = "Install the highlighted package"
         self.query_one("#query", Input).focus()
-        self._status("Search for a package, then pick a row and press Install.")
+        self._status("Loading curated tools...")
+        self.load_curated()
 
     def _status(self, message: str) -> None:
         self.status_text = message
@@ -1091,8 +1092,17 @@ class ToolsScreen(CopyableScreen):
     @on(Input.Submitted, "#query")
     def _submitted(self, event: Input.Submitted) -> None:
         term = event.value.strip()
+        if not term:
+            self._status("Loading curated tools...")
+            self.load_curated()
+            return
         self._status(f"Searching for '{term}'...")
         self.run_search(term)
+
+    @work(thread=True)
+    def load_curated(self) -> None:
+        results, error = packages.curated()
+        self.app.call_from_thread(self._show, results, error, curated=True)
 
     @work(thread=True)
     def run_search(self, term: str) -> None:
@@ -1105,7 +1115,9 @@ class ToolsScreen(CopyableScreen):
         results, error = packages.search(term, log)
         self.app.call_from_thread(self._show, results, error)
 
-    def _show(self, results: list[packages.Package], error: str | None) -> None:
+    def _show(
+        self, results: list[packages.Package], error: str | None, curated: bool = False
+    ) -> None:
         self._results = results
         table = self.query_one("#tools-table", DataTable)
         table.clear()
@@ -1119,6 +1131,12 @@ class ToolsScreen(CopyableScreen):
 
         if error:
             self._status(error)
+        elif curated:
+            installed = sum(1 for p in results if p.installed)
+            self._status(
+                f"{len(results)} curated tool(s), {installed} already installed "
+                "(marked I). Search to find more, or highlight one and press Install."
+            )
         else:
             installed = sum(1 for p in results if p.installed)
             self._status(

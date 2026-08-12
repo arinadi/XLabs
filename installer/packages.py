@@ -71,6 +71,61 @@ def valid_term(term: str) -> bool:
     return bool(SAFE_TERM.match(term.strip().lower()))
 
 
+INSTALLED_SCRIPT = """#!/bin/bash
+dpkg-query -W -f='${Package}\\n' 2>/dev/null
+"""
+
+# Shown before a search is typed, so an empty query is not just a blank
+# table. Dev tools come first — this is a dev-focused container.
+CURATED_PACKAGES: tuple[tuple[str, str], ...] = (
+    ("git", "Distributed version control"),
+    ("build-essential", "GCC, make and friends — C/C++ toolchain"),
+    ("python3", "Python 3 interpreter"),
+    ("python3-pip", "Python package installer"),
+    ("nodejs", "JavaScript runtime"),
+    ("npm", "Node.js package manager"),
+    ("neovim", "Vim-based text editor"),
+    ("vim", "Text editor"),
+    ("tmux", "Terminal multiplexer"),
+    ("openjdk-17-jdk", "Java Development Kit 17"),
+    ("golang", "Go programming language"),
+    ("cmake", "Build system generator"),
+    ("gdb", "GNU debugger"),
+    ("sqlite3", "SQLite command-line shell"),
+    ("ripgrep", "Fast recursive search (rg)"),
+    ("p7zip-full", "7-Zip archiver (7z)"),
+    ("unzip", "Extract .zip archives"),
+    ("zip", "Create .zip archives"),
+    ("curl", "Transfer data from URLs"),
+    ("wget", "Download files from the web"),
+    ("htop", "Interactive process viewer"),
+    ("tree", "List directories as a tree"),
+    ("jq", "Command-line JSON processor"),
+    ("rsync", "Fast file copy/sync"),
+    ("ffmpeg", "Audio/video conversion"),
+)
+
+
+def curated(log: Log = _noop) -> tuple[list[Package], str | None]:
+    """The curated list above, with install status filled in.
+
+    Descriptions come from CURATED_PACKAGES, not apt-cache, so this works
+    even before the package lists have been fetched — only install status
+    needs the container, via dpkg-query rather than a search.
+    """
+    if not is_installed():
+        return [], "No container yet — install it from the menu first."
+
+    if not write_container_script("xlabs-installed.sh", INSTALLED_SCRIPT):
+        return [], "Could not write the installed-check script."
+
+    rc, out = run_cmd(container_command("xlabs-installed.sh"), timeout=30)
+    log(f"exit {rc}, {len(out.splitlines())} installed package(s)")
+    installed = set(out.split()) if rc == 0 else set()
+
+    return [Package(name, desc, name in installed) for name, desc in CURATED_PACKAGES], None
+
+
 def _noop(_message: str) -> None:
     pass
 
