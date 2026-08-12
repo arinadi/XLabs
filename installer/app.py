@@ -17,6 +17,7 @@ from typing import Callable
 from rich.text import Text
 from textual import on, work
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.containers import Grid, Horizontal, VerticalScroll
 from textual.screen import ModalScreen, Screen
 from textual.widgets import (
@@ -89,6 +90,22 @@ def _write_export(text: str) -> str | None:
         return path
     except OSError:
         return None
+
+
+class ScrollableTable(DataTable):
+    """A DataTable with Left/Right repurposed to horizontal scroll.
+
+    Every table here uses cursor_type="row", which has no column cursor —
+    DataTable's own Left/Right bindings call cursor_left/cursor_right, which
+    are no-ops for a row cursor, so a wide column (a description, a URI) was
+    unreachable with no working way to see the rest of it. Overriding the
+    same keys wins: bindings merge by key across the MRO, most-derived last.
+    """
+
+    BINDINGS = [
+        Binding("left", "scroll_left", "Scroll left", show=False),
+        Binding("right", "scroll_right", "Scroll right", show=False),
+    ]
 
 
 class CopyableScreen(Screen):
@@ -694,7 +711,7 @@ class BackupScreen(CopyableScreen):
         yield Header()
         yield Label("Backup", classes="screen-title")
         yield Static(self.NOTE, id="backup-note")
-        yield DataTable(id="backup-table", cursor_type="row", zebra_stripes=True)
+        yield ScrollableTable(id="backup-table", cursor_type="row", zebra_stripes=True)
         with Grid(classes="row3"):
             yield Button("Backup now", id="create", variant="success")
             yield Button("Restore", id="restore")
@@ -839,7 +856,7 @@ class DoctorScreen(CopyableScreen):
         yield Header()
         yield Label("Doctor", classes="screen-title")
         yield Static("", id="doctor-info")
-        yield DataTable(id="doctor-table", cursor_type="row", zebra_stripes=True)
+        yield ScrollableTable(id="doctor-table", cursor_type="row", zebra_stripes=True)
         # Three to a row, with Back on its own full-width row: it is the
         # most-used control and deserves the biggest target.
         with Grid(classes="row3"):
@@ -972,7 +989,7 @@ class DupesScreen(CopyableScreen):
             "lacks the tool.",
             id="dupes-note",
         )
-        yield DataTable(id="dupes-table", cursor_type="row", zebra_stripes=True)
+        yield ScrollableTable(id="dupes-table", cursor_type="row", zebra_stripes=True)
         with Grid(classes="row2"):
             yield Button("Re-scan", id="rescan")
             yield Button("Remove", id="remove", variant="error", disabled=True)
@@ -1064,7 +1081,7 @@ class ToolsScreen(CopyableScreen):
         yield Label("Extra Tools", classes="screen-title")
         yield Input(placeholder="Search packages, e.g. neovim", id="query")
         yield Static("", id="tools-status")
-        yield DataTable(id="tools-table", cursor_type="row", zebra_stripes=True)
+        yield ScrollableTable(id="tools-table", cursor_type="row", zebra_stripes=True)
         # The command and its raw output. A search that finds nothing and one
         # that failed look identical without this.
         yield RichLog(id="tools-log", markup=True, wrap=True, auto_scroll=True)
@@ -1254,7 +1271,7 @@ class MirrorScreen(CopyableScreen):
         yield Header()
         yield Label("Debian mirror", classes="screen-title")
         yield Static("", id="mirror-current")
-        yield DataTable(id="mirror-table", cursor_type="row", zebra_stripes=True)
+        yield ScrollableTable(id="mirror-table", cursor_type="row", zebra_stripes=True)
         with Grid(classes="row3"):
             yield Button("Refresh", id="refresh")
             yield Button("Measure", id="measure")
@@ -1410,7 +1427,7 @@ class ReposScreen(CopyableScreen):
         yield Header()
         yield Label("Extra repositories", classes="screen-title")
         yield Static(self.NOTE, id="repos-note")
-        yield DataTable(id="repos-table", cursor_type="row", zebra_stripes=True)
+        yield ScrollableTable(id="repos-table", cursor_type="row", zebra_stripes=True)
         with Grid(classes="row3"):
             yield Button("Add", id="add", variant="success")
             yield Button("Enable", id="enable")
