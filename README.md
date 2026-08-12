@@ -1,9 +1,13 @@
 <div align="center">
   <h1>📱 arinanoLabs</h1>
   <p><strong>Your phone is a Linux workstation — ~30s to a working desktop, not 30 minutes of apt.</strong></p>
+  <p>A full Debian 13 + XFCE desktop inside Termux, no root — installed and
+  driven from a touch-friendly TUI, not a wall of shell scripts.</p>
   <p>
     <a href="https://github.com/arinadi/arinanoLabs/actions"><img src="https://img.shields.io/github/actions/workflow/status/arinadi/arinanoLabs/build-image.yml?label=build"></a>
     <a href="https://github.com/arinadi/arinanoLabs/blob/main/LICENSE"><img src="https://img.shields.io/github/license/arinadi/arinanoLabs"></a>
+    <a href="https://github.com/arinadi/arinanoLabs/commits/main"><img src="https://img.shields.io/github/last-commit/arinadi/arinanoLabs"></a>
+    <a href="https://github.com/arinadi/arinanoLabs/stargazers"><img src="https://img.shields.io/github/stars/arinadi/arinanoLabs"></a>
   </p>
 
   ```bash
@@ -32,6 +36,27 @@ Your Android phone is a pocket PC with 8GB+ RAM and an ARM64 CPU — it deserves
 | Teardown that leaves stale locks | One teardown path, verified before it reports success |
 
 **What this can't do:** no Docker, no systemd services, no native x86, no root (proot emulates root-like behavior, not real root). Full details in [Limitations](#️-limitations).
+
+---
+
+## 🌱 Where this came from
+
+arinanoLabs started as a fork of [DroidDesk](https://github.com/orailnoor/DroidDesk)
+and has since diverged completely. The install path is a from-scratch Python
+[Textual](https://github.com/Textualize/textual) TUI instead of shell scripts —
+idempotent, resumable, with [more than 30 automated tests](tests/run_tests.py)
+run on every push. The system image is declarative: a `Dockerfile`, built and
+published by CI, not a setup script run against whatever state the device
+happens to be in. And **Doctor** diagnoses and repairs specific, named failure
+modes — the Debian security-archive bug, DNS, timezone, Electron's sandbox
+under proot, per-device GPU and audio method selection — rather than leaving
+you to re-run an install script and hope.
+
+DroidDesk covers more ground: a choice of desktop environment, Adreno-specific
+GPU paths, monitor/VNC bridging. arinanoLabs deliberately narrows to one path —
+Debian 13 and XFCE4 — and puts the effort into that path working reliably
+instead. Both are GPLv3; credit and thanks to DroidDesk for the idea and the
+starting point.
 
 ---
 
