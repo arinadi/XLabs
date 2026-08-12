@@ -653,7 +653,39 @@ PulseAudio or the graphics packages are not candidates.
 | No GPU passthrough | virgl renderer, software fallback |
 | ARM64 only | QEMU for cross-arch (slow) |
 | No native X11 | Termux:X11 app required |
-| No Docker | proot lacks kernel features |
+| No Docker or Podman | See [Containers](#-containers-docker-podman) |
+
+---
+
+## 🐳 Containers: Docker, Podman
+
+Neither runs, and it's a kernel wall, not a missing package. `runc`/`crun`
+need to open namespaces (`clone(CLONE_NEWUSER | CLONE_NEWPID | ...)`) and
+get `EINVAL`, because stock Android kernels don't expose `CONFIG_USER_NS` and
+cgroups to unprivileged processes — that's the Android app sandbox, not
+Termux or proot. [Users hit the identical failure](https://github.com/containers/podman/issues/26186)
+running rootless Podman straight in Termux/proot-distro, with no XLabs
+involved at all.
+
+proot's own trick is `ptrace`-based syscall interception — exactly what lets
+this project's Debian container run without root in the first place. It
+doesn't extend to Docker/Podman's namespace and cgroup calls: `ptrace` can
+fake a `chdir`, not manufacture a real isolated PID/mount/network namespace.
+Rootless mode doesn't sidestep this — it still asks the kernel for the same
+namespaces, just owned by an unprivileged user, and the sandbox never hands
+them out.
+
+Rooting the device and flashing a custom kernel with those features enabled
+removes the wall, at the cost of the no-root model this project is built
+around. The other real option is a project like
+[Podroid](https://github.com/aanundgit/podroid), which sidesteps the kernel
+gap entirely by booting a QEMU VM with its own Linux kernel — a heavier,
+fundamentally different architecture than proot, and out of scope here.
+
+**If what you actually need is a dev toolchain, not container isolation:**
+most of what people reach for Docker for — a pinned language version, a
+database, a build tool — installs directly via [Store](#store) into the full
+glibc Debian environment. No container needed for that.
 
 ---
 
