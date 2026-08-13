@@ -2,7 +2,11 @@
   <h1>📱 XLabs</h1>
   <p><strong>Your phone is a Linux workstation — ~30s to a working desktop, not 30 minutes of apt.</strong></p>
   <p>A full Debian 13 + XFCE desktop inside Termux, no root — installed and
-  driven from a touch-friendly TUI, not a wall of shell scripts.</p>
+  driven from a touch-friendly TUI, not a wall of shell scripts. For
+  developers who want one desktop that works and stays out of the way —
+  not which distro it runs on. Want to experiment with other distros
+  instead? See <a href="https://github.com/arinadi/proot-distro-manager">PDM</a>,
+  XLabs's sibling project.</p>
   <p>
     <a href="https://github.com/arinadi/XLabs/actions"><img src="https://img.shields.io/github/actions/workflow/status/arinadi/XLabs/build-image.yml?label=build"></a>
     <a href="https://github.com/arinadi/XLabs/blob/main/LICENSE"><img src="https://img.shields.io/github/license/arinadi/XLabs"></a>
@@ -50,7 +54,11 @@ modes — DNS, timezone, the Electron sandbox, per-device GPU/audio — instead
 of "reinstall and hope."
 
 Inspired by DroidDesk, which covers more distros and GPUs; XLabs narrows to
-one path — Debian 13 + XFCE4 — and makes that path reliable. Both GPLv3.
+one path — Debian 13 + XFCE4 — and makes that path reliable, on the bet
+that most people installing a Linux desktop on their phone want it
+working, not configurable. [PDM](https://github.com/arinadi/proot-distro-manager)
+takes the other bet — same codebase, opened back up to any distro
+proot-distro can pull, for people who'd rather tinker. Both GPLv3.
 
 ---
 
