@@ -100,6 +100,15 @@ RUN apt-get update && \
         pulseaudio- pipewire-pulse- accountsservice- && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# ── Theme ──────────────────────────────────────────────────────
+# gnome-themes-extra provides the Adwaita-dark GTK theme. Installed only;
+# not set as default, per the no-baked-in-configuration rule above — pick
+# it via xfce4-settings > Appearance on first run.
+RUN apt-get update && \
+    apt-get install -y \
+        gnome-themes-extra && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # ── X11 client tools, GL userspace, audio client ───────────────
 RUN apt-get update && \
     apt-get install -y \
