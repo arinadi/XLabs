@@ -248,15 +248,16 @@ hardlink emulation don't survive a raw copy. Stored outside Debian under
 `~/XLabs-backups`, so a **Reset** can't take a backup down with it.
 
 A backup dropped into [`presets/`](presets/) in this repo (instead of
-`~/XLabs-backups`) is your own — XLabs doesn't ship one. Commit it, and it's
-restored automatically the first time Debian is installed or Doctor pulls a
-missing container back, and offered as a checkbox on **Reset**.
+`~/XLabs-backups`) is your own — XLabs doesn't ship one. Commit it, and
+`install.py` restores it the first time it ever pulls the container on a
+device — not on every run, and not from the TUI: see
+[`presets/README.md`](presets/README.md) for why it's scoped that
+narrowly.
 
 ### Reset and Cache
 
-**Reset** deletes Debian and pulls a fresh image — with a checkbox to
-restore your [preset](presets/) afterward, checked by default when one
-exists. **Cache** drops downloaded image layers only. Both confirm first.
+**Reset** deletes Debian and pulls a fresh image. **Cache** drops
+downloaded image layers only. Both confirm first.
 
 ### Copying anything
 

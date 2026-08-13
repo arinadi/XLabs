@@ -34,6 +34,8 @@ try:
     from installer.preflight import (
         check_x11_app as preflight_check_x11_app,
     )
+    from installer.presets import find_preset
+    from installer.presets import restore_preset as apply_preset
     from installer.system import ensure_home_bin_on_path, link_launcher
 except ImportError:
     sys.exit(
@@ -208,15 +210,20 @@ def container_exists() -> bool:
     return os.path.isdir(os.path.join(PROOT_DIR, "rootfs"))
 
 
-def install_container() -> None:
+def install_container() -> bool:
+    """Returns True only when this call actually pulled the image — not
+    when a container was already there. restore_preset() needs that
+    distinction: applying a preset onto a container that already existed
+    could silently overwrite months of the user's own changes with an old
+    snapshot, rather than seeding a container that never had any."""
     say("Installing Debian container")
     if container_exists():
         ok("container already present, skipping")
-        return
+        return False
 
     if not have("proot-distro"):
         fail("container", "proot-distro is not available")
-        return
+        return False
 
     # GHCR first (no pull-rate limit for a public package), Docker Hub as
     # the fallback for ISPs where ghcr.io's CDN routes badly — see
@@ -230,12 +237,13 @@ def install_container() -> None:
             break
     else:
         fail("container", "image pull failed from both registries")
-        return
+        return False
 
     if not container_exists():
         fail("container", "image pulled but no rootfs was created")
-        return
+        return False
     ok("container installed")
+    return True
 
 
 def setup_admin_user() -> None:
@@ -255,6 +263,29 @@ def setup_admin_user() -> None:
         ok("admin user ready")
     else:
         fail("user", "could not configure the admin user")
+
+
+def restore_preset(fresh: bool) -> None:
+    """Applies presets/*.tar.gz (see presets/README.md) — but only onto a
+    container this same run just pulled. `fresh=False` means the container
+    was already there (install.py is safe to re-run, and usually is one),
+    which could just as easily be a container the user has been living in
+    for months; restoring a preset onto that would silently clobber it.
+
+    Preset-only, on purpose: this is not where a user's own Backup/Restore
+    belongs. That stays a manual, explicit action from the TUI's Backup
+    screen — it is never something the bootstrap decides on its own."""
+    if not fresh:
+        return
+    preset = find_preset()
+    if preset is None:
+        return
+
+    say(f"Restoring preset ({preset.name})")
+    if apply_preset(lambda msg: print(f"    {msg}")):
+        ok("preset restored")
+    else:
+        warn("preset restore failed — see the output above")
 
 
 def install_launcher() -> None:
@@ -290,8 +321,9 @@ def main() -> int:
 
     install_libs()
     install_termux_packages()
-    install_container()
+    fresh_container = install_container()
     setup_admin_user()
+    restore_preset(fresh_container)
     install_launcher()
 
     print()

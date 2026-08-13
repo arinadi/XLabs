@@ -128,10 +128,6 @@ ConfirmScreen {
     margin-bottom: 1;
 }
 
-#dialog-checkbox {
-    margin-bottom: 1;
-}
-
 #dialog-buttons {
     width: 100%;
     height: auto;

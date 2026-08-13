@@ -31,6 +31,7 @@ from test_backup import TESTS as BACKUP_TESTS
 from test_bench import TESTS as BENCH_TESTS
 from test_config import TESTS as CONFIG_TESTS
 from test_doctor import TESTS as DOCTOR_TESTS
+from test_install import TESTS as INSTALL_TESTS
 from test_main_screen import TESTS as MAIN_SCREEN_TESTS
 from test_packages import TESTS as PACKAGES_TESTS
 from test_preflight import TESTS as PREFLIGHT_TESTS
@@ -45,6 +46,7 @@ ALL_TESTS = [
     *SYSTEM_TESTS,
     *PREFLIGHT_TESTS,
     *DOCTOR_TESTS,
+    *INSTALL_TESTS,
     *CONFIG_TESTS,
     *PACKAGES_TESTS,
     *BACKUP_TESTS,

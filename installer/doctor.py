@@ -12,7 +12,7 @@ import shutil
 import sys
 from typing import Callable, NamedTuple
 
-from . import audio, packages, presets
+from . import audio, packages
 from . import start as desktop
 from .const import (
     LAUNCHER_SRC,
@@ -97,7 +97,6 @@ def _fix_container(log: Log) -> bool:
     ok = pull_image(log)
     if ok:
         packages.reapply_saved_mirror(log)
-        presets.restore_preset(log)
     return ok
 
 
