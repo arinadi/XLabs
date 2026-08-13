@@ -13,6 +13,7 @@ import threading
 import time
 from datetime import datetime, timezone
 
+from . import isolation
 from .const import (
     CONTAINER_NAME,
     HOME_BIN,
@@ -326,17 +327,28 @@ def write_container_script(name: str, content: str) -> bool:
         return False
 
 
-def container_command(script_name: str, user: str | None = None) -> str:
+def container_command(
+    script_name: str,
+    user: str | None = None,
+    isolation_preset: isolation.Preset | None = None,
+) -> str:
     """Command that runs a script placed by write_container_script.
 
     --shared-tmp is not optional here: the script is written to Termux's tmp,
     and without the flag the container's /tmp is its own rootfs directory
     where the file does not exist. Four call sites forgot it independently,
     which is why building the command is no longer left to callers.
+
+    `isolation_preset` overrides the saved setting — iobench.py uses this to
+    measure each preset in turn without touching .env until a winner is
+    picked. Every other caller gets whatever isolation.py currently has
+    saved.
     """
     user_flag = f"--user {user} " if user else ""
+    preset = isolation_preset if isolation_preset is not None else isolation.load_preset()
+    extra_flag = f"{preset.flags} " if preset.flags else ""
     return (
-        f"proot-distro login {CONTAINER_NAME} {user_flag}--shared-tmp "
+        f"proot-distro login {CONTAINER_NAME} {user_flag}--shared-tmp {extra_flag}"
         f"-- bash /tmp/{script_name}"
     )
 

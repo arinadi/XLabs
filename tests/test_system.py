@@ -94,6 +94,47 @@ def test_stream_cmd_shows_carriage_return_progress() -> None:
     os.remove(script)
 
 
+def test_container_command_uses_saved_isolation_preset() -> None:
+    """container_command() must fold in whatever isolation.py has saved, so
+    every existing caller (start, audio, bench, doctor) picks it up without
+    each having to ask for it — and iobench.py's explicit override must win
+    over whatever is saved, since it measures presets other than the
+    current one."""
+    from installer import config, isolation
+    from installer.system import container_command
+
+    original = config.get(isolation.PROFILE_KEY)
+    try:
+        config.unset(isolation.PROFILE_KEY)
+        check(
+            "--isolated" not in container_command("x.sh"),
+            "the unmodified default leaked --isolated into the command",
+        )
+
+        isolation.set_preset_manually(isolation.preset_by_name("isolated"))
+        check(
+            "--isolated" in container_command("x.sh"),
+            "the saved isolated preset was not applied",
+        )
+
+        overridden = container_command(
+            "x.sh", isolation_preset=isolation.DEFAULT_PRESET
+        )
+        check(
+            "--isolated" not in overridden,
+            "an explicit isolation_preset override did not win over the saved setting",
+        )
+        check(
+            "--shared-tmp" in overridden,
+            "--shared-tmp must stay present regardless of the isolation preset",
+        )
+    finally:
+        if original is None:
+            config.unset(isolation.PROFILE_KEY)
+        else:
+            config.set_value(isolation.PROFILE_KEY, original)
+
+
 def test_pull_image_falls_back_to_docker_hub() -> None:
     """GHCR has no pull-rate limit for a public package, but some ISPs route
     its Fastly-backed CDN badly. Docker Hub is faster there but rate-limits
@@ -163,6 +204,7 @@ TESTS = [
     test_stream_cmd_timeout_kills_silent_process,
     test_stream_cmd_returns_output_and_code,
     test_stream_cmd_shows_carriage_return_progress,
+    test_container_command_uses_saved_isolation_preset,
     test_pull_image_falls_back_to_docker_hub,
 ]
 

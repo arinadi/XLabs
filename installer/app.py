@@ -32,7 +32,7 @@ from textual.widgets import (
     Static,
 )
 
-from . import audio, backup, bench, doctor, packages
+from . import audio, backup, bench, doctor, iobench, isolation, packages
 from . import start as desktop
 from .const import CACHE_DIR, CONTAINER_NAME, REPO_DIR
 from .system import (
@@ -570,6 +570,7 @@ class SettingsScreen(CopyableScreen):
         self._last_audio = ""
         self._last_gpu = ""
         self._last_x11 = ""
+        self._last_isolation = ""
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -596,6 +597,12 @@ class SettingsScreen(CopyableScreen):
             )
             yield Label("termux-x11 rendering")
             yield Select(self.DRAW_PATH_OPTIONS, id="settings-x11", allow_blank=False)
+            yield Label("Container isolation (Doctor → IO to measure)")
+            yield Select(
+                [(p.description, p.name) for p in isolation.PRESETS],
+                id="settings-isolation",
+                allow_blank=False,
+            )
             yield Static("", id="settings-status")
             yield Button("Uninstall XLabs", id="uninstall", variant="error")
         with Grid(classes="row2"):
@@ -626,6 +633,8 @@ class SettingsScreen(CopyableScreen):
         self.query_one("#settings-gpu", Select).value = self._last_gpu
         self._last_x11 = desktop.load_draw_path()
         self.query_one("#settings-x11", Select).value = self._last_x11
+        self._last_isolation = isolation.load_preset().name
+        self.query_one("#settings-isolation", Select).value = self._last_isolation
 
     def _status(self, message: str) -> None:
         self.status_text = message
@@ -659,6 +668,16 @@ class SettingsScreen(CopyableScreen):
         desktop.save_draw_path(self._last_x11)
         self._status("termux-x11 rendering mode saved.")
 
+    @on(Select.Changed, "#settings-isolation")
+    def _isolation_changed(self, event: Select.Changed) -> None:
+        if str(event.value) == self._last_isolation:
+            return
+        preset = isolation.preset_by_name(str(event.value))
+        if preset is not None:
+            self._last_isolation = preset.name
+            isolation.set_preset_manually(preset)
+            self._status(f"Container isolation set to {preset.name}.")
+
     def copy_payload(self) -> str:
         return "\n".join(
             [
@@ -668,6 +687,7 @@ class SettingsScreen(CopyableScreen):
                 f"Audio:   {audio.load_method().name}",
                 f"GPU:     {(bench.load_profile() or bench.PRESETS[0]).name}",
                 f"X11:     {desktop.load_draw_path()}",
+                f"Isolation: {isolation.load_preset().name}",
             ]
         )
 
@@ -863,10 +883,11 @@ class DoctorScreen(CopyableScreen):
             yield Button("Re-scan", id="rescan")
             yield Button("Fix", id="fix", variant="success", disabled=True)
             yield Button("Diagnose", id="diagnose")
-        with Grid(classes="row3"):
+        with Grid(classes="row4"):
             yield Button("Dupes", id="dupes")
             yield Button("Audio", id="audio")
             yield Button("Bench", id="bench")
+            yield Button("IO", id="iobench")
         with Grid(classes="row2"):
             yield Button("C", id="copy")
             yield Button("Back", id="back", variant="primary")
@@ -875,6 +896,7 @@ class DoctorScreen(CopyableScreen):
     def on_mount(self) -> None:
         self.query_one("#doctor-table", DataTable).add_columns("Check", "State", "Detail")
         self.query_one("#copy", Button).tooltip = "Copy this report"
+        self.query_one("#iobench", Button).tooltip = "Test which isolation preset is fastest"
 
     def copy_payload(self) -> str:
         lines = [f"XLabs doctor — {get_version()}", self._info, ""]
@@ -947,6 +969,10 @@ class DoctorScreen(CopyableScreen):
     @on(Button.Pressed, "#bench")
     def _bench(self) -> None:
         self.app.push_screen(ActionScreen("GPU Benchmark", bench.run))
+
+    @on(Button.Pressed, "#iobench")
+    def _iobench(self) -> None:
+        self.app.push_screen(ActionScreen("IO Benchmark", iobench.run))
 
     @on(Button.Pressed, "#fix")
     def _fix(self) -> None:

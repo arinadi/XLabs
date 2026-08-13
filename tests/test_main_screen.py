@@ -86,6 +86,12 @@ async def test_uninstall_is_gated() -> None:
         await pilot.click("#settings")
         await pilot.pause()
 
+        # Settings has grown past one screenful (audio/GPU/X11/isolation),
+        # so Uninstall now sits below the fold — a real phone scrolls to
+        # reach it too, which is why this is a VerticalScroll.
+        app.screen.query_one("#uninstall", Button).scroll_visible(animate=False)
+        await pilot.pause()
+
         await pilot.click("#uninstall")
         await pilot.pause()
         check(isinstance(app.screen, ConfirmScreen), "#uninstall skipped confirmation")

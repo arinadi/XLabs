@@ -23,9 +23,16 @@ async def test_settings_screen() -> None:
     the screen must not itself count as an edit — Select.value is set
     programmatically on every visit to show the current pick, which would
     otherwise read back as a user changing it."""
-    from installer import audio, bench, config, start
+    from installer import audio, bench, config, isolation, start
 
-    keys = (audio.METHOD_KEY, bench.PROFILE_KEY, bench.SCORE_KEY, start.DRAW_PATH_KEY)
+    keys = (
+        audio.METHOD_KEY,
+        bench.PROFILE_KEY,
+        bench.SCORE_KEY,
+        start.DRAW_PATH_KEY,
+        isolation.PROFILE_KEY,
+        isolation.SCORE_KEY,
+    )
     original = {k: config.get(k) for k in keys}
 
     app = XLabsApp()
@@ -44,6 +51,10 @@ async def test_settings_screen() -> None:
                 config.get(start.DRAW_PATH_KEY) == original[start.DRAW_PATH_KEY],
                 "opening Settings wrote the draw path",
             )
+            check(
+                config.get(isolation.PROFILE_KEY) == original[isolation.PROFILE_KEY],
+                "opening Settings wrote the isolation preset",
+            )
             check(app.screen.status_text == "", "a status message appeared before any edit")
 
             select = app.screen.query_one("#settings-x11", Select)
@@ -60,8 +71,25 @@ async def test_settings_screen() -> None:
                 f"no confirmation shown after an edit: {app.screen.status_text!r}",
             )
 
+            iso_select = app.screen.query_one("#settings-isolation", Select)
+            check(
+                iso_select.value == isolation.load_preset().name,
+                "the isolation select did not show the currently saved value",
+            )
+            iso_select.value = "isolated"
+            await pilot.pause()
+            check(
+                isolation.load_preset().name == "isolated",
+                "changing the isolation select did not save",
+            )
+            check(
+                config.get(isolation.SCORE_KEY) is None,
+                "a manual isolation change through Settings must not carry a measured score",
+            )
+
             payload = app.screen.copy_payload()
             check("force-bgra" in payload, f"copy payload missed the change: {payload!r}")
+            check("isolated" in payload, f"copy payload missed the isolation change: {payload!r}")
             # Raises OutOfBounds if the button is not on screen — every
             # other CopyableScreen has one; this one shipped without it.
             await pilot.click("#copy")

@@ -32,6 +32,8 @@ from test_bench import TESTS as BENCH_TESTS
 from test_config import TESTS as CONFIG_TESTS
 from test_doctor import TESTS as DOCTOR_TESTS
 from test_install import TESTS as INSTALL_TESTS
+from test_iobench import TESTS as IOBENCH_TESTS
+from test_isolation import TESTS as ISOLATION_TESTS
 from test_main_screen import TESTS as MAIN_SCREEN_TESTS
 from test_packages import TESTS as PACKAGES_TESTS
 from test_preflight import TESTS as PREFLIGHT_TESTS
@@ -52,6 +54,8 @@ ALL_TESTS = [
     *BACKUP_TESTS,
     *BENCH_TESTS,
     *AUDIO_TESTS,
+    *ISOLATION_TESTS,
+    *IOBENCH_TESTS,
     *SETTINGS_SCREEN_TESTS,
     *STORE_SCREEN_TESTS,
     *MAIN_SCREEN_TESTS,
