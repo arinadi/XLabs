@@ -3,6 +3,11 @@
 Every issue carries its own fix, so the UI does not need to know how any of
 them work — it renders the list and calls `fix(log)` on the ones that have
 one. An issue with `fix=None` needs the user; say so in `detail`.
+
+Electron sandbox patching, Termux/container duplicate detection, and
+Firefox/Chromium tuning each grew into enough of their own thing to live in
+electron.py, duplicates.py, and browser.py — this module wires their results
+into the issue list rather than implementing them inline.
 """
 
 from __future__ import annotations
@@ -12,7 +17,7 @@ import shutil
 import sys
 from typing import Callable, NamedTuple
 
-from . import audio, packages
+from . import audio, browser, electron, packages
 from . import start as desktop
 from .const import (
     LAUNCHER_SRC,
@@ -348,7 +353,7 @@ def diagnose() -> list[Issue]:
     # Electron apps (VS Code and anything else installed later) — only
     # worth mentioning once at least one is actually present.
     if is_installed():
-        electron_found, electron_missing = _electron_status()
+        electron_found, electron_missing = electron.electron_status()
         if electron_found:
             electron_ok = electron_missing == 0
             issues.append(
@@ -357,20 +362,46 @@ def diagnose() -> list[Issue]:
                     electron_ok,
                     "sandbox disabled" if electron_ok
                     else f"{electron_missing} of {electron_found} still need --no-sandbox",
-                    None if electron_ok else _fix_electron_sandbox,
+                    None if electron_ok else electron.fix_electron_sandbox,
                 )
             )
 
-    # Firefox video defaults — only worth mentioning where Firefox exists.
-    if os.path.exists(container_path(FIREFOX_BIN)):
-        tuned = os.path.exists(container_path(FIREFOX_PREFS_FILE))
+    # Firefox and Chromium tuning — video codec defaults and the safe
+    # performance tier from browser.py, each independently checkable/
+    # fixable. The reduced-security tier is deliberately not offered here:
+    # it needs its own explicit confirmation, not a blanket Doctor Fix
+    # silently taking it — see Doctor Tools -> Browser.
+    if browser.firefox_present():
+        video_ok = browser.firefox_video_prefs_ok()
         issues.append(
             Issue(
                 "Firefox video",
-                tuned,
-                "H.264 preferred" if tuned
+                video_ok,
+                "H.264 preferred" if video_ok
                 else "VP9/AV1 enabled — software decoded, stutters on YouTube",
-                None if tuned else _fix_firefox_prefs,
+                None if video_ok else browser.apply_firefox_video_prefs,
+            )
+        )
+        safe_ok = browser.firefox_safe_tuning_ok()
+        issues.append(
+            Issue(
+                "Firefox tuning",
+                safe_ok,
+                "Applied" if safe_ok
+                else "Default process count and disk cache — see Doctor Tools -> Browser",
+                None if safe_ok else browser.apply_firefox_safe_tuning,
+            )
+        )
+
+    if browser.chromium_present():
+        chromium_ok = bool(browser.chromium_tuning_ok())
+        issues.append(
+            Issue(
+                "Chromium tuning",
+                chromium_ok,
+                "Applied" if chromium_ok
+                else "Default flags — see Doctor Tools -> Browser",
+                None if chromium_ok else browser.apply_chromium_tuning,
             )
         )
 
@@ -483,291 +514,6 @@ def _fix_timezone(log: Log) -> bool:
 
     log(f"  container timezone set to {android_tz}")
     return True
-
-
-# ── Firefox video defaults ─────────────────────────────────
-
-# Firefox scans this directory for default preferences, so a file here
-# applies before any profile exists and without locking anything: the values
-# can still be changed in about:config.
-FIREFOX_BIN = "/usr/bin/firefox-esr"
-FIREFOX_PREFS_DIR = "/usr/lib/firefox-esr/browser/defaults/preferences"
-FIREFOX_PREFS_FILE = f"{FIREFOX_PREFS_DIR}/xlabs-video.js"
-
-FIREFOX_PREFS = """// XLabs — video defaults for proot on Android.
-//
-// YouTube serves VP9 or AV1 by default. Neither can be hardware decoded in
-// this stack: there is no VA-API through proot, so both are decoded on the
-// CPU, and that is what makes playback stutter. Turning them off makes
-// YouTube fall back to H.264, which is far cheaper to decode.
-//
-// VirGL does not help here. It accelerates OpenGL — rendering and
-// compositing — while the cost of a video is in decoding it.
-//
-// These are defaults, not locks. Change them in about:config if you want
-// AV1 back on a device that can afford it.
-pref("media.mediasource.vp9.enabled", false);
-pref("media.av1.enabled", false);
-"""
-
-
-def _fix_firefox_prefs(log: Log) -> bool:
-    directory = container_path(FIREFOX_PREFS_DIR)
-    if not os.path.isdir(directory):
-        log(f"  {FIREFOX_PREFS_DIR} does not exist in the container")
-        return False
-
-    target = container_path(FIREFOX_PREFS_FILE)
-    try:
-        with open(target, "w", encoding="utf-8", newline="\n") as f:
-            f.write(FIREFOX_PREFS)
-    except OSError as e:
-        log(f"  could not write the preferences: {e}")
-        return False
-
-    log(f"  wrote {FIREFOX_PREFS_FILE}")
-    log("  restart Firefox for it to take effect")
-    return True
-
-
-# ── Electron sandbox ───────────────────────────────────────
-
-# Electron's SUID sandbox needs either a real setuid-root helper or working
-# unprivileged user namespaces. proot fakes namespace syscalls without a
-# kernel behind them, so Chromium's zygote sandbox init fails outright and
-# the app never opens — this is why VS Code (and anything else built on
-# Electron) does nothing when launched under proot. --no-sandbox turns that
-# subsystem off; proot is already the outer isolation boundary on a personal
-# device, so there is nothing behind it worth protecting.
-#
-# Detected the way distro packagers detect it: a chrome-sandbox helper next
-# to the resolved binary means Chromium/Electron, whatever the app is —
-# this catches whatever gets installed later, not only the vscode repo.
-APPLICATIONS_DIR = "/usr/share/applications"
-DEFAULT_PATH_DIRS = ("/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin")
-
-
-def _resolve_in_root(root: str, path: str, depth: int = 0) -> str | None:
-    """Host path for `path` as the container itself would resolve it.
-
-    os.path.realpath cannot be used here: an absolute symlink target stored
-    inside the container (e.g. /usr/bin/code -> /usr/share/code/code) is only
-    absolute *inside the container* — resolved against the host root it
-    points somewhere that does not exist.
-    """
-    if depth > 20:
-        return None
-    if not path.startswith("/"):
-        path = "/" + path
-    host = os.path.join(root, path.lstrip("/"))
-    if os.path.islink(host):
-        target = os.readlink(host)
-        if not os.path.isabs(target):
-            target = os.path.normpath(os.path.join(os.path.dirname(path), target))
-        return _resolve_in_root(root, target, depth + 1)
-    return host
-
-
-def _find_in_path(root: str, name: str) -> str | None:
-    if "/" in name:
-        resolved = _resolve_in_root(root, name)
-        return resolved if resolved and os.path.isfile(resolved) else None
-    for directory in DEFAULT_PATH_DIRS:
-        resolved = _resolve_in_root(root, f"{directory}/{name}")
-        if resolved and os.path.isfile(resolved):
-            return resolved
-    return None
-
-
-def _desktop_exec_binary(content: str) -> str | None:
-    for line in content.splitlines():
-        if line.startswith("Exec="):
-            rest = line[len("Exec="):].strip()
-            return rest.split()[0] if rest else None
-    return None
-
-
-def _desktop_is_sandboxed(content: str) -> bool:
-    for line in content.splitlines():
-        if line.startswith("Exec="):
-            return "--no-sandbox" in line
-    return False
-
-
-def _electron_desktop_files() -> list[tuple[str, str]]:
-    """(path, content) for every .desktop file that launches an Electron app."""
-    root = container_path("/")
-    directory = container_path(APPLICATIONS_DIR)
-    try:
-        names = sorted(os.listdir(directory))
-    except OSError:
-        return []
-
-    found = []
-    for name in names:
-        if not name.endswith(".desktop"):
-            continue
-        path = os.path.join(directory, name)
-        try:
-            with open(path, encoding="utf-8") as f:
-                content = f.read()
-        except OSError:
-            continue
-        binary = _desktop_exec_binary(content)
-        if not binary:
-            continue
-        resolved = _find_in_path(root, binary)
-        if not resolved:
-            continue
-        if os.path.isfile(os.path.join(os.path.dirname(resolved), "chrome-sandbox")):
-            found.append((path, content))
-    return found
-
-
-def _electron_status() -> tuple[int, int]:
-    """(Electron apps found, still missing --no-sandbox)."""
-    files = _electron_desktop_files()
-    missing = sum(1 for _, content in files if not _desktop_is_sandboxed(content))
-    return len(files), missing
-
-
-def _patch_desktop_exec(content: str, binary: str) -> str:
-    lines = content.splitlines()
-    for i, line in enumerate(lines):
-        if not line.startswith("Exec="):
-            continue
-        value = line[len("Exec="):]
-        if value.split()[0] != binary:
-            continue
-        lines[i] = f"Exec={binary} --no-sandbox{value[len(binary):]}"
-    return "\n".join(lines) + ("\n" if content.endswith("\n") else "")
-
-
-def _fix_electron_sandbox(log: Log) -> bool:
-    files = _electron_desktop_files()
-    patched = 0
-    ok = True
-    for path, content in files:
-        if _desktop_is_sandboxed(content):
-            continue
-        binary = _desktop_exec_binary(content)
-        assert binary is not None
-        try:
-            with open(path, "w", encoding="utf-8", newline="\n") as f:
-                f.write(_patch_desktop_exec(content, binary))
-        except OSError as e:
-            log(f"  could not write {path}: {e}")
-            ok = False
-            continue
-        log(f"  {os.path.basename(path)} -> Exec gets --no-sandbox")
-        patched += 1
-    log(f"  {patched} of {len(files)} Electron app(s) patched")
-    return ok
-
-
-# ── Termux packages the container already provides ─────────
-
-# proot-distro binds the Termux $PREFIX into the container and appends
-# $PREFIX/bin to the guest's PATH, so Termux binaries are reachable inside by
-# design. Because it appends, a tool present in both resolves to the Debian
-# copy — the Termux one only surfaces when Debian lacks it, which is exactly
-# when it is confusing.
-#
-# Only these are ever offered for removal, and only after the container is
-# confirmed to provide the tool. Everything XLabs itself runs on —
-# python, git, proot-distro, termux-x11-nightly, pulseaudio, the graphics
-# packages — is absent from this list on purpose and must stay that way.
-TERMUX_DUPLICATES = {
-    "nodejs": "node",
-    "nodejs-lts": "node",
-    "clang": "clang",
-    "cmake": "cmake",
-    "make": "make",
-    "golang": "go",
-    "rust": "rustc",
-    "ripgrep": "rg",
-    "fzf": "fzf",
-    "bat": "bat",
-    "lazygit": "lazygit",
-    "neovim": "nvim",
-    "zsh": "zsh",
-    "htop": "htop",
-    "tmux": "tmux",
-}
-
-
-class Duplicate(NamedTuple):
-    package: str
-    binary: str
-
-
-def _installed_termux_packages() -> set[str]:
-    rc, out = run_cmd("dpkg-query -W -f='${Package}\\n' 2>/dev/null")
-    if rc != 0:
-        return set()
-    return {line.strip() for line in out.splitlines() if line.strip()}
-
-
-def _container_provides(binaries: set[str]) -> set[str]:
-    """Which of `binaries` the container can actually run."""
-    if not binaries:
-        return set()
-
-    script = "#!/bin/bash\n" + "".join(
-        f'command -v {b} >/dev/null 2>&1 && echo {b}\n' for b in sorted(binaries)
-    )
-    if not write_container_script("xlabs-which.sh", script):
-        return set()
-
-    rc, out = run_cmd(
-        container_command("xlabs-which.sh"),
-        timeout=120,
-    )
-    if rc != 0:
-        return set()
-    return {line.strip() for line in out.splitlines() if line.strip()}
-
-
-def termux_duplicates() -> list[Duplicate]:
-    """Termux packages whose job the container already does.
-
-    Returns nothing unless the container exists — without it there is no
-    "primary" to defer to, and removing anything would just take the tool away.
-    """
-    if not is_installed():
-        return []
-
-    installed = _installed_termux_packages() & set(TERMUX_DUPLICATES)
-    if not installed:
-        return []
-
-    wanted = {TERMUX_DUPLICATES[pkg] for pkg in installed}
-    provided = _container_provides(wanted)
-
-    return sorted(
-        (
-            Duplicate(pkg, TERMUX_DUPLICATES[pkg])
-            for pkg in installed
-            if TERMUX_DUPLICATES[pkg] in provided
-        ),
-        key=lambda d: d.package,
-    )
-
-
-def remove_termux_packages(packages: list[str], log: Log) -> bool:
-    """Remove Termux packages. Refuses anything not on the candidate list."""
-    unknown = [p for p in packages if p not in TERMUX_DUPLICATES]
-    if unknown:
-        log(f"[red]Refusing to remove packages outside the candidate list: {unknown}[/red]")
-        return False
-    if not packages:
-        log("Nothing to remove.")
-        return True
-
-    log(f"Removing from Termux: {', '.join(packages)}")
-    log("[dim]The container keeps its own copies.[/dim]")
-    log("")
-    return stream_cmd(f"pkg uninstall -y {' '.join(packages)}", log, timeout=900) == 0
 
 
 def fixable(issues: list[Issue]) -> list[Issue]:

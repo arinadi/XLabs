@@ -32,7 +32,7 @@ from textual.widgets import (
     Static,
 )
 
-from . import audio, backup, bench, doctor, iobench, isolation, packages
+from . import audio, backup, bench, browser, doctor, duplicates, iobench, isolation, packages
 from . import start as desktop
 from .const import CACHE_DIR, CONTAINER_NAME, REPO_DIR
 from .system import (
@@ -877,17 +877,10 @@ class DoctorScreen(CopyableScreen):
         yield Label("Doctor", classes="screen-title")
         yield Static("", id="doctor-info")
         yield ScrollableTable(id="doctor-table", cursor_type="row", zebra_stripes=True)
-        # Three to a row, with Back on its own full-width row: it is the
-        # most-used control and deserves the biggest target.
         with Grid(classes="row3"):
             yield Button("Re-scan", id="rescan")
             yield Button("Fix", id="fix", variant="success", disabled=True)
-            yield Button("Diagnose", id="diagnose")
-        with Grid(classes="row4"):
-            yield Button("Dupes", id="dupes")
-            yield Button("Audio", id="audio")
-            yield Button("Bench", id="bench")
-            yield Button("IO", id="iobench")
+            yield Button("Tools", id="tools")
         with Grid(classes="row2"):
             yield Button("C", id="copy")
             yield Button("Back", id="back", variant="primary")
@@ -896,7 +889,7 @@ class DoctorScreen(CopyableScreen):
     def on_mount(self) -> None:
         self.query_one("#doctor-table", DataTable).add_columns("Check", "State", "Detail")
         self.query_one("#copy", Button).tooltip = "Copy this report"
-        self.query_one("#iobench", Button).tooltip = "Test which isolation preset is fastest"
+        self.query_one("#tools", Button).tooltip = "Dupes, Audio, GPU, IO, Browser tuning"
 
     def copy_payload(self) -> str:
         lines = [f"XLabs doctor — {get_version()}", self._info, ""]
@@ -928,6 +921,12 @@ class DoctorScreen(CopyableScreen):
         self.app.call_from_thread(self._show_issues, issues, info)
 
     def _show_issues(self, issues: list[doctor.Issue], info: str) -> None:
+        # scan() runs in a background thread; by the time it calls back here
+        # the user may already have navigated away (Back is one tap after
+        # Tools resumes this screen and re-triggers a scan), popping this
+        # screen off the stack before the callback arrives.
+        if not self.is_mounted:
+            return
         self._issues = issues
         self._info = info
         self.query_one("#doctor-info", Static).update(info)
@@ -953,26 +952,9 @@ class DoctorScreen(CopyableScreen):
     def _rescan(self) -> None:
         self.scan()
 
-    @on(Button.Pressed, "#diagnose")
-    def _diagnose(self) -> None:
-        """Same report the start sequence prints on failure, on demand."""
-        self.app.push_screen(ActionScreen("Desktop Diagnostics", desktop.collect_diagnostics))
-
-    @on(Button.Pressed, "#dupes")
-    def _dupes(self) -> None:
-        self.app.push_screen(DupesScreen())
-
-    @on(Button.Pressed, "#audio")
-    def _audio(self) -> None:
-        self.app.push_screen(ActionScreen("Audio Test", audio.test))
-
-    @on(Button.Pressed, "#bench")
-    def _bench(self) -> None:
-        self.app.push_screen(ActionScreen("GPU Benchmark", bench.run))
-
-    @on(Button.Pressed, "#iobench")
-    def _iobench(self) -> None:
-        self.app.push_screen(ActionScreen("IO Benchmark", iobench.run))
+    @on(Button.Pressed, "#tools")
+    def _tools(self) -> None:
+        self.app.push_screen(ToolsScreen())
 
     @on(Button.Pressed, "#fix")
     def _fix(self) -> None:
@@ -992,6 +974,172 @@ class DoctorScreen(CopyableScreen):
         self.app.pop_screen()
 
 
+class ToolsScreen(Screen):
+    """On-demand diagnostics and tuning that don't belong in Doctor's own
+    issue table — nothing here is "wrong" the way a failed Issue is; each is
+    a scan, benchmark, or tuning pass the user runs when they want it, not
+    something Doctor's Fix should ever do on its own.
+    """
+
+    BINDINGS = [("escape", "back", "Back")]
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Label("Doctor Tools", classes="screen-title")
+        with Grid(classes="row3"):
+            yield Button("Dupes", id="dupes")
+            yield Button("Audio", id="audio")
+            yield Button("GPU", id="gpu")
+        with Grid(classes="row3"):
+            yield Button("IO", id="iobench")
+            yield Button("Diagnose", id="diagnose")
+            yield Button("Browser", id="browser")
+        yield Button("Back", id="back", variant="primary")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one("#iobench", Button).tooltip = "Test which isolation preset is fastest"
+        self.query_one("#diagnose", Button).tooltip = "Desktop session diagnostics, on demand"
+
+    @on(Button.Pressed, "#dupes")
+    def _dupes(self) -> None:
+        self.app.push_screen(DupesScreen())
+
+    @on(Button.Pressed, "#audio")
+    def _audio(self) -> None:
+        self.app.push_screen(ActionScreen("Audio Test", audio.test))
+
+    @on(Button.Pressed, "#gpu")
+    def _gpu(self) -> None:
+        self.app.push_screen(ActionScreen("GPU Benchmark", bench.run))
+
+    @on(Button.Pressed, "#iobench")
+    def _iobench(self) -> None:
+        self.app.push_screen(ActionScreen("IO Benchmark", iobench.run))
+
+    @on(Button.Pressed, "#diagnose")
+    def _diagnose(self) -> None:
+        """Same report the start sequence prints on failure, on demand."""
+        self.app.push_screen(ActionScreen("Desktop Diagnostics", desktop.collect_diagnostics))
+
+    @on(Button.Pressed, "#browser")
+    def _browser(self) -> None:
+        self.app.push_screen(BrowserScreen())
+
+    @on(Button.Pressed, "#back")
+    def action_back(self) -> None:
+        self.app.pop_screen()
+
+
+class BrowserScreen(CopyableScreen):
+    """Firefox/Chromium tuning for proot's ptrace overhead — see browser.py.
+
+    The safe tier has no downside and could live in Doctor's own Fix, but
+    stays here next to the reduced-security tier so both are one screen: a
+    user weighing the trade-off should see what "further" means without
+    hunting for it.
+    """
+
+    BINDINGS = [("escape", "back", "Back")]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._status_lines: list[str] = []
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Label("Browser tuning", classes="screen-title")
+        yield Static("", id="browser-status")
+        with Grid(classes="row2"):
+            yield Button("Tune Firefox", id="firefox-safe")
+            yield Button("Tune Chromium", id="chromium-safe")
+        yield Button("Reduce Firefox security further", id="firefox-reduced", variant="error")
+        yield Button("Back", id="back", variant="primary")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one("#firefox-reduced", Button).tooltip = (
+            "Disables Fission site isolation and Safe Browsing — read the confirmation first"
+        )
+        self._refresh()
+
+    def on_screen_resume(self) -> None:
+        """Also runs after returning from a tuning action, so status is
+        never stale."""
+        self._refresh()
+
+    def _refresh(self) -> None:
+        firefox = browser.firefox_present()
+        chromium = browser.chromium_present()
+
+        lines = [f"Firefox:  {'installed' if firefox else 'not installed'}"]
+        if firefox:
+            safe = browser.firefox_safe_tuning_ok()
+            reduced = browser.firefox_reduced_security_ok()
+            lines.append(f"  safe tuning:       {'applied' if safe else 'not applied'}")
+            lines.append(f"  reduced security:  {'applied' if reduced else 'not applied'}")
+        lines.append(f"Chromium: {'installed' if chromium else 'not installed'}")
+        if chromium:
+            chromium_ok = browser.chromium_tuning_ok()
+            lines.append(f"  safe tuning:       {'applied' if chromium_ok else 'not applied'}")
+
+        self._status_lines = lines
+        self.query_one("#browser-status", Static).update("\n".join(lines))
+
+        self.query_one("#firefox-safe", Button).disabled = not firefox
+        self.query_one("#firefox-reduced", Button).disabled = not firefox
+        self.query_one("#chromium-safe", Button).disabled = not chromium
+
+    def copy_payload(self) -> str:
+        return "\n".join([f"XLabs browser tuning — {get_version()}", "", *self._status_lines])
+
+    @on(Button.Pressed, "#firefox-safe")
+    def _firefox_safe(self) -> None:
+        def run(log) -> None:
+            if browser.apply_firefox_safe_tuning(log):
+                log("")
+                log("[green]Applied.[/green]")
+
+        self.app.push_screen(ActionScreen("Tune Firefox", run))
+
+    @on(Button.Pressed, "#chromium-safe")
+    def _chromium_safe(self) -> None:
+        def run(log) -> None:
+            if browser.apply_chromium_tuning(log):
+                log("")
+                log("[green]Applied.[/green]")
+
+        self.app.push_screen(ActionScreen("Tune Chromium", run))
+
+    @on(Button.Pressed, "#firefox-reduced")
+    def _firefox_reduced(self) -> None:
+        def run(log) -> None:
+            if browser.apply_firefox_reduced_security(log):
+                log("")
+                log("[green]Applied.[/green]")
+
+        self.app.push_screen(
+            ConfirmScreen(
+                "Reduce Firefox security",
+                "This disables Fission site isolation and Safe Browsing's "
+                "phishing/malware warnings, in exchange for fewer content "
+                "processes and less background I/O under proot.\n\n"
+                "Fission loss means a compromised tab's content process can "
+                "see others', not just its own. Safe Browsing loss means no "
+                "warning before a known phishing or malware page loads.\n\n"
+                "This project's own research recommends against applying "
+                "this — only continue if you understand and accept the "
+                "trade-off.",
+                confirm_label="Apply anyway",
+            ),
+            when_confirmed(self.app, lambda: ActionScreen("Reduce Firefox security", run)),
+        )
+
+    @on(Button.Pressed, "#back")
+    def action_back(self) -> None:
+        self.app.pop_screen()
+
+
 class DupesScreen(CopyableScreen):
     """Termux packages the container already provides.
 
@@ -1003,7 +1151,7 @@ class DupesScreen(CopyableScreen):
 
     def __init__(self) -> None:
         super().__init__()
-        self._dupes: list[doctor.Duplicate] = []
+        self._dupes: list[duplicates.Duplicate] = []
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -1036,9 +1184,9 @@ class DupesScreen(CopyableScreen):
 
     @work(thread=True)
     def scan(self) -> None:
-        self.app.call_from_thread(self._show, doctor.termux_duplicates())
+        self.app.call_from_thread(self._show, duplicates.termux_duplicates())
 
-    def _show(self, dupes: list[doctor.Duplicate]) -> None:
+    def _show(self, dupes: list[duplicates.Duplicate]) -> None:
         self._dupes = dupes
         table = self.query_one("#dupes-table", DataTable)
         table.clear()
@@ -1067,7 +1215,7 @@ class DupesScreen(CopyableScreen):
             return
 
         def run(log) -> None:
-            if doctor.remove_termux_packages(packages, log):
+            if duplicates.remove_termux_packages(packages, log):
                 log("")
                 log("[green]Removed.[/green] The container's copies are unaffected.")
             else:

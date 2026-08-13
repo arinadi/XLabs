@@ -22,6 +22,7 @@ from installer.app import (
     MainScreen,
     SettingsScreen,
     StoreScreen,
+    ToolsScreen,
     XLabsApp,
 )
 
@@ -131,6 +132,10 @@ async def test_narrow_terminal_layout() -> None:
             await pilot.click("#copy")
             await pilot.pause()
 
+            await pilot.click("#tools")
+            await pilot.pause()
+            check(isinstance(app.screen, ToolsScreen), f"got {app.screen!r}")
+
             await pilot.click("#dupes")
             await pilot.pause()
             check(isinstance(app.screen, DupesScreen), f"got {app.screen!r}")
@@ -138,7 +143,11 @@ async def test_narrow_terminal_layout() -> None:
             await pilot.pause()
             await pilot.click("#back")
             await pilot.pause()
-            check(isinstance(app.screen, DoctorScreen), "dupes did not return")
+            check(isinstance(app.screen, ToolsScreen), "dupes did not return")
+
+            await pilot.click("#back")
+            await pilot.pause()
+            check(isinstance(app.screen, DoctorScreen), "tools did not return")
 
             await pilot.click("#back")
             await pilot.pause()

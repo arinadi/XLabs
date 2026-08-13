@@ -15,7 +15,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from support import check, run
 
 from installer import doctor
-from installer.system import container_path
 
 
 def test_doctor_scan_shape() -> None:
@@ -37,39 +36,6 @@ def test_doctor_scan_shape() -> None:
     )
 
 
-def test_firefox_prefs_are_defaults_not_locks() -> None:
-    """The video tuning must set defaults the user can still override."""
-    body = doctor.FIREFOX_PREFS
-    for line in body.splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("//"):
-            continue
-        check(
-            stripped.startswith("pref(") and stripped.endswith(");"),
-            f"unexpected line in the prefs file: {line!r}",
-        )
-        # lockPref would stop about:config from changing it.
-        check("lockPref" not in stripped, f"prefs must not lock: {line!r}")
-
-    for expected in ("media.mediasource.vp9.enabled", "media.av1.enabled"):
-        check(expected in body, f"{expected} missing from the prefs")
-
-    # Without a container there is nothing to tune, so the check stays out of
-    # the way rather than reporting a problem that cannot exist yet.
-    if not doctor.is_installed():
-        names = {i.name for i in doctor.diagnose()}
-        check("Firefox video" not in names, "reported Firefox with no container")
-
-    # The repair refuses rather than raising when the target is absent.
-    lines: list[str] = []
-    if not os.path.isdir(container_path(doctor.FIREFOX_PREFS_DIR)):
-        check(
-            not doctor._fix_firefox_prefs(lines.append),
-            "the repair claimed success with no container",
-        )
-        check(lines, "the repair explained nothing")
-
-
 def test_doctor_reports_security_archive() -> None:
     """The shadowing bug mypy caught: a loop variable named `packages` hid
     the module import for the rest of diagnose(), so this check silently
@@ -84,71 +50,6 @@ def test_doctor_reports_security_archive() -> None:
             "Security archive" not in names,
             "the check ran with no container to check",
         )
-
-
-def test_electron_sandbox_detection_and_fix() -> None:
-    """VS Code (and anything else Electron) opens nothing under proot: the
-    SUID sandbox needs unprivileged user namespaces proot only fakes, so
-    Chromium's zygote init fails and the app never appears. Doctor finds
-    every installed Electron app by the chrome-sandbox helper next to its
-    binary — not by name, so something besides VS Code is caught too — and
-    patches its .desktop Exec with --no-sandbox."""
-    fake_root = tempfile.mkdtemp()
-    apps_dir = os.path.join(fake_root, "usr", "share", "applications")
-    code_dir = os.path.join(fake_root, "opt", "code")
-    bin_dir = os.path.join(fake_root, "usr", "bin")
-    os.makedirs(apps_dir)
-    os.makedirs(code_dir)
-    os.makedirs(bin_dir)
-
-    open(os.path.join(code_dir, "code"), "w").close()
-    open(os.path.join(code_dir, "chrome-sandbox"), "w").close()
-    code_desktop = os.path.join(apps_dir, "code.desktop")
-    with open(code_desktop, "w", newline="\n") as f:
-        f.write(
-            "[Desktop Entry]\n"
-            "Name=Visual Studio Code\n"
-            "Exec=/opt/code/code --unity-launch %F\n"
-            "Type=Application\n"
-        )
-
-    # A non-Electron app in a different directory, with no sandbox helper
-    # anywhere near it, must not be touched.
-    open(os.path.join(bin_dir, "htop"), "w").close()
-    htop_desktop = os.path.join(apps_dir, "htop.desktop")
-    with open(htop_desktop, "w", newline="\n") as f:
-        f.write("[Desktop Entry]\nName=htop\nExec=/usr/bin/htop\nType=Application\n")
-
-    original_container_path = doctor.container_path
-    doctor.container_path = lambda p: os.path.join(fake_root, p.lstrip("/"))
-    try:
-        found, missing = doctor._electron_status()
-        check(found == 1, f"expected exactly the Electron app to be found, got {found}")
-        check(missing == 1, "a freshly-written .desktop must not already look patched")
-
-        lines: list[str] = []
-        check(doctor._fix_electron_sandbox(lines.append), "the fix reported failure")
-
-        patched = open(code_desktop).read()
-        check("--no-sandbox" in patched, "Exec was not patched")
-        check("--unity-launch" in patched, "the fix dropped an existing flag")
-        check("%F" in patched, "the fix dropped the file-open field code")
-
-        untouched = open(htop_desktop).read()
-        check("--no-sandbox" not in untouched, "a non-Electron app was patched")
-
-        found, missing = doctor._electron_status()
-        check(missing == 0, "the app still reports as unpatched after the fix")
-
-        # Re-running must not add a second --no-sandbox.
-        lines2: list[str] = []
-        check(doctor._fix_electron_sandbox(lines2.append), "the re-run reported failure")
-        check(
-            open(code_desktop).read().count("--no-sandbox") == 1,
-            "re-running the fix duplicated the flag",
-        )
-    finally:
-        doctor.container_path = original_container_path
 
 
 def test_resolv_conf_check_and_fix() -> None:
@@ -255,48 +156,13 @@ def test_doctor_reports_audio() -> None:
         check(expected in names, f"{expected} missing from the diagnosis")
 
 
-def test_termux_duplicates_are_safe() -> None:
-    """Never offer to remove anything outside the candidate list."""
-    dupes = doctor.termux_duplicates()
-    check(isinstance(dupes, list), f"expected a list, got {type(dupes)}")
-    for dupe in dupes:
-        check(
-            dupe.package in doctor.TERMUX_DUPLICATES,
-            f"{dupe.package} is not a removal candidate",
-        )
-
-    # Everything the project itself runs on must be unreachable by this path.
-    for essential in (
-        "python", "python-pip", "git", "proot-distro", "termux-x11-nightly",
-        "pulseaudio", "termux-tools", "bash", "coreutils", "apt", "dpkg",
-        "mesa-zink", "virglrenderer-android", "angle-android",
-    ):
-        check(
-            essential not in doctor.TERMUX_DUPLICATES,
-            f"{essential} must never be a removal candidate",
-        )
-
-    lines: list[str] = []
-    check(
-        not doctor.remove_termux_packages(["coreutils"], lines.append),
-        "removing a non-candidate package was not refused",
-    )
-    check(
-        any("Refusing" in line for line in lines),
-        f"refusal was not explained: {lines}",
-    )
-
-
 TESTS = [
     test_doctor_scan_shape,
-    test_firefox_prefs_are_defaults_not_locks,
     test_doctor_reports_security_archive,
-    test_electron_sandbox_detection_and_fix,
     test_resolv_conf_check_and_fix,
     test_timezone_check_and_fix,
     test_storage_check_and_cleanup_guard,
     test_doctor_reports_audio,
-    test_termux_duplicates_are_safe,
 ]
 
 if __name__ == "__main__":
