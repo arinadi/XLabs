@@ -22,6 +22,7 @@ from textual.containers import Grid, Horizontal, VerticalScroll
 from textual.screen import ModalScreen, Screen
 from textual.widgets import (
     Button,
+    Checkbox,
     DataTable,
     Footer,
     Header,
@@ -32,7 +33,7 @@ from textual.widgets import (
     Static,
 )
 
-from . import audio, backup, bench, doctor, packages
+from . import audio, backup, bench, doctor, packages, presets
 from . import start as desktop
 from .const import CACHE_DIR, CONTAINER_NAME, REPO_DIR
 from .system import (
@@ -167,22 +168,40 @@ class ConfirmScreen(ModalScreen[bool]):
 
     BINDINGS = [("escape", "dismiss(False)", "Cancel")]
 
-    def __init__(self, title: str, body: str, confirm_label: str = "Confirm") -> None:
+    def __init__(
+        self,
+        title: str,
+        body: str,
+        confirm_label: str = "Confirm",
+        checkbox_label: str | None = None,
+        checkbox_default: bool = True,
+    ) -> None:
         super().__init__()
         self._title = title
         self._body = body
         self._confirm_label = confirm_label
+        self._checkbox_label = checkbox_label
+        # Read by the caller after dismiss(True) — via the same instance it
+        # already holds, not through the bool push_screen callback gets, so
+        # every other ConfirmScreen call site is untouched by this.
+        self.checkbox_value = checkbox_default
 
     def compose(self) -> ComposeResult:
         with VerticalScroll(id="dialog"):
             yield Label(self._title, id="dialog-title")
             yield Static(self._body, id="dialog-body")
+            if self._checkbox_label is not None:
+                yield Checkbox(
+                    self._checkbox_label, value=self.checkbox_value, id="dialog-checkbox"
+                )
             with Horizontal(id="dialog-buttons"):
                 yield Button("Cancel", id="cancel")
                 yield Button(self._confirm_label, id="confirm", variant="error")
 
     @on(Button.Pressed, "#confirm")
     def _confirm(self) -> None:
+        if self._checkbox_label is not None:
+            self.checkbox_value = self.query_one("#dialog-checkbox", Checkbox).value
         self.dismiss(True)
 
     @on(Button.Pressed, "#cancel")
@@ -348,7 +367,7 @@ def run_update(log) -> None:
         log("[red]Update failed.[/red]")
 
 
-def run_reset(log) -> None:
+def run_reset(log, restore_preset: bool = False) -> None:
     # One teardown path. stop_desktop already kills this container's proot
     # tree and verifies, so there is nothing to repeat here.
     log("Stopping the desktop...")
@@ -364,6 +383,10 @@ def run_reset(log) -> None:
     ok = pull_image(log)
     if ok:
         packages.reapply_saved_mirror(log)
+
+    if ok and restore_preset:
+        log("")
+        presets.restore_preset(log)
 
     log("")
     if ok:
@@ -483,7 +506,12 @@ class MainScreen(Screen):
                     "minutes.",
                     confirm_label="Install",
                 ),
-                when_confirmed(self.app, lambda: ActionScreen("Install", run_reset)),
+                when_confirmed(
+                    self.app,
+                    lambda: ActionScreen(
+                        "Install", lambda log: run_reset(log, restore_preset=True)
+                    ),
+                ),
             )
             return
         self.app.push_screen(ActionScreen("Start Desktop", run_start))
@@ -514,17 +542,27 @@ class MainScreen(Screen):
 
     @on(Button.Pressed, "#reset")
     def _reset(self) -> None:
-        self.app.push_screen(
-            ConfirmScreen(
-                "Reset (Clean Install)",
-                "This deletes the entire container and pulls a fresh image.\n\n"
-                "Every file, setting, and package inside the container is lost "
-                "permanently. Your Termux home is untouched. Back up first from "
-                "the Backup screen if you want to keep your files.",
-                confirm_label="Delete and reinstall",
-            ),
-            when_confirmed(self.app, lambda: ActionScreen("Reset", run_reset)),
+        preset = presets.find_preset()
+        confirm = ConfirmScreen(
+            "Reset (Clean Install)",
+            "This deletes the entire container and pulls a fresh image.\n\n"
+            "Every file, setting, and package inside the container is lost "
+            "permanently. Your Termux home is untouched. Back up first from "
+            "the Backup screen if you want to keep your files.",
+            confirm_label="Delete and reinstall",
+            checkbox_label=f"Restore preset ({preset.name})" if preset else None,
         )
+
+        def handler(confirmed: bool | None) -> None:
+            if confirmed:
+                restore = preset is not None and confirm.checkbox_value
+                self.app.push_screen(
+                    ActionScreen(
+                        "Reset", lambda log: run_reset(log, restore_preset=restore)
+                    )
+                )
+
+        self.app.push_screen(confirm, handler)
 
     @on(Button.Pressed, "#cache")
     def _cache(self) -> None:

@@ -247,10 +247,16 @@ Debian rather than copying files from the host, since proot's ownership and
 hardlink emulation don't survive a raw copy. Stored outside Debian under
 `~/XLabs-backups`, so a **Reset** can't take a backup down with it.
 
+A backup dropped into [`presets/`](presets/) in this repo (instead of
+`~/XLabs-backups`) is your own — XLabs doesn't ship one. Commit it, and it's
+restored automatically the first time Debian is installed or Doctor pulls a
+missing container back, and offered as a checkbox on **Reset**.
+
 ### Reset and Cache
 
-**Reset** deletes Debian and pulls a fresh image. **Cache** drops downloaded
-image layers only. Both confirm first.
+**Reset** deletes Debian and pulls a fresh image — with a checkbox to
+restore your [preset](presets/) afterward, checked by default when one
+exists. **Cache** drops downloaded image layers only. Both confirm first.
 
 ### Copying anything
 
@@ -314,9 +320,12 @@ XLabs/
 │   └── doctor.py       ←   Diagnosis and repair
 │   ├── bench.py        ←   GPU benchmark and profile
 │   ├── config.py       ←   .env, per-device settings
+│   ├── backup.py       ←   Home directory backup/restore
+│   └── presets.py      ←   Restore a repo-tracked preset (see backup.py)
 ├── image/              ← System definition (Dockerfile + configs)
 ├── tests/              ← Headless TUI tests, run by CI
 ├── docker/dev/         ← Local TUI test harness
+├── presets/            ← Your own backup, restored on fresh installs
 └── docs/               ← Debugging notes and references
 ```
 
