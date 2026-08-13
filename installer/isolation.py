@@ -34,11 +34,11 @@ class Preset(NamedTuple):
 
 
 PRESETS = (
-    Preset("default", "Full Android/host access (current behavior)", ""),
-    Preset("isolated", "Skip Android/host bindings, fewer binds for proot to resolve", "--isolated"),
+    Preset("default", "Full Android/host access (default)", ""),
+    Preset("isolated", "Isolated — skip Android bindings", "--isolated"),
     Preset(
         "isolated-storage",
-        "Isolated, with phone storage bound at /mnt/android",
+        "Isolated + /mnt/android storage",
         f"--isolated --bind {STORAGE_BIND}:/mnt/android",
     ),
 )

@@ -66,10 +66,10 @@ TCP_MODULE = "module-native-protocol-tcp auth-ip-acl=127.0.0.1 auth-anonymous=1"
 # --shared-tmp already puts it inside the container as an ordinary file, with
 # no networking involved.
 METHODS = (
-    Method("unix", "Unix socket, shared memory off", UNIX_MODULE, "unix:/tmp/pulse-socket", False),
-    Method("unix-shm", "Unix socket, shared memory on", UNIX_MODULE, "unix:/tmp/pulse-socket", True),
-    Method("tcp", "TCP, shared memory off", TCP_MODULE, "tcp:127.0.0.1", False),
-    Method("tcp-shm", "TCP, shared memory on", TCP_MODULE, "tcp:127.0.0.1", True),
+    Method("unix", "Unix socket (shm off)", UNIX_MODULE, "unix:/tmp/pulse-socket", False),
+    Method("unix-shm", "Unix socket (shm on)", UNIX_MODULE, "unix:/tmp/pulse-socket", True),
+    Method("tcp", "TCP (shm off)", TCP_MODULE, "tcp:127.0.0.1", False),
+    Method("tcp-shm", "TCP (shm on)", TCP_MODULE, "tcp:127.0.0.1", True),
 )
 
 DEFAULT_METHOD = METHODS[0]

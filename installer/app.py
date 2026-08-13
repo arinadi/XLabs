@@ -577,12 +577,11 @@ class SettingsScreen(CopyableScreen):
         yield Label("Settings", classes="screen-title")
         with VerticalScroll(id="settings-form"):
             yield Static(
-                "Per-device preferences, saved to .env. Restart the desktop "
-                "for a change to take effect.",
+                "Saved to .env — restart the desktop for changes to take effect.",
                 id="settings-note",
             )
-            yield Label("Debian mirror (change from Store → Mirror)")
             yield Static("", id="settings-mirror")
+            yield Label("Rendering & audio", classes="settings-section")
             yield Label("Audio method")
             yield Select(
                 [(m.description, m.name) for m in audio.METHODS],
@@ -597,13 +596,15 @@ class SettingsScreen(CopyableScreen):
             )
             yield Label("termux-x11 rendering")
             yield Select(self.DRAW_PATH_OPTIONS, id="settings-x11", allow_blank=False)
-            yield Label("Container isolation (Doctor → IO to measure)")
+            yield Label("Container", classes="settings-section")
+            yield Label("Isolation")
             yield Select(
                 [(p.description, p.name) for p in isolation.PRESETS],
                 id="settings-isolation",
                 allow_blank=False,
             )
             yield Static("", id="settings-status")
+            yield Label("Danger zone", classes="settings-section settings-danger-label")
             yield Button("Uninstall XLabs", id="uninstall", variant="error")
         with Grid(classes="row2"):
             yield Button("C", id="copy")
@@ -615,14 +616,18 @@ class SettingsScreen(CopyableScreen):
         self.query_one("#uninstall", Button).tooltip = (
             "Remove the container, cache, and xlabs launcher"
         )
+        self.query_one("#settings-isolation", Select).tooltip = (
+            "Measure which preset is fastest from Doctor -> Tools -> IO"
+        )
         self._refresh()
 
     def on_screen_resume(self) -> None:
         self._refresh()
 
     def _refresh(self) -> None:
+        mirror = packages.current_mirror() or "no sources file yet"
         self.query_one("#settings-mirror", Static).update(
-            packages.current_mirror() or "No sources file in the container"
+            f"Mirror: {mirror} · change from Store → Mirror"
         )
         self._last_audio = audio.load_method().name
         self.query_one("#settings-audio", Select).value = self._last_audio

@@ -196,16 +196,23 @@ AddRepoScreen Input {
     height: 1fr;
 }
 
-#settings-note {
-    margin: 1 2 0 2;
-    padding: 1;
-    border: round $primary;
+#settings-note,
+#settings-mirror {
+    margin: 0 2;
+    padding: 0 1;
+    color: $text-muted;
 }
 
-#settings-mirror,
+#settings-note {
+    margin-top: 1;
+}
+
+/* Reserves its line even empty, so a confirmation message appearing after
+   an edit does not shove Danger zone and Back down a row. */
 #settings-status {
     margin: 0 2;
     padding: 0 1;
+    min-height: 1;
     color: $text-muted;
 }
 
@@ -215,4 +222,26 @@ SettingsScreen Label {
 
 SettingsScreen Select {
     margin: 0 2;
+}
+
+/* Muted, bold section dividers ("Rendering & audio", "Container") so a
+   growing list of unrelated Selects still reads as grouped, not a flat
+   pile of identical-looking rows. */
+.settings-section {
+    margin: 2 2 0 2;
+    color: $text-muted;
+    text-style: bold;
+}
+
+/* Colored red rather than boxed: a bordered Vertical here fights the
+   VerticalScroll's 1fr sizing and renders overlapping its neighbours
+   instead of following them, so a plain colored section label is what
+   actually separates Uninstall from an ordinary settings row without a
+   layout fight. */
+.settings-danger-label {
+    color: $error;
+}
+
+SettingsScreen #uninstall {
+    margin: 0 2 1 2;
 }
