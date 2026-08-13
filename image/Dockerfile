@@ -101,12 +101,14 @@ RUN apt-get update && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ── Theme ──────────────────────────────────────────────────────
-# gnome-themes-extra provides the Adwaita-dark GTK theme. Installed only;
-# not set as default, per the no-baked-in-configuration rule above — pick
-# it via xfce4-settings > Appearance on first run.
+# breeze-gtk-theme provides Breeze Dark: pure-CSS GTK3, no legacy GTK2
+# engine deps (unlike gnome-themes-extra), and actively maintained
+# upstream via KDE Plasma releases. Installed only; not set as default,
+# per the no-baked-in-configuration rule above — pick it via
+# xfce4-settings > Appearance on first run.
 RUN apt-get update && \
     apt-get install -y \
-        gnome-themes-extra && \
+        breeze-gtk-theme && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ── X11 client tools, GL userspace, audio client ───────────────
