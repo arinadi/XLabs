@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from support import check, run
 from textual.widgets import Button, DataTable, Input
 
+from installer import packages
 from installer.app import (
     AddRepoScreen,
     ConfirmScreen,
@@ -61,6 +62,86 @@ async def test_store_screen_searches() -> None:
         await pilot.click("#back")
         await pilot.pause()
         check(isinstance(app.screen, MainScreen), f"got {app.screen!r}")
+
+
+async def test_multi_select_checkboxes() -> None:
+    """Space checks/unchecks the highlighted row; Install then acts on
+    every checked package, or falls back to the highlighted row alone if
+    nothing is checked."""
+    app = XLabsApp()
+    async with app.run_test(size=(80, 40)) as pilot:
+        await pilot.pause()
+        await pilot.click("#store")
+        await pilot.pause()
+        store = app.screen
+        check(isinstance(store, StoreScreen), f"got {store!r}")
+
+        # No container off-device, so results are seeded directly rather
+        # than through a real search/curated load.
+        fake = [
+            packages.Package("alpha", "first tool", False),
+            packages.Package("beta", "second tool", False),
+            packages.Package("gamma", "already there", True),
+        ]
+        store._show(fake, None, kind="search")
+        await pilot.pause()
+
+        table = store.query_one("#store-table", DataTable)
+        table.focus()
+
+        table.move_cursor(row=0)
+        await pilot.pause()
+        await pilot.press("space")
+        await pilot.pause()
+        check(store._checked == {"alpha"}, f"space did not check the row: {store._checked}")
+        install = store.query_one("#install", Button)
+        check(
+            str(install.label) == "Install (1)",
+            f"install label did not reflect the checked count: {install.label!r}",
+        )
+
+        table.move_cursor(row=1)
+        await pilot.pause()
+        await pilot.press("space")
+        await pilot.pause()
+        check(store._checked == {"alpha", "beta"}, f"second check lost the first: {store._checked}")
+
+        # An already-installed row must refuse to be checked.
+        table.move_cursor(row=2)
+        await pilot.pause()
+        await pilot.press("space")
+        await pilot.pause()
+        check("gamma" not in store._checked, "an already-installed package was checked")
+
+        # Toggling an already-checked row off works too.
+        table.move_cursor(row=0)
+        await pilot.pause()
+        await pilot.press("space")
+        await pilot.pause()
+        check(store._checked == {"beta"}, f"toggling off did not remove it: {store._checked}")
+
+        await pilot.click("#install")
+        await pilot.pause()
+        check(isinstance(app.screen, ConfirmScreen), f"got {app.screen!r}")
+        check(store._checked == set(), "Install did not clear the checked set for the pending run")
+
+        await pilot.click("#cancel")
+        await pilot.pause()
+        check(isinstance(app.screen, StoreScreen), "cancel did not return to Store")
+
+        # Nothing checked: Install falls back to the highlighted row alone.
+        table.move_cursor(row=0)
+        await pilot.pause()
+        await pilot.click("#install")
+        await pilot.pause()
+        check(isinstance(app.screen, ConfirmScreen), "the single-row fallback did not confirm")
+        title = str(app.screen.query_one("#dialog-title").content)
+        check("Install alpha" in title, f"the fallback did not target the highlighted row: {title!r}")
+
+        await pilot.click("#cancel")
+        await pilot.pause()
+        await pilot.click("#back")
+        await pilot.pause()
 
 
 async def test_row_selection_shows_before_confirm() -> None:
@@ -182,6 +263,7 @@ async def test_add_repo_screen() -> None:
 
 TESTS = [
     test_store_screen_searches,
+    test_multi_select_checkboxes,
     test_row_selection_shows_before_confirm,
     test_add_repo_screen,
 ]

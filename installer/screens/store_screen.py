@@ -15,13 +15,20 @@ from .common import ActionScreen, ConfirmScreen, ScrollableTable, when_confirmed
 
 
 class StoreScreen(Screen):
-    """Search the container's package lists and install from them."""
+    """Search the container's package lists and install from them.
 
-    BINDINGS = [("escape", "back", "Back")]
+    Space checks/unchecks the highlighted row for a batch install; Install
+    then acts on every checked package. With nothing checked it falls back
+    to installing just the highlighted row, so a single install still takes
+    one press.
+    """
+
+    BINDINGS = [("escape", "back", "Back"), ("space", "toggle_check", "Check")]
 
     def __init__(self) -> None:
         super().__init__()
         self._results: list[packages.Package] = []
+        self._checked: set[str] = set()
         # Kept alongside the widget: Static does not expose its text back.
         self.status_text = ""
 
@@ -42,7 +49,9 @@ class StoreScreen(Screen):
 
     def on_mount(self) -> None:
         self.query_one("#store-table", DataTable).add_columns("", "Package", "Description")
-        self.query_one("#install", Button).tooltip = "Install the highlighted package"
+        self.query_one("#install", Button).tooltip = (
+            "Installs every checked package, or the highlighted one if none are checked"
+        )
         self.query_one("#installed", Button).tooltip = "List everything installed"
         self.query_one("#query", Input).focus()
         self._status("Loading curated tools...")
@@ -82,19 +91,44 @@ class StoreScreen(Screen):
         results, error = packages.search(term)
         self.app.call_from_thread(self._show, results, error)
 
+    def _mark(self, pkg: packages.Package) -> str:
+        if pkg.installed:
+            return "[green]I[/green]"
+        if pkg.name in self._checked:
+            return "[green][x][/green]"
+        return "[ ]"
+
+    def _refill_table(self) -> None:
+        """Redraws marks from the current results/checked set, without
+        re-querying apt — used after a checkbox toggle.
+
+        Restores the cursor row afterward: clear() resets it to the top,
+        which would otherwise throw the highlight back to row 0 after every
+        single checkbox toggle — exactly the row a user checking several in
+        a row is about to press space on next.
+        """
+        table = self.query_one("#store-table", DataTable)
+        row = table.cursor_row
+        table.clear()
+        for pkg in self._results:
+            table.add_row(self._mark(pkg), pkg.name, pkg.description[:70])
+        if row is not None and 0 <= row < len(self._results):
+            table.move_cursor(row=row, animate=False, scroll=False)
+
+    def _update_install_button(self) -> None:
+        button = self.query_one("#install", Button)
+        button.disabled = not self._results
+        button.label = f"Install ({len(self._checked)})" if self._checked else "Install"
+
     def _show(
         self, results: list[packages.Package], error: str | None, kind: str = "search"
     ) -> None:
         self._results = results
-        table = self.query_one("#store-table", DataTable)
-        table.clear()
-
-        for pkg in results:
-            mark = "[green]I[/green]" if pkg.installed else ""
-            table.add_row(mark, pkg.name, pkg.description[:70])
-
-        button = self.query_one("#install", Button)
-        button.disabled = not results
+        # A checked package not in the new results is kept — a second search
+        # to add more picks to the same batch shouldn't lose the first ones.
+        self._checked -= {p.name for p in results if p.installed}
+        self._refill_table()
+        self._update_install_button()
 
         if error:
             self._status(error)
@@ -103,7 +137,7 @@ class StoreScreen(Screen):
             installed = sum(1 for p in results if p.installed)
             self._status(
                 f"{len(results)} curated tool(s), {installed} already installed "
-                "(marked I). Search to find more, or highlight one and press Install."
+                "(marked I). Space checks a row for a batch install."
             )
         elif kind == "installed":
             self._status(f"{len(results)} package(s) installed in the container.")
@@ -111,7 +145,7 @@ class StoreScreen(Screen):
             installed = sum(1 for p in results if p.installed)
             self._status(
                 f"{len(results)} result(s), {installed} already installed "
-                "(marked I). Highlight one and press Install."
+                "(marked I). Space checks a row for a batch install."
             )
 
     def _selected(self) -> packages.Package | None:
@@ -131,36 +165,69 @@ class StoreScreen(Screen):
         pkg = self._selected()
         if pkg is not None:
             state = "installed" if pkg.installed else "not installed"
-            self._status(f"Selected: {pkg.name} ({state})")
+            self._status(f"Highlighted: {pkg.name} ({state}) — space to check")
+
+    def action_toggle_check(self) -> None:
+        pkg = self._selected()
+        if pkg is None:
+            self.notify("Highlight a row first.", severity="warning")
+            return
+        if pkg.installed:
+            self.notify(f"{pkg.name} is already installed.", severity="warning")
+            return
+
+        if pkg.name in self._checked:
+            self._checked.discard(pkg.name)
+        else:
+            self._checked.add(pkg.name)
+        self._refill_table()
+        self._update_install_button()
+        self._status(f"{len(self._checked)} package(s) checked to install.")
 
     @on(Button.Pressed, "#install")
     def _install(self) -> None:
-        pkg = self._selected()
-        if pkg is None:
-            self._status("Highlight a row first.")
-            return
+        names = sorted(self._checked)
+        if not names:
+            pkg = self._selected()
+            if pkg is None:
+                self._status("Highlight a row first, or check some with space.")
+                return
+            if pkg.installed:
+                self._status(f"{pkg.name} is already installed.")
+                return
+            names = [pkg.name]
 
-        if pkg.installed:
-            self._status(f"{pkg.name} is already installed.")
-            return
+        # Optimistic: the batch is now committed to this run, so the
+        # checkboxes shouldn't still claim to be pending if the user comes
+        # back here before it finishes.
+        self._checked.clear()
+        self._refill_table()
+        self._update_install_button()
+
+        label = names[0] if len(names) == 1 else f"{len(names)} packages"
+        if len(names) == 1:
+            pkg = next((p for p in self._results if p.name == names[0]), None)
+            body = pkg.description if pkg else ""
+        else:
+            body = "\n".join(names)
 
         def run(log) -> None:
-            if packages.install([pkg.name], log):
+            if packages.install(names, log):
                 log("")
-                log(f"[green]{pkg.name} installed.[/green]")
+                log(f"[green]{label} installed.[/green]")
             else:
                 log("")
-                log(f"[red]Could not install {pkg.name}.[/red]")
+                log(f"[red]Could not install {label}.[/red]")
 
         self.app.push_screen(
             ConfirmScreen(
-                f"Install {pkg.name}",
-                f"{pkg.description}\n\n"
+                f"Install {label}",
+                f"{body}\n\n"
                 "This installs into the container with apt. "
                 "Termux is not touched.",
                 confirm_label="Install",
             ),
-            when_confirmed(self.app, lambda: ActionScreen(f"Install {pkg.name}", run)),
+            when_confirmed(self.app, lambda: ActionScreen(f"Install {label}", run)),
         )
 
     @on(Button.Pressed, "#mirror")
