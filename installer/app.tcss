@@ -242,6 +242,7 @@ SettingsScreen Select {
     color: $error;
 }
 
-SettingsScreen #uninstall {
+SettingsScreen #uninstall,
+SettingsScreen #claude-providers {
     margin: 0 2 1 2;
 }
