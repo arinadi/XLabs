@@ -15,12 +15,13 @@ from .common import ActionScreen, ConfirmScreen, ScrollableTable, when_confirmed
 
 
 class StoreScreen(Screen):
-    """Search the container's package lists and install from them.
+    """Search the container's package lists and install or remove from them.
 
-    Space checks/unchecks the highlighted row for a batch install; Install
-    then acts on every checked package. With nothing checked it falls back
-    to installing just the highlighted row, so a single install still takes
-    one press.
+    Space checks/unchecks the highlighted row — a not-yet-installed row
+    joins the Install batch, an installed one joins the Uninstall batch, so
+    the same gesture drives both without a mode switch. Either button falls
+    back to acting on just the highlighted row when nothing is checked, so a
+    single install/uninstall still takes one press.
     """
 
     BINDINGS = [("escape", "back", "Back"), ("space", "toggle_check", "Check")]
@@ -28,7 +29,8 @@ class StoreScreen(Screen):
     def __init__(self) -> None:
         super().__init__()
         self._results: list[packages.Package] = []
-        self._checked: set[str] = set()
+        self._to_install: set[str] = set()
+        self._to_uninstall: set[str] = set()
         # Kept alongside the widget: Static does not expose its text back.
         self.status_text = ""
 
@@ -42,15 +44,19 @@ class StoreScreen(Screen):
             yield Button("Mirror", id="mirror")
             yield Button("Repos", id="repos")
             yield Button("Installed", id="installed")
-        with Grid(classes="row2"):
+        with Grid(classes="row3"):
             yield Button("Install", id="install", variant="success", disabled=True)
+            yield Button("Uninstall", id="uninstall", variant="error", disabled=True)
             yield Button("Back", id="back", variant="primary")
         yield Footer()
 
     def on_mount(self) -> None:
         self.query_one("#store-table", DataTable).add_columns("", "Package", "Description")
         self.query_one("#install", Button).tooltip = (
-            "Installs every checked package, or the highlighted one if none are checked"
+            "Installs every checked not-installed package, or the highlighted one if none are checked"
+        )
+        self.query_one("#uninstall", Button).tooltip = (
+            "Removes every checked installed package, or the highlighted one if none are checked"
         )
         self.query_one("#installed", Button).tooltip = "List everything installed"
         self.query_one("#query", Input).focus()
@@ -92,11 +98,11 @@ class StoreScreen(Screen):
         self.app.call_from_thread(self._show, results, error)
 
     def _mark(self, pkg: packages.Package) -> str:
-        if pkg.installed:
-            return "[green]I[/green]"
-        if pkg.name in self._checked:
+        if pkg.name in self._to_uninstall:
+            return "[red][x][/red]"
+        if pkg.name in self._to_install:
             return "[green][x][/green]"
-        return "[ ]"
+        return "[green]I[/green]" if pkg.installed else "[ ]"
 
     def _refill_table(self) -> None:
         """Redraws marks from the current results/checked set, without
@@ -115,20 +121,26 @@ class StoreScreen(Screen):
         if row is not None and 0 <= row < len(self._results):
             table.move_cursor(row=row, animate=False, scroll=False)
 
-    def _update_install_button(self) -> None:
-        button = self.query_one("#install", Button)
-        button.disabled = not self._results
-        button.label = f"Install ({len(self._checked)})" if self._checked else "Install"
+    def _update_action_buttons(self) -> None:
+        install_button = self.query_one("#install", Button)
+        install_button.disabled = not self._results
+        install_button.label = (
+            f"Install ({len(self._to_install)})" if self._to_install else "Install"
+        )
+        uninstall_button = self.query_one("#uninstall", Button)
+        uninstall_button.disabled = not self._results
+        uninstall_button.label = (
+            f"Uninstall ({len(self._to_uninstall)})" if self._to_uninstall else "Uninstall"
+        )
 
     def _show(
         self, results: list[packages.Package], error: str | None, kind: str = "search"
     ) -> None:
         self._results = results
-        # A checked package not in the new results is kept — a second search
+        # Checked packages not in the new results are kept — a second search
         # to add more picks to the same batch shouldn't lose the first ones.
-        self._checked -= {p.name for p in results if p.installed}
         self._refill_table()
-        self._update_install_button()
+        self._update_action_buttons()
 
         if error:
             self._status(error)
@@ -137,15 +149,18 @@ class StoreScreen(Screen):
             installed = sum(1 for p in results if p.installed)
             self._status(
                 f"{len(results)} curated tool(s), {installed} already installed "
-                "(marked I). Space checks a row for a batch install."
+                "(marked I). Space checks a row for install/uninstall."
             )
         elif kind == "installed":
-            self._status(f"{len(results)} package(s) installed in the container.")
+            self._status(
+                f"{len(results)} package(s) installed in the container. "
+                "Space checks a row to uninstall it."
+            )
         else:
             installed = sum(1 for p in results if p.installed)
             self._status(
                 f"{len(results)} result(s), {installed} already installed "
-                "(marked I). Space checks a row for a batch install."
+                "(marked I). Space checks a row for install/uninstall."
             )
 
     def _selected(self) -> packages.Package | None:
@@ -172,21 +187,21 @@ class StoreScreen(Screen):
         if pkg is None:
             self.notify("Highlight a row first.", severity="warning")
             return
-        if pkg.installed:
-            self.notify(f"{pkg.name} is already installed.", severity="warning")
-            return
 
-        if pkg.name in self._checked:
-            self._checked.discard(pkg.name)
+        target = self._to_uninstall if pkg.installed else self._to_install
+        if pkg.name in target:
+            target.discard(pkg.name)
         else:
-            self._checked.add(pkg.name)
+            target.add(pkg.name)
         self._refill_table()
-        self._update_install_button()
-        self._status(f"{len(self._checked)} package(s) checked to install.")
+        self._update_action_buttons()
+        self._status(
+            f"{len(self._to_install)} to install, {len(self._to_uninstall)} to uninstall."
+        )
 
     @on(Button.Pressed, "#install")
     def _install(self) -> None:
-        names = sorted(self._checked)
+        names = sorted(self._to_install)
         if not names:
             pkg = self._selected()
             if pkg is None:
@@ -197,12 +212,12 @@ class StoreScreen(Screen):
                 return
             names = [pkg.name]
 
-        # Optimistic: the batch is now committed to this run, so the
+        # Optimistic: the batch is now committed to this run, so its
         # checkboxes shouldn't still claim to be pending if the user comes
         # back here before it finishes.
-        self._checked.clear()
+        self._to_install.difference_update(names)
         self._refill_table()
-        self._update_install_button()
+        self._update_action_buttons()
 
         label = names[0] if len(names) == 1 else f"{len(names)} packages"
         if len(names) == 1:
@@ -228,6 +243,49 @@ class StoreScreen(Screen):
                 confirm_label="Install",
             ),
             when_confirmed(self.app, lambda: ActionScreen(f"Install {label}", run)),
+        )
+
+    @on(Button.Pressed, "#uninstall")
+    def _uninstall(self) -> None:
+        names = sorted(self._to_uninstall)
+        if not names:
+            pkg = self._selected()
+            if pkg is None:
+                self._status("Highlight a row first, or check some with space.")
+                return
+            if not pkg.installed:
+                self._status(f"{pkg.name} is not installed.")
+                return
+            names = [pkg.name]
+
+        self._to_uninstall.difference_update(names)
+        self._refill_table()
+        self._update_action_buttons()
+
+        label = names[0] if len(names) == 1 else f"{len(names)} packages"
+        if len(names) == 1:
+            pkg = next((p for p in self._results if p.name == names[0]), None)
+            body = pkg.description if pkg else ""
+        else:
+            body = "\n".join(names)
+
+        def run(log) -> None:
+            if packages.uninstall(names, log):
+                log("")
+                log(f"[green]{label} removed.[/green]")
+            else:
+                log("")
+                log(f"[red]Could not remove {label}.[/red]")
+
+        self.app.push_screen(
+            ConfirmScreen(
+                f"Uninstall {label}",
+                f"{body}\n\n"
+                "Removes the package from the container with apt — its "
+                "config files are left in place. Termux is not touched.",
+                confirm_label="Uninstall",
+            ),
+            when_confirmed(self.app, lambda: ActionScreen(f"Uninstall {label}", run)),
         )
 
     @on(Button.Pressed, "#mirror")

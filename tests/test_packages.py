@@ -211,6 +211,13 @@ def test_package_terms_reject_shell_metacharacters() -> None:
     )
     check(any("Refusing" in line for line in lines), f"no refusal logged: {lines}")
 
+    lines = []
+    check(
+        not packages.uninstall(["neovim; rm -rf /"], lines.append),
+        "uninstall accepted a name with shell syntax",
+    )
+    check(any("Refusing" in line for line in lines), f"no refusal logged: {lines}")
+
     results, error = packages.search("a; rm -rf /")
     check(results == [], "a hostile search returned results")
     check(error is not None, "a hostile search reported no error")
@@ -235,6 +242,7 @@ def test_search_notices_missing_package_lists() -> None:
     # Both paths that install must refresh first, or they fail on a fresh
     # container the same way search did.
     check("apt-get update" in packages.INSTALL_SCRIPT, "install does not refresh lists")
+    check("apt-get remove" in packages.UNINSTALL_SCRIPT, "uninstall does not remove")
 
 
 def test_validate_custom_repo() -> None:

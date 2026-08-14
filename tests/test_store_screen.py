@@ -65,9 +65,10 @@ async def test_store_screen_searches() -> None:
 
 
 async def test_multi_select_checkboxes() -> None:
-    """Space checks/unchecks the highlighted row; Install then acts on
-    every checked package, or falls back to the highlighted row alone if
-    nothing is checked."""
+    """Space checks the highlighted row into the Install batch if it's not
+    installed, or the Uninstall batch if it is. Either button then acts on
+    its batch, or falls back to the highlighted row alone if nothing is
+    checked for it."""
     app = XLabsApp()
     async with app.run_test(size=(80, 40)) as pilot:
         await pilot.pause()
@@ -93,7 +94,7 @@ async def test_multi_select_checkboxes() -> None:
         await pilot.pause()
         await pilot.press("space")
         await pilot.pause()
-        check(store._checked == {"alpha"}, f"space did not check the row: {store._checked}")
+        check(store._to_install == {"alpha"}, f"space did not check the row: {store._to_install}")
         install = store.query_one("#install", Button)
         check(
             str(install.label) == "Install (1)",
@@ -104,30 +105,49 @@ async def test_multi_select_checkboxes() -> None:
         await pilot.pause()
         await pilot.press("space")
         await pilot.pause()
-        check(store._checked == {"alpha", "beta"}, f"second check lost the first: {store._checked}")
+        check(
+            store._to_install == {"alpha", "beta"},
+            f"second check lost the first: {store._to_install}",
+        )
 
-        # An already-installed row must refuse to be checked.
+        # An already-installed row joins the Uninstall batch instead.
         table.move_cursor(row=2)
         await pilot.pause()
         await pilot.press("space")
         await pilot.pause()
-        check("gamma" not in store._checked, "an already-installed package was checked")
+        check(store._to_uninstall == {"gamma"}, f"installed row did not check: {store._to_uninstall}")
+        uninstall = store.query_one("#uninstall", Button)
+        check(
+            str(uninstall.label) == "Uninstall (1)",
+            f"uninstall label did not reflect the checked count: {uninstall.label!r}",
+        )
 
         # Toggling an already-checked row off works too.
         table.move_cursor(row=0)
         await pilot.pause()
         await pilot.press("space")
         await pilot.pause()
-        check(store._checked == {"beta"}, f"toggling off did not remove it: {store._checked}")
+        check(store._to_install == {"beta"}, f"toggling off did not remove it: {store._to_install}")
 
         await pilot.click("#install")
         await pilot.pause()
         check(isinstance(app.screen, ConfirmScreen), f"got {app.screen!r}")
-        check(store._checked == set(), "Install did not clear the checked set for the pending run")
+        check(store._to_install == set(), "Install did not clear its batch for the pending run")
+        check(store._to_uninstall == {"gamma"}, "Install disturbed the separate Uninstall batch")
 
         await pilot.click("#cancel")
         await pilot.pause()
         check(isinstance(app.screen, StoreScreen), "cancel did not return to Store")
+
+        await pilot.click("#uninstall")
+        await pilot.pause()
+        check(isinstance(app.screen, ConfirmScreen), f"got {app.screen!r}")
+        title = str(app.screen.query_one("#dialog-title").content)
+        check("Uninstall gamma" in title, f"the batch did not target gamma: {title!r}")
+        check(store._to_uninstall == set(), "Uninstall did not clear its batch for the pending run")
+
+        await pilot.click("#cancel")
+        await pilot.pause()
 
         # Nothing checked: Install falls back to the highlighted row alone.
         table.move_cursor(row=0)
@@ -140,6 +160,19 @@ async def test_multi_select_checkboxes() -> None:
 
         await pilot.click("#cancel")
         await pilot.pause()
+
+        # Nothing checked: Uninstall falls back to the highlighted row,
+        # refusing one that isn't actually installed.
+        table.move_cursor(row=0)
+        await pilot.pause()
+        await pilot.click("#uninstall")
+        await pilot.pause()
+        check(
+            isinstance(app.screen, StoreScreen),
+            "Uninstall confirmed against a not-installed highlighted row",
+        )
+        check("not installed" in store.status_text, f"no refusal shown: {store.status_text!r}")
+
         await pilot.click("#back")
         await pilot.pause()
 

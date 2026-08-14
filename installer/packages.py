@@ -60,6 +60,11 @@ apt-get update
 apt-get install -y "$@"
 """
 
+UNINSTALL_SCRIPT = """#!/bin/bash
+export DEBIAN_FRONTEND=noninteractive
+apt-get remove -y "$@"
+"""
+
 
 class Package(NamedTuple):
     name: str
@@ -270,6 +275,36 @@ def install(names: list[str], log: Log) -> bool:
     log("")
     rc = stream_cmd(
         f"{container_command('xlabs-install.sh')} {' '.join(names)}",
+        log,
+        timeout=1800,
+    )
+    return rc == 0
+
+
+def uninstall(names: list[str], log: Log) -> bool:
+    """Remove packages from the container.
+
+    apt remove, not purge: this drops the package's own files, not whatever
+    the user put in its config afterward — the same asymmetry Repos already
+    draws between removing a repository and untouched already-installed
+    packages from it.
+    """
+    rejected = [n for n in names if not valid_term(n)]
+    if rejected:
+        log(f"[red]Refusing these names: {', '.join(rejected)}[/red]")
+        return False
+    if not names:
+        log("Nothing selected.")
+        return True
+
+    if not write_container_script("xlabs-uninstall.sh", UNINSTALL_SCRIPT):
+        log("[red]Could not write the uninstall script.[/red]")
+        return False
+
+    log(f"Removing from the container: {', '.join(names)}")
+    log("")
+    rc = stream_cmd(
+        f"{container_command('xlabs-uninstall.sh')} {' '.join(names)}",
         log,
         timeout=1800,
     )
