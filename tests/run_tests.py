@@ -40,6 +40,7 @@ from test_isolation import TESTS as ISOLATION_TESTS
 from test_main_screen import TESTS as MAIN_SCREEN_TESTS
 from test_packages import TESTS as PACKAGES_TESTS
 from test_preflight import TESTS as PREFLIGHT_TESTS
+from test_providers import TESTS as PROVIDERS_TESTS
 from test_settings_screen import TESTS as SETTINGS_SCREEN_TESTS
 from test_store_screen import TESTS as STORE_SCREEN_TESTS
 from test_system import TESTS as SYSTEM_TESTS
@@ -57,6 +58,7 @@ ALL_TESTS = [
     *CONFIG_TESTS,
     *PACKAGES_TESTS,
     *BACKUP_TESTS,
+    *PROVIDERS_TESTS,
     *BENCH_TESTS,
     *AUDIO_TESTS,
     *BROWSER_TESTS,
