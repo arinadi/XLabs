@@ -15,11 +15,11 @@ from .. import start as desktop
 from ..const import CACHE_DIR
 from ..system import get_version, human_size
 from .browser_screen import BrowserScreen
-from .common import ActionScreen, CopyableScreen, ScrollableTable
+from .common import ActionScreen, ScrollableTable
 from .dupes_screen import DupesScreen
 
 
-class DoctorScreen(CopyableScreen):
+class DoctorScreen(Screen):
     """Environment diagnosis with a one-press repair for what is fixable."""
 
     BINDINGS = [("escape", "back", "Back")]
@@ -38,29 +38,12 @@ class DoctorScreen(CopyableScreen):
             yield Button("Re-scan", id="rescan")
             yield Button("Fix", id="fix", variant="success", disabled=True)
             yield Button("Tools", id="tools")
-        with Grid(classes="row2"):
-            yield Button("C", id="copy")
-            yield Button("Back", id="back", variant="primary")
+        yield Button("Back", id="back", variant="primary")
         yield Footer()
 
     def on_mount(self) -> None:
         self.query_one("#doctor-table", DataTable).add_columns("Check", "State", "Detail")
-        self.query_one("#copy", Button).tooltip = "Copy this report"
         self.query_one("#tools", Button).tooltip = "Dupes, Audio, GPU, IO, Browser tuning"
-
-    def copy_payload(self) -> str:
-        lines = [f"XLabs doctor — {get_version()}", self._info, ""]
-        for issue in self._issues:
-            if issue.ok:
-                mark = "ok "
-            elif issue.unknown:
-                mark = "?? "
-            elif issue.fix is not None:
-                mark = "FIX"
-            else:
-                mark = "-- "
-            lines.append(f"{mark} {issue.name:<14} {issue.detail}")
-        return "\n".join(lines)
 
     def on_screen_resume(self) -> None:
         """Also runs after returning from a fix, so the table is never stale."""

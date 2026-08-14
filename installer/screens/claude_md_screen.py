@@ -7,14 +7,14 @@ from __future__ import annotations
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Grid
+from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Label, Static, TextArea
 
 from .. import claude_md
 from ..system import is_installed
-from .common import CopyableScreen
 
 
-class ClaudeMdScreen(CopyableScreen):
+class ClaudeMdScreen(Screen):
     """Plain-text editor for ~/.claude/CLAUDE.md, Claude Code's global
     memory file inside the container."""
 
@@ -34,9 +34,8 @@ class ClaudeMdScreen(CopyableScreen):
         )
         yield TextArea(id="claude-md-text")
         yield Static("", id="claude-md-status")
-        with Grid(classes="row3"):
+        with Grid(classes="row2"):
             yield Button("Save", id="save", variant="success")
-            yield Button("C", id="copy")
             yield Button("Back", id="back", variant="primary")
         yield Footer()
 
@@ -51,9 +50,6 @@ class ClaudeMdScreen(CopyableScreen):
 
     def on_screen_resume(self) -> None:
         self.query_one("#claude-md-text", TextArea).text = claude_md.read()
-
-    def copy_payload(self) -> str:
-        return self.query_one("#claude-md-text", TextArea).text
 
     @on(Button.Pressed, "#save")
     def _save(self) -> None:

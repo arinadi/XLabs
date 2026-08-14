@@ -23,11 +23,11 @@ from textual.widgets import (
 )
 
 from .. import mcp_manager
-from ..system import get_version, is_installed
-from .common import ActionScreen, ConfirmScreen, CopyableScreen, ScrollableTable, when_confirmed
+from ..system import is_installed
+from .common import ActionScreen, ConfirmScreen, ScrollableTable, when_confirmed
 
 
-class MCPScreen(CopyableScreen):
+class MCPScreen(Screen):
     """MCP servers in the container's ~/.claude.json.
 
     Unlike Providers, every entry here loads in every Claude Code session
@@ -50,9 +50,7 @@ class MCPScreen(CopyableScreen):
         with Grid(classes="row2"):
             yield Button("Add", id="add", variant="success")
             yield Button("Remove", id="remove", variant="error")
-        with Grid(classes="row2"):
-            yield Button("C", id="copy")
-            yield Button("Back", id="back", variant="primary")
+        yield Button("Back", id="back", variant="primary")
         yield Footer()
 
     def __init__(self) -> None:
@@ -97,11 +95,6 @@ class MCPScreen(CopyableScreen):
         server = self._selected()
         if server is not None:
             self._note(f"Selected: {server.name} ({server.type})")
-
-    def copy_payload(self) -> str:
-        lines = [f"XLabs MCP servers - {get_version()}", ""]
-        lines += [f"{s.name:<16} {s.type:<6} {self._detail(s)}" for s in self._servers]
-        return "\n".join(lines)
 
     @on(Button.Pressed, "#add")
     def _add(self) -> None:

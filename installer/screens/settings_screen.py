@@ -14,15 +14,16 @@ import shutil
 
 from textual import on
 from textual.app import ComposeResult
-from textual.containers import Grid, VerticalScroll
+from textual.containers import VerticalScroll
+from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Label, Select, Static
 
 from .. import audio, bench, isolation, packages
 from .. import start as desktop
 from ..const import CACHE_DIR, CONTAINER_NAME, REPO_DIR
-from ..system import get_version, stream_cmd, unlink_launcher
+from ..system import stream_cmd, unlink_launcher
 from .claude_md_screen import ClaudeMdScreen
-from .common import ActionScreen, ConfirmScreen, CopyableScreen, when_confirmed
+from .common import ActionScreen, ConfirmScreen, when_confirmed
 from .mcp_screen import MCPScreen
 from .providers_screen import ProvidersScreen
 
@@ -61,7 +62,7 @@ def run_uninstall(log) -> None:
         "yourself with `rm -rf ~/XLabs` if you want it gone too.")
 
 
-class SettingsScreen(CopyableScreen):
+class SettingsScreen(Screen):
     """Per-device preferences, stored in .env.
 
     Each value is owned by whatever module actually uses it — audio.py,
@@ -132,13 +133,10 @@ class SettingsScreen(CopyableScreen):
             yield Static("", id="settings-status")
             yield Label("Danger zone", classes="settings-section settings-danger-label")
             yield Button("Uninstall XLabs", id="uninstall", variant="error")
-        with Grid(classes="row2"):
-            yield Button("C", id="copy")
-            yield Button("Back", id="back", variant="primary")
+        yield Button("Back", id="back", variant="primary")
         yield Footer()
 
     def on_mount(self) -> None:
-        self.query_one("#copy", Button).tooltip = "Copy these settings"
         self.query_one("#uninstall", Button).tooltip = (
             "Remove the container, cache, and xlabs launcher"
         )
@@ -217,19 +215,6 @@ class SettingsScreen(CopyableScreen):
             self._last_isolation = preset.name
             isolation.set_preset_manually(preset)
             self._status(f"Container isolation set to {preset.name}.")
-
-    def copy_payload(self) -> str:
-        return "\n".join(
-            [
-                f"XLabs settings - {get_version()}",
-                "",
-                f"Mirror:  {packages.current_mirror() or 'unknown'}",
-                f"Audio:   {audio.load_method().name}",
-                f"GPU:     {(bench.load_profile() or bench.PRESETS[0]).name}",
-                f"X11:     {desktop.load_draw_path()}",
-                f"Isolation: {isolation.load_preset().name}",
-            ]
-        )
 
     @on(Button.Pressed, "#uninstall")
     def _uninstall(self) -> None:

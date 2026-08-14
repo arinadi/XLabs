@@ -11,11 +11,10 @@ from textual.screen import Screen
 from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Static
 
 from .. import packages
-from ..system import get_version
-from .common import ActionScreen, ConfirmScreen, CopyableScreen, ScrollableTable, when_confirmed
+from .common import ActionScreen, ConfirmScreen, ScrollableTable, when_confirmed
 
 
-class StoreScreen(CopyableScreen):
+class StoreScreen(Screen):
     """Search the container's package lists and install from them."""
 
     BINDINGS = [("escape", "back", "Back")]
@@ -36,15 +35,13 @@ class StoreScreen(CopyableScreen):
             yield Button("Mirror", id="mirror")
             yield Button("Repos", id="repos")
             yield Button("Installed", id="installed")
-        with Grid(classes="row3"):
+        with Grid(classes="row2"):
             yield Button("Install", id="install", variant="success", disabled=True)
-            yield Button("C", id="copy")
             yield Button("Back", id="back", variant="primary")
         yield Footer()
 
     def on_mount(self) -> None:
         self.query_one("#store-table", DataTable).add_columns("", "Package", "Description")
-        self.query_one("#copy", Button).tooltip = "Copy these results"
         self.query_one("#install", Button).tooltip = "Install the highlighted package"
         self.query_one("#installed", Button).tooltip = "List everything installed"
         self.query_one("#query", Input).focus()
@@ -166,18 +163,6 @@ class StoreScreen(CopyableScreen):
             when_confirmed(self.app, lambda: ActionScreen(f"Install {pkg.name}", run)),
         )
 
-    def copy_payload(self) -> str:
-        lines = [f"XLabs package search — {get_version()}", ""]
-        lines.append(self.status_text)
-        lines.append("")
-        if not self._results:
-            lines.append("(no results)")
-        lines += [
-            f"{'I' if p.installed else ' '} {p.name:<28} {p.description}"
-            for p in self._results
-        ]
-        return "\n".join(lines)
-
     @on(Button.Pressed, "#mirror")
     def _mirror(self) -> None:
         self.app.push_screen(MirrorScreen())
@@ -191,7 +176,7 @@ class StoreScreen(CopyableScreen):
         self.app.pop_screen()
 
 
-class MirrorScreen(CopyableScreen):
+class MirrorScreen(Screen):
     """Pick which Debian mirror the container fetches from.
 
     The list comes from Debian's own deb822 masterlist rather than being
@@ -218,9 +203,7 @@ class MirrorScreen(CopyableScreen):
             yield Button("Refresh", id="refresh")
             yield Button("Measure", id="measure")
             yield Button("Use", id="use", variant="success")
-        with Grid(classes="row2"):
-            yield Button("C", id="copy")
-            yield Button("Back", id="back", variant="primary")
+        yield Button("Back", id="back", variant="primary")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -318,16 +301,6 @@ class MirrorScreen(CopyableScreen):
             else "No mirror answered."
         )
 
-    def copy_payload(self) -> str:
-        lines = [f"XLabs mirrors - {get_version()}", ""]
-        lines.append(f"current: {packages.current_mirror()}")
-        lines.append("")
-        for name, where, uri in self._mirrors:
-            speed = self._speeds.get(uri)
-            rate = f"{speed:,.0f} KB/s" if speed else ("failed" if uri in self._speeds else "-")
-            lines.append(f"  {rate:>12}  {name:<34} {where}")
-        return "\n".join(lines)
-
     @on(Button.Pressed, "#use")
     def _use(self) -> None:
         mirror = self._selected_mirror()
@@ -355,7 +328,7 @@ class MirrorScreen(CopyableScreen):
         self.app.pop_screen()
 
 
-class ReposScreen(CopyableScreen):
+class ReposScreen(Screen):
     """Third-party apt repositories, added with their signing keys."""
 
     BINDINGS = [("escape", "back", "Back")]
@@ -376,8 +349,7 @@ class ReposScreen(CopyableScreen):
             yield Button("Remove", id="remove", variant="error")
         with Grid(classes="row2"):
             yield Button("Re-scan", id="rescan")
-            yield Button("C", id="copy")
-        yield Button("Back", id="back", variant="primary")
+            yield Button("Back", id="back", variant="primary")
         yield Footer()
 
     def __init__(self) -> None:
@@ -429,14 +401,6 @@ class ReposScreen(CopyableScreen):
         if repo is not None:
             state = "enabled" if packages.repo_enabled(repo) else "not enabled"
             self._note(f"Selected: {repo.name} ({state})")
-
-    def copy_payload(self) -> str:
-        lines = [f"XLabs repositories - {get_version()}", ""]
-        lines += [
-            f"{'on ' if packages.repo_enabled(r) else '   '} {r.name:<12} {r.description}"
-            for r in self._repos
-        ]
-        return "\n".join(lines)
 
     @on(Button.Pressed, "#add")
     def _add(self) -> None:

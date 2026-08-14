@@ -87,14 +87,6 @@ async def test_settings_screen() -> None:
                 "a manual isolation change through Settings must not carry a measured score",
             )
 
-            payload = app.screen.copy_payload()
-            check("force-bgra" in payload, f"copy payload missed the change: {payload!r}")
-            check("isolated" in payload, f"copy payload missed the isolation change: {payload!r}")
-            # Raises OutOfBounds if the button is not on screen — every
-            # other CopyableScreen has one; this one shipped without it.
-            await pilot.click("#copy")
-            await pilot.pause()
-
             await pilot.click("#back")
             await pilot.pause()
             check(isinstance(app.screen, MainScreen), "back from Settings did not return")

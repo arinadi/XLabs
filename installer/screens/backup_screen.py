@@ -9,14 +9,15 @@ from __future__ import annotations
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Grid
+from textual.screen import Screen
 from textual.widgets import Button, DataTable, Footer, Header, Label, Static
 
 from .. import backup
-from ..system import get_version, is_installed
-from .common import ActionScreen, ConfirmScreen, CopyableScreen, ScrollableTable, when_confirmed
+from ..system import is_installed
+from .common import ActionScreen, ConfirmScreen, ScrollableTable, when_confirmed
 
 
-class BackupScreen(CopyableScreen):
+class BackupScreen(Screen):
     """Back up and restore the container's home directory.
 
     This is the user's own files and settings — not apt packages, which a
@@ -40,9 +41,7 @@ class BackupScreen(CopyableScreen):
             yield Button("Backup now", id="create", variant="success")
             yield Button("Restore", id="restore")
             yield Button("Delete", id="delete", variant="error")
-        with Grid(classes="row2"):
-            yield Button("C", id="copy")
-            yield Button("Back", id="back", variant="primary")
+        yield Button("Back", id="back", variant="primary")
         yield Footer()
 
     def __init__(self) -> None:
@@ -57,7 +56,6 @@ class BackupScreen(CopyableScreen):
 
     def on_mount(self) -> None:
         self.query_one("#backup-table", DataTable).add_columns("Name", "Size", "Created")
-        self.query_one("#copy", Button).tooltip = "Copy this list"
         self._fill()
 
     def on_screen_resume(self) -> None:
@@ -90,14 +88,6 @@ class BackupScreen(CopyableScreen):
         b = self._selected()
         if b is not None:
             self._note(f"Selected: {b.name} ({backup.human_size(b.size_bytes)})")
-
-    def copy_payload(self) -> str:
-        lines = [f"XLabs backups - {get_version()}", ""]
-        lines += [
-            f"{b.created.strftime('%Y-%m-%d %H:%M')}  {backup.human_size(b.size_bytes):>8}  {b.name}"
-            for b in self._backups
-        ]
-        return "\n".join(lines)
 
     @on(Button.Pressed, "#create")
     def _create(self) -> None:

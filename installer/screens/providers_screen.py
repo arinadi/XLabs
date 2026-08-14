@@ -11,11 +11,11 @@ from textual.screen import Screen
 from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Static
 
 from .. import providers
-from ..system import get_version, is_installed
-from .common import ActionScreen, ConfirmScreen, CopyableScreen, ScrollableTable, when_confirmed
+from ..system import is_installed
+from .common import ActionScreen, ConfirmScreen, ScrollableTable, when_confirmed
 
 
-class ProvidersScreen(CopyableScreen):
+class ProvidersScreen(Screen):
     """Claude Code accounts: the official Anthropic login, or a saved
     gateway profile written into the container's ~/.claude/settings.json.
 
@@ -39,9 +39,7 @@ class ProvidersScreen(CopyableScreen):
             yield Button("Add", id="add", variant="success")
             yield Button("Activate", id="activate")
             yield Button("Remove", id="remove", variant="error")
-        with Grid(classes="row2"):
-            yield Button("C", id="copy")
-            yield Button("Back", id="back", variant="primary")
+        yield Button("Back", id="back", variant="primary")
         yield Footer()
 
     def __init__(self) -> None:
@@ -90,14 +88,6 @@ class ProvidersScreen(CopyableScreen):
             label = "Official" if name == providers.OFFICIAL else name
             state = "active" if name == providers.active_provider_name() else "not active"
             self._note(f"Selected: {label} ({state})")
-
-    def copy_payload(self) -> str:
-        active = providers.active_provider_name()
-        lines = [f"XLabs Claude providers - {get_version()}", ""]
-        lines.append(f"{'on ' if active == providers.OFFICIAL else '   '} Official")
-        for p in providers.list_providers():
-            lines.append(f"{'on ' if active == p.name else '   '} {p.name:<12} {p.base_url}")
-        return "\n".join(lines)
 
     @on(Button.Pressed, "#add")
     def _add(self) -> None:

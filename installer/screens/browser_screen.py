@@ -10,14 +10,14 @@ from __future__ import annotations
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Grid
+from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Label, Static
 
 from .. import browser
-from ..system import get_version
-from .common import ActionScreen, ConfirmScreen, CopyableScreen, when_confirmed
+from .common import ActionScreen, ConfirmScreen, when_confirmed
 
 
-class BrowserScreen(CopyableScreen):
+class BrowserScreen(Screen):
     """Firefox/Chromium tuning for proot's ptrace overhead — see browser.py.
 
     The safe tier has no downside and could live in Doctor's own Fix, but
@@ -27,10 +27,6 @@ class BrowserScreen(CopyableScreen):
     """
 
     BINDINGS = [("escape", "back", "Back")]
-
-    def __init__(self) -> None:
-        super().__init__()
-        self._status_lines: list[str] = []
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -69,15 +65,11 @@ class BrowserScreen(CopyableScreen):
             chromium_ok = browser.chromium_tuning_ok()
             lines.append(f"  safe tuning:       {'applied' if chromium_ok else 'not applied'}")
 
-        self._status_lines = lines
         self.query_one("#browser-status", Static).update("\n".join(lines))
 
         self.query_one("#firefox-safe", Button).disabled = not firefox
         self.query_one("#firefox-reduced", Button).disabled = not firefox
         self.query_one("#chromium-safe", Button).disabled = not chromium
-
-    def copy_payload(self) -> str:
-        return "\n".join([f"XLabs browser tuning — {get_version()}", "", *self._status_lines])
 
     @on(Button.Pressed, "#firefox-safe")
     def _firefox_safe(self) -> None:

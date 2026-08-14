@@ -15,7 +15,7 @@ import threading
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from support import check, run, wait_for_rows
+from support import check, run
 from textual.widgets import Button, RichLog
 
 from installer.app import ActionScreen, MainScreen, XLabsApp
@@ -99,31 +99,48 @@ def _expected_export_path() -> str:
 
 
 async def test_copy_buttons_export_output() -> None:
-    """The diagnostic screen must be able to hand its text back out."""
+    """ActionScreen must be able to hand its log text back out.
+
+    Copy is scoped to ActionScreen alone now — the run log is the only
+    thing worth exporting, not the report/list screens that lead into it.
+    The runner is swapped for a deterministic one, the same shape the other
+    tests in this module use, so this doesn't depend on stop_desktop's real
+    behaviour or timing.
+    """
+    original = main_module.run_stop
+
+    def fake(log) -> None:
+        log("XLabs test output")
+
+    main_module.run_stop = fake
+
     app = XLabsApp()
-    async with app.run_test(size=(80, 40)) as pilot:
-        await pilot.pause()
+    try:
+        async with app.run_test(size=(80, 40)) as pilot:
+            await pilot.pause()
 
-        await pilot.click("#doctor")
-        await pilot.pause()
-        await wait_for_rows(pilot, app, "#doctor-table")
+            await pilot.click("#stop")
+            await pilot.pause()
 
-        screen = app.screen
-        screen.query_one("#copy", Button)
-        payload = screen.copy_payload()
-        check(payload.strip(), "Doctor produced an empty copy payload")
-        check("XLabs" in payload, f"Doctor payload has no header: {payload[:40]!r}")
+            screen = app.screen
+            check(isinstance(screen, ActionScreen), f"got {screen!r}")
+            screen.query_one("#copy", Button)
+            payload = screen.copy_payload()
+            check(payload.strip(), "ActionScreen produced an empty copy payload")
+            check("XLabs test output" in payload, f"payload missed the log: {payload!r}")
 
-        await pilot.click("#copy")
-        await pilot.pause()
-        check(
-            os.path.exists(_expected_export_path()),
-            "copy did not mirror the output to a file",
-        )
+            await pilot.click("#copy")
+            await pilot.pause()
+            check(
+                os.path.exists(_expected_export_path()),
+                "copy did not mirror the output to a file",
+            )
 
-        await pilot.click("#back")
-        await pilot.pause()
-        check(isinstance(app.screen, MainScreen), "Doctor did not return to the menu")
+            await pilot.click("#back")
+            await pilot.pause()
+            check(isinstance(app.screen, MainScreen), "ActionScreen did not return to the menu")
+    finally:
+        main_module.run_stop = original
 
 
 async def test_update_offers_restart() -> None:

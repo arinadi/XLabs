@@ -8,15 +8,15 @@ from __future__ import annotations
 
 from textual import on, work
 from textual.app import ComposeResult
-from textual.containers import Grid, Horizontal
+from textual.containers import Grid
+from textual.screen import Screen
 from textual.widgets import Button, DataTable, Footer, Header, Label, Static
 
 from .. import duplicates
-from ..system import get_version
-from .common import ActionScreen, ConfirmScreen, CopyableScreen, ScrollableTable, when_confirmed
+from .common import ActionScreen, ConfirmScreen, ScrollableTable, when_confirmed
 
 
-class DupesScreen(CopyableScreen):
+class DupesScreen(Screen):
     """Termux packages the container already provides.
 
     Removal is never folded into Doctor's Fix: uninstalling from Termux is
@@ -43,16 +43,13 @@ class DupesScreen(CopyableScreen):
         with Grid(classes="row2"):
             yield Button("Re-scan", id="rescan")
             yield Button("Remove", id="remove", variant="error", disabled=True)
-        with Horizontal(id="action-buttons"):
-            yield Button("C", id="copy")
-            yield Button("Back", id="back", variant="primary")
+        yield Button("Back", id="back", variant="primary")
         yield Footer()
 
     def on_mount(self) -> None:
         self.query_one("#dupes-table", DataTable).add_columns(
             "Termux package", "Container provides"
         )
-        self.query_one("#copy", Button).tooltip = "Copy this list"
         self.query_one("#remove", Button).tooltip = "Uninstall these from Termux only"
 
     def on_screen_resume(self) -> None:
@@ -72,13 +69,6 @@ class DupesScreen(CopyableScreen):
         button = self.query_one("#remove", Button)
         button.disabled = not dupes
         button.label = f"Remove ({len(dupes)})" if dupes else "Remove"
-
-    def copy_payload(self) -> str:
-        lines = [f"XLabs Termux duplicates — {get_version()}", ""]
-        if not self._dupes:
-            lines.append("(none)")
-        lines += [f"{d.package:<14} -> container has {d.binary}" for d in self._dupes]
-        return "\n".join(lines)
 
     @on(Button.Pressed, "#rescan")
     def _rescan(self) -> None:
