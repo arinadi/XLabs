@@ -36,18 +36,22 @@ ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 
 # ── Base ───────────────────────────────────────────────────────
-# git and nano: verified against a real-device audit (issue #6) that a
-# freshly provisioned container has no text editor and no version control
-# at all — everything else the audit flagged as "missing" (build-essential,
-# python3-pip, nodejs, vim, tmux, htop, wget, rsync, unzip/zip...) is
-# already one tap away via Store's CURATED_PACKAGES (packages.py), so it
-# stays out of the image on purpose, per the vanilla-baseline / image-size
+# Verified against a real-device audit (issue #6): a freshly provisioned
+# container had no text editor, no version control, and none of these
+# basic CLI utilities at all — confirmed with a podman dry-run against
+# this exact package set, not taken on the audit's word (it also
+# self-contradicted on `sudo`, already installed below). Every package
+# here is small (largest is wget at ~3.8 MB installed; the rest are under
+# 1 MB each) and is the kind of thing assumed present on any Linux
+# desktop, unlike the heavier/situational dev toolchain (build-essential,
+# python3-pip, nodejs, vim/neovim, tmux...) that stays Store-only
+# (packages.py CURATED_PACKAGES) per the vanilla-baseline / image-size
 # rationale above. git's own Recommends pulls in openssh-client (git+ssh
-# remotes), less and patch — all small, all kept since Recommends stay on
-# everywhere else in this file.
+# remotes), less and patch for free.
 RUN apt-get update && \
     apt-get install -y \
-        ca-certificates locales sudo git nano && \
+        ca-certificates locales sudo git nano \
+        curl wget zip unzip htop tree jq rsync && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ── Desktop ────────────────────────────────────────────────────
