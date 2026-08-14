@@ -604,7 +604,7 @@ class SettingsScreen(CopyableScreen):
                 allow_blank=False,
             )
             yield Label("Claude Code", classes="settings-section")
-            yield Button("Providers", id="claude-providers")
+            yield Button("Providers", id="claude-providers", variant="warning")
             yield Static("", id="settings-status")
             yield Label("Danger zone", classes="settings-section settings-danger-label")
             yield Button("Uninstall XLabs", id="uninstall", variant="error")
