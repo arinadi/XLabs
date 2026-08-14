@@ -30,6 +30,7 @@ from test_audio import TESTS as AUDIO_TESTS
 from test_backup import TESTS as BACKUP_TESTS
 from test_bench import TESTS as BENCH_TESTS
 from test_browser import TESTS as BROWSER_TESTS
+from test_claude_md import TESTS as CLAUDE_MD_TESTS
 from test_config import TESTS as CONFIG_TESTS
 from test_doctor import TESTS as DOCTOR_TESTS
 from test_duplicates import TESTS as DUPLICATES_TESTS
@@ -39,6 +40,7 @@ from test_install import TESTS as INSTALL_TESTS
 from test_iobench import TESTS as IOBENCH_TESTS
 from test_isolation import TESTS as ISOLATION_TESTS
 from test_main_screen import TESTS as MAIN_SCREEN_TESTS
+from test_mcp_manager import TESTS as MCP_MANAGER_TESTS
 from test_packages import TESTS as PACKAGES_TESTS
 from test_preflight import TESTS as PREFLIGHT_TESTS
 from test_providers import TESTS as PROVIDERS_TESTS
@@ -61,6 +63,8 @@ ALL_TESTS = [
     *PACKAGES_TESTS,
     *BACKUP_TESTS,
     *PROVIDERS_TESTS,
+    *MCP_MANAGER_TESTS,
+    *CLAUDE_MD_TESTS,
     *BENCH_TESTS,
     *AUDIO_TESTS,
     *BROWSER_TESTS,
