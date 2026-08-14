@@ -243,6 +243,41 @@ SettingsScreen Select {
 }
 
 SettingsScreen #uninstall,
-SettingsScreen #claude-providers {
+SettingsScreen #claude-providers,
+SettingsScreen #claude-mcp,
+SettingsScreen #claude-md {
     margin: 0 2 1 2;
+}
+
+AddMCPScreen Label {
+    margin: 1 2 0 2;
+}
+
+AddMCPScreen Input,
+AddMCPScreen Select {
+    margin: 0 2;
+}
+
+#add-mcp-form {
+    height: 1fr;
+}
+
+#mcp-env {
+    margin: 0 2;
+    height: 6;
+}
+
+/* Fills the screen so a long CLAUDE.md is actually workable on a phone,
+   the same way #log does for command output. */
+#claude-md-text {
+    height: 1fr;
+    margin: 0 2 1 2;
+    border: round $primary;
+}
+
+#claude-md-note,
+#claude-md-status {
+    margin: 0 2;
+    padding: 0 1;
+    color: $text-muted;
 }

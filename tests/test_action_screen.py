@@ -18,8 +18,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from support import check, run, wait_for_rows
 from textual.widgets import Button, RichLog
 
-from installer import app as app_module
 from installer.app import ActionScreen, MainScreen, XLabsApp
+from installer.screens import common as common_module
+from installer.screens import main_screen as main_module
 
 
 async def test_escape_cannot_leave_running_action() -> None:
@@ -38,8 +39,8 @@ async def test_escape_cannot_leave_running_action() -> None:
     # Drive the real UI path. Pushing a screen from outside the app's own
     # handlers never mounts it, so the runner is swapped instead — that also
     # keeps the test from touching the machine's image cache.
-    original = app_module.run_clean_cache
-    app_module.run_clean_cache = blocking
+    original = main_module.run_clean_cache
+    main_module.run_clean_cache = blocking
 
     app = XLabsApp()
     try:
@@ -84,17 +85,17 @@ async def test_escape_cannot_leave_running_action() -> None:
             await pilot.pause()
             check(isinstance(app.screen, MainScreen), "escape did not leave a finished screen")
     finally:
-        app_module.run_clean_cache = original
+        main_module.run_clean_cache = original
         release.set()
 
 
 def _expected_export_path() -> str:
     directory = (
-        app_module.REPO_DIR
-        if os.path.isdir(app_module.REPO_DIR)
+        common_module.REPO_DIR
+        if os.path.isdir(common_module.REPO_DIR)
         else tempfile.gettempdir()
     )
-    return os.path.join(directory, app_module.EXPORT_NAME)
+    return os.path.join(directory, common_module.EXPORT_NAME)
 
 
 async def test_copy_buttons_export_output() -> None:
@@ -138,8 +139,8 @@ async def test_update_offers_restart() -> None:
         log("pulling")
         release.wait(timeout=15)
 
-    original = app_module.run_update
-    app_module.run_update = blocking
+    original = main_module.run_update
+    main_module.run_update = blocking
 
     app = XLabsApp()
     try:
@@ -173,7 +174,7 @@ async def test_update_offers_restart() -> None:
             await pilot.pause()
             check(app.restart_requested, "pressing Restart did not request one")
     finally:
-        app_module.run_update = original
+        main_module.run_update = original
         release.set()
 
 
@@ -185,12 +186,12 @@ def test_other_actions_do_not_offer_restart() -> None:
 
 def test_export_never_creates_a_repo_directory() -> None:
     """Copying must not conjure ~/XLabs on a machine without a checkout."""
-    if os.path.isdir(app_module.REPO_DIR):
+    if os.path.isdir(common_module.REPO_DIR):
         return  # nothing to prove on a real checkout
-    app_module._write_export("probe")
+    common_module._write_export("probe")
     check(
-        not os.path.isdir(app_module.REPO_DIR),
-        f"copying created {app_module.REPO_DIR}",
+        not os.path.isdir(common_module.REPO_DIR),
+        f"copying created {common_module.REPO_DIR}",
     )
 
 
