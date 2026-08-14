@@ -17,7 +17,7 @@ import shutil
 import sys
 from typing import Callable, NamedTuple
 
-from . import audio, browser, electron, packages
+from . import audio, browser, electron, fonts, packages
 from . import start as desktop
 from .const import (
     LAUNCHER_SRC,
@@ -402,6 +402,21 @@ def diagnose() -> list[Issue]:
                 "Applied" if chromium_ok
                 else "Default flags — see Doctor Tools -> Browser",
                 None if chromium_ok else browser.apply_chromium_tuning,
+            )
+        )
+
+    # Fonts — color emoji plus a ligature-friendly terminal font. Not baked
+    # into the image outright; see fonts.py for why these two specifically
+    # (validated against issue #6's audit rather than taken on its word).
+    if is_installed():
+        fonts_ok = fonts.fonts_ready()
+        issues.append(
+            Issue(
+                "Fonts",
+                fonts_ok,
+                "Noto Color Emoji + Fira Code installed and active" if fonts_ok
+                else "Missing or not activated — see Doctor Fix",
+                None if fonts_ok else fonts.install_and_activate,
             )
         )
 

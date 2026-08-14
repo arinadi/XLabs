@@ -32,7 +32,18 @@ from textual.widgets import (
     Static,
 )
 
-from . import audio, backup, bench, browser, doctor, duplicates, iobench, isolation, packages, providers
+from . import (
+    audio,
+    backup,
+    bench,
+    browser,
+    doctor,
+    duplicates,
+    iobench,
+    isolation,
+    packages,
+    providers,
+)
 from . import start as desktop
 from .const import CACHE_DIR, CONTAINER_NAME, REPO_DIR
 from .system import (

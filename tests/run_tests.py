@@ -34,6 +34,7 @@ from test_config import TESTS as CONFIG_TESTS
 from test_doctor import TESTS as DOCTOR_TESTS
 from test_duplicates import TESTS as DUPLICATES_TESTS
 from test_electron import TESTS as ELECTRON_TESTS
+from test_fonts import TESTS as FONTS_TESTS
 from test_install import TESTS as INSTALL_TESTS
 from test_iobench import TESTS as IOBENCH_TESTS
 from test_isolation import TESTS as ISOLATION_TESTS
@@ -53,6 +54,7 @@ ALL_TESTS = [
     *PREFLIGHT_TESTS,
     *DOCTOR_TESTS,
     *ELECTRON_TESTS,
+    *FONTS_TESTS,
     *DUPLICATES_TESTS,
     *INSTALL_TESTS,
     *CONFIG_TESTS,
